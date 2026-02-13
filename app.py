@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import ssl
 
-# Fix for MAC OS (SSL Certificate issue)
+# Фікс SSL для завантаження даних
 try:
     _create_unverified_https_context = ssl._create_unverified_context
 except AttributeError:
@@ -14,153 +14,322 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
-# Set Streamlit page configuration
-st.set_page_config(layout="wide", page_title="BTC Power Law & Percentiles")
+# Налаштування сторінки
+st.set_page_config(layout="wide", page_title="BTC Power Law Pro")
 
-# Main Title (HTML for compact styling)
-st.markdown("<h3 style='margin-top: -40px; margin-bottom: 0px;'>Bitcoin: Power Law Trend, R² & DSI Oscillator</h3>", unsafe_allow_html=True)
+# --- ЕКСКЛЮЗИВНИЙ CSS ДЛЯ PREMIUM LOOK ТА ПОВНОЇ ВИСОТИ ---
+st.markdown("""
+    <style>
+    /* Головний фон та шрифти */
+    .main { background-color: #0e1117; }
+    .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    
+    /* Приховування зайвих елементів Streamlit */
+    header, footer, [data-testid="stHeader"] {visibility: hidden; display: none;}
+
+    /* Стилізація Sidebar (Trading Style) */
+    [data-testid="stSidebar"] {
+        width: 320px !important;
+        background-color: #161a25 !important;
+        border-right: 1px solid #2d323e;
+    }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 0.8rem !important;
+        padding-top: 1.5rem !important;
+    }
+
+    /* Кастомні картки метрик (KPI) - ВИРІВНЮВАННЯ */
+    .metric-card {
+        background: #1e222d;
+        border: 1px solid #2d323e;
+        border-radius: 8px;
+        padding: 10px 16px; /* Трохи менше вертикального паддінгу, бо є flex */
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-top: 5px;
+        
+        /* Фіксуємо висоту та центруємо */
+        min-height: 110px; 
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    .metric-label { color: #848e9c; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+    .metric-value { color: #ffffff; font-size: 22px; font-weight: 700; }
+    .metric-delta { font-size: 13px; font-weight: 600; margin-top: 2px; }
+
+    /* Кнопки регулювання */
+    .stButton > button {
+        width: 100% !important;
+        background-color: #2d323e !important;
+        color: #d1d4dc !important;
+        border: none !important;
+        border-radius: 4px !important;
+        height: 32px !important;
+        line-height: 32px !important;
+        font-size: 14px !important;
+        transition: 0.2s;
+        font-weight: bold !important;
+    }
+    .stButton > button:hover {
+        background-color: #3d4251 !important;
+        color: #ffffff !important;
+    }
+
+    /* Слайдери */
+    .stSlider { margin-bottom: -5px !important; margin-top: 5px !important; }
+    
+    [data-testid="stSidebar"] .stMarkdown p {
+        font-size: 1rem !important;
+        color: #d1d4dc;
+        margin-bottom: 5px !important;
+        font-weight: 500;
+    }
+    
+    /* Радіо кнопки */
+    .stRadio label {
+        font-size: 0.9rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 
 @st.cache_data
 def load_raw_data():
-    # Load early data (2010-2014)
+    # Ранні дані
     url = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
     early_df = pd.read_csv(url)
     early_df['Date'] = pd.to_datetime(early_df['Date'])
     early_df.set_index('Date', inplace=True)
     early_df.rename(columns={'Price': 'Close'}, inplace=True)
 
-    # Load recent data (from 2014) via yfinance
+    # Yahoo Finance дані
     recent_df = yf.download('BTC-USD', start='2014-09-17')
-    recent_df = recent_df[['Close']].dropna()
+    if isinstance(recent_df.columns, pd.MultiIndex):
+        recent_df = recent_df['Close']
+    else:
+        recent_df = recent_df[['Close']]
     recent_df.columns = ['Close']
+    recent_df = recent_df.dropna()
     recent_df.index = pd.to_datetime(recent_df.index).tz_localize(None)
 
-    # Merge datasets
+    # Мердж
     early_df = early_df[early_df.index < '2014-09-17']
-    full_df = pd.concat([early_df, recent_df])
-    return full_df
+    return pd.concat([early_df, recent_df])
+
 
 try:
     raw_df = load_raw_data()
 except Exception as e:
-    st.error(f"Error loading data: {e}")
+    st.error(f"Помилка завантаження: {e}")
     st.stop()
 
-# --- AUTOFIT MATHEMATICS (R-Squared Calculation) ---
-df_fit = raw_df.copy()
-genesis_date_fit = pd.to_datetime('2009-01-03')
-df_fit = df_fit[df_fit.index > genesis_date_fit]
 
-days = (df_fit.index - genesis_date_fit).days.values
-price = df_fit['Close'].values
+# --- АЛГОРИТМ АВТО-ТЮНІНГУ ОФСЕТУ ---
+# Ця функція знаходить офсет, який дає максимальний R2, перебираючи дні
+@st.cache_data
+def find_best_fit_params(df_in):
+    best_r2_val = -1
+    best_off_val = 150
+    best_A_val = -17
+    best_B_val = 5.8
 
-log_days = np.log10(days)
-log_price = np.log10(price)
+    # Шукаємо в діапазоні навколо липневої дати (26 липня ~ 204 дні від генезису)
+    # Діапазон 180-230 днів покриває літо-осінь 2009
+    for off in range(180, 230):
+        gen_test = pd.to_datetime('2009-01-03') + pd.Timedelta(days=off)
+        df_test = df_in[df_in.index > gen_test].copy()
 
-# Calculate ideal A and B using Least Squares method
-B_ideal, A_ideal = np.polyfit(log_days, log_price, 1)
+        d_vals = (df_test.index - gen_test).days.values
+        p_vals = df_test['Close'].values
+        valid_mask = (d_vals > 0) & (p_vals > 0)
 
-# Calculate R-squared
-p = np.poly1d([B_ideal, A_ideal])
-yhat = p(log_days)
-ybar = np.sum(log_price) / len(log_price)
-r_squared = (np.sum((yhat - ybar)**2) / np.sum((log_price - ybar)**2)) * 100
+        if np.sum(valid_mask) < 100: continue
 
-# Calculate Percentiles (Support/Resistance bands)
-perfect_residuals = log_price - yhat
-p2_5 = np.percentile(perfect_residuals, 2.5)
-p16_5 = np.percentile(perfect_residuals, 16.5)
-p83_5 = np.percentile(perfect_residuals, 83.5)
-p97_5 = np.percentile(perfect_residuals, 97.5)
+        log_d = np.log10(d_vals[valid_mask])
+        log_p = np.log10(p_vals[valid_mask])
 
-# === SETTINGS PANEL (SIDEBAR) ===
-st.sidebar.header("1. Power Law Trend")
-st.sidebar.success(f"**Auto-fit (Ideal Math):**\n\nR² (Accuracy): **{r_squared:.2f}%**")
+        slope, intercept = np.polyfit(log_d, log_p, 1)
 
-# Sliders for Power Law parameters
-A = st.sidebar.slider("A (Intercept / Axis Shift)", min_value=-25.0, max_value=0.0, value=float(A_ideal), step=0.01)
-B = st.sidebar.slider("B (Slope)", min_value=1.0, max_value=10.0, value=float(B_ideal), step=0.01)
+        # Розрахунок R2
+        y_pred = slope * log_d + intercept
+        ss_res = np.sum((log_p - y_pred) ** 2)
+        ss_tot = np.sum((log_p - np.mean(log_p)) ** 2)
+        r2 = 1 - (ss_res / ss_tot)
 
-st.sidebar.markdown("---")
-st.sidebar.header("2. Resonances (DSI Cycles)")
-genesis_offset = st.sidebar.slider("Genesis Offset (days from Jan 3, 2009)", min_value=-1000, max_value=1000, value=0, step=5)
-t1_age = st.sidebar.slider("Age of 1st Peak (Phase, years)", min_value=1.0, max_value=5.0, value=2.45, step=0.01)
-lambda_val = st.sidebar.slider("Lambda (λ) - Multiplier", min_value=1.5, max_value=3.0, value=2.07, step=0.01)
+        if r2 > best_r2_val:
+            best_r2_val = r2
+            best_off_val = off
+            best_A_val = intercept
+            best_B_val = slope
 
-# === SCALE SWITCHES (ABOVE CHART) ===
-col1, col2, _ = st.columns([1, 1, 4])
-with col1:
-    price_scale = st.radio("Price Scale", ["Log", "Lin"], horizontal=True)
-with col2:
-    time_scale = st.radio("Time Scale", ["Log", "Lin"], horizontal=True)
+    return best_off_val, best_A_val, best_B_val, best_r2_val
 
-# === MAIN MODEL MATHEMATICS ===
+
+# Виконуємо розрахунок один раз при старті
+opt_offset, opt_A, opt_B, opt_R2 = find_best_fit_params(raw_df)
+
+# === ІНІЦІАЛІЗАЦІЯ ПАРАМЕТРІВ ===
+# Встановлюємо знайдені оптимальні значення як дефолтні
+if 'genesis_offset' not in st.session_state: st.session_state.genesis_offset = int(opt_offset)
+if 'A' not in st.session_state: st.session_state.A = float(round(opt_A, 3))
+if 'B' not in st.session_state: st.session_state.B = float(round(opt_B, 3))
+
+if 't1_age' not in st.session_state: st.session_state.t1_age = 1.88
+if 'lambda_val' not in st.session_state: st.session_state.lambda_val = 2.12
+
+
+def update_param(param_name, delta):
+    st.session_state[param_name] = round(st.session_state[param_name] + delta, 3)
+
+
+# === SIDEBAR ===
+st.sidebar.markdown(
+    "<h2 style='text-align: center; color: #f0b90b; margin-bottom: 20px; font-size: 1.8rem;'>BITCOIN MODEL</h2>",
+    unsafe_allow_html=True)
+
+c_v1, c_v2 = st.sidebar.columns(2)
+with c_v1: price_scale = st.radio("Ціна", ["Log", "Lin"], index=0)
+with c_v2: time_scale = st.radio("Час", ["Log", "Lin"], index=0)
+
+# Тепер ми відображаємо R2, який відповідає ПОТОЧНИМ налаштуванням слайдерів,
+# але дефолтні налаштування - це максимум.
+st.sidebar.markdown(
+    f"<p style='color:gray; text-align:center; font-size: 0.85rem; margin-top: 10px; margin-bottom: 20px;'>Max R² (авто): {opt_R2 * 100:.3f}%<br>(offset {opt_offset}d)</p>",
+    unsafe_allow_html=True)
+
+
+def fancy_control(label, key, step, min_v, max_v):
+    st.sidebar.markdown(f"**{label}**")
+    c1, c2, c3 = st.sidebar.columns([1, 2, 1])
+    with c1:
+        if st.button("➖", key=f"{key}_m"): update_param(key, -step)
+    with c3:
+        if st.button("➕", key=f"{key}_p"): update_param(key, step)
+    with c2:
+        return st.slider(label, min_v, max_v, key=key, step=step, label_visibility="collapsed")
+
+
+A = fancy_control("A (Константа)", "A", 0.01, -25.0, 0.0)
+B = fancy_control("B (Нахил)", "B", 0.01, 1.0, 10.0)
+genesis_offset = fancy_control("Зсув Генезису", "genesis_offset", 1, -1000, 1000)  # Крок 1 день для точності
+t1_age = fancy_control("Вік 1-го піку", "t1_age", 0.01, 1.0, 5.0)
+lambda_val = fancy_control("Лямбда", "lambda_val", 0.01, 1.5, 3.0)
+
+# === РОЗРАХУНКИ МОДЕЛІ (LIVE) ===
 df = raw_df.copy()
-# Adjust Genesis date based on user offset
-genesis_date = pd.to_datetime('2009-01-03') + pd.Timedelta(days=genesis_offset)
-df = df[df.index > genesis_date].copy()
+gen_date = pd.to_datetime('2009-01-03') + pd.Timedelta(days=genesis_offset)
+df = df[df.index > gen_date].copy()
+df['Days'] = (df.index - gen_date).days
+df['LogP'], df['LogD'] = np.log10(df['Close']), np.log10(df['Days'])
 
-df['DaysFromGenesis'] = (df.index - genesis_date).days
-df['YearsFromGenesis'] = df['DaysFromGenesis'] / 365.25
+df['ModelLog'] = A + B * df['LogD']
+df['Res'] = df['LogP'] - df['ModelLog']
+df['Fair'] = 10 ** df['ModelLog']
 
-df['Log10_Price'] = np.log10(df['Close'])
-df['Log10_Days'] = np.log10(df['DaysFromGenesis'])
+# Поточний R² для відображення на екрані
+ss_res = np.sum(df['Res'] ** 2)
+ss_tot = np.sum((df['LogP'] - np.mean(df['LogP'])) ** 2)
+current_r2 = (1 - (ss_res / ss_tot)) * 100
 
-# Calculate Trend in Logarithms
-df['PowerLaw_Log10'] = A + B * df['Log10_Days']
-df['Residuals'] = df['Log10_Price'] - df['PowerLaw_Log10']
+# Перцентилі для каналів (перераховуємо динамічно від поточної моделі)
+res_vals = df['LogP'] - (A + B * df['LogD'])
+p2_5, p16_5, p83_5, p97_5 = np.percentile(res_vals, [2.5, 16.5, 83.5, 97.5])
 
-# CONVERT TO REAL DOLLARS FOR THE UPPER CHART
-df['PowerLaw_USD'] = 10 ** df['PowerLaw_Log10']
-y_97_5_usd = 10 ** (df['PowerLaw_Log10'] + p97_5)
-y_83_5_usd = 10 ** (df['PowerLaw_Log10'] + p83_5)
-y_16_5_usd = 10 ** (df['PowerLaw_Log10'] + p16_5)
-y_2_5_usd = 10 ** (df['PowerLaw_Log10'] + p2_5)
+# Лінії тренду
+view_max = df['Days'].max() + 365 * 1.5
+m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
+m_log_d = np.log10(m_x)
+m_fair_log = A + B * m_log_d
+m_fair_usd = 10 ** m_fair_log
+m_bbl, m_acc = 10 ** (m_fair_log + p97_5), 10 ** (m_fair_log + p2_5)
 
-# Calculate DSI Resonances (Future Peaks)
-cycles_to_draw = 6 # Number of future cycles
-red_lines_years = [t1_age * (lambda_val ** i) for i in range(cycles_to_draw)]
-blue_lines_years = [t1_age * (lambda_val ** (i + 0.5)) for i in range(cycles_to_draw)]
+# --- ГРАФІК (Оптимізована висота) ---
+# Збільшив vertical_spacing до 0.10, щоб звільнити місце для легенди
+fig = make_subplots(rows=2, cols=1, shared_xaxes=False, vertical_spacing=0.10, row_heights=[0.76, 0.24])
 
-# --- VISUALIZATION ---
-fig = make_subplots(rows=2, cols=1,
-                    shared_xaxes=False,
-                    vertical_spacing=0.08,
-                    subplot_titles=(f"1. Trend & Channels (Time: {time_scale} | Price: {price_scale})",
-                                    f"2. Residuals Oscillator (Genesis: {genesis_date.strftime('%d %b %Y')})"))
+# Зони
+fig.add_trace(go.Scatter(x=m_x, y=m_bbl, mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'), row=1,
+              col=1)
+fig.add_trace(go.Scatter(x=m_x, y=10 ** (m_fair_log + p83_5), mode='lines', line=dict(width=0), fill='tonexty',
+                         fillcolor='rgba(234, 61, 47, 0.15)', name='Бульбашка'), row=1, col=1)
+fig.add_trace(go.Scatter(x=m_x, y=10 ** (m_fair_log + p16_5), mode='lines', line=dict(width=0), showlegend=False,
+                         hoverinfo='skip'), row=1, col=1)
+fig.add_trace(
+    go.Scatter(x=m_x, y=m_acc, mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)',
+               name='Накопичення'), row=1, col=1)
 
-# --- TOP CHART: Price & Trend ---
-# Power Law Trend Line
-fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=df['PowerLaw_USD'], mode='lines', name='Power Law Trend', line=dict(color='cyan', dash='dash')), row=1, col=1)
+# Лінії цін
+fig.add_trace(go.Scatter(x=m_x, y=m_fair_usd, mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'),
+                         name='Fair Value'), row=1, col=1)
+fig.add_trace(
+    go.Scatter(x=df['Days'], y=df['Close'], mode='lines', name='Ціна BTC', line=dict(color='#ffffff', width=1.3)),
+    row=1, col=1)
 
-# Percentile Bands (Support/Resistance)
-fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_97_5_usd, mode='lines', line=dict(color='red', width=1, dash='dot'), name='97.5th Percentile (Top/Bubble)'), row=1, col=1)
-fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_83_5_usd, mode='lines', line=dict(color='blue', width=1, dash='dot'), name='83.5th Percentile'), row=1, col=1)
-fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_16_5_usd, mode='lines', line=dict(color='blue', width=1, dash='dot'), name='16.5th Percentile'), row=1, col=1)
-fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_2_5_usd, mode='lines', line=dict(color='red', width=1, dash='dot'), name='2.5th Percentile (Bottom)'), row=1, col=1)
+t_vals = [(pd.Timestamp(f'{y}-01-01') - gen_date).days for y in range(gen_date.year + 1, 2028) if
+          (pd.Timestamp(f'{y}-01-01') - gen_date).days > 0]
+t_text = [str(y) for y in range(gen_date.year + 1, 2028) if (pd.Timestamp(f'{y}-01-01') - gen_date).days > 0]
+xr = [np.log10(t_vals[0]), np.log10(view_max)] if time_scale == "Log" else [0, view_max]
 
-# Real Bitcoin Price
-fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=df['Close'], mode='lines', name='Real Price (USD)', line=dict(color='orange')), row=1, col=1)
+fig.update_xaxes(type="log" if time_scale == "Log" else "linear", tickvals=t_vals, ticktext=t_text, range=xr,
+                 gridcolor='#1e222d', row=1, col=1)
+fig.update_yaxes(type="log" if price_scale == "Log" else "linear",
+                 range=[np.log10(0.01), np.log10(df['Close'].max() * 8)] if price_scale == "Log" else None,
+                 gridcolor='#1e222d', row=1, col=1)
 
-# Dynamic Axes Configuration (Log vs Linear)
-fig.update_xaxes(type="log" if time_scale == "Log" else "linear", title_text=f"Bitcoin Age (Days) - {time_scale} Scale", row=1, col=1)
-fig.update_yaxes(type="log" if price_scale == "Log" else "linear", title_text=f"Price (USD) - {price_scale} Scale", row=1, col=1)
+# Осцилятор
+fig.add_trace(
+    go.Scatter(x=df['Days'], y=df['Res'], mode='lines', name='Осцилятор', line=dict(color='#0ecb81', width=1.2)), row=2,
+    col=1)
+fig.add_hline(y=0, line_width=1, line_color="#848e9c", row=2, col=1)
+for i in range(6):
+    fig.add_vline(x=t1_age * (lambda_val ** i) * 365.25, line_width=1, line_dash="dash", line_color="#ea3d2f",
+                  opacity=0.3, row=2, col=1)
+    fig.add_vline(x=t1_age * (lambda_val ** (i + 0.5)) * 365.25, line_width=0.8, line_dash="dot", line_color="#2b6aff",
+                  opacity=0.2, row=2, col=1)
 
-# --- BOTTOM CHART: Oscillator ---
-fig.add_trace(go.Scatter(x=df['YearsFromGenesis'], y=df['Residuals'], mode='lines', name='Oscillator (Residuals)', line=dict(color='white', width=1)), row=2, col=1)
+fig.update_xaxes(type="log" if time_scale == "Log" else "linear", tickvals=t_vals, ticktext=t_text, range=xr,
+                 gridcolor='#1e222d', row=2, col=1)
 
-# Draw Red Lines (Primary Peaks)
-for age in red_lines_years:
-    fig.add_vline(x=age, line_width=1.5, line_dash="dash", line_color="red", row=2, col=1)
+# Перемістив легенду на y=0.27 (між графіками) та збільшив шрифт до 15
+fig.update_layout(height=720, margin=dict(t=30, b=10, l=50, r=20), template="plotly_dark",
+                  legend=dict(orientation="h", y=0.27, x=0.5, xanchor="center", font=dict(size=15, color="#848e9c")),
+                  paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
 
-# Draw Blue Lines (Half-Harmonics)
-for age in blue_lines_years:
-    fig.add_vline(x=age, line_width=1, line_dash="dot", line_color="blue", row=2, col=1)
+st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-fig.update_xaxes(title_text="Bitcoin Age (Linear Years from Genesis)", range=[0, 22], row=2, col=1)
-fig.update_yaxes(title_text="Residuals (Log Deviation)", row=2, col=1)
+# === KPI DASHBOARD ===
+l_p, l_f = df['Close'].iloc[-1], df['Fair'].iloc[-1]
+diff = ((l_p - l_f) / l_f) * 100
+pot = ((m_bbl[-1] - l_p) / l_p) * 100
+diff_color = "#0ecb81" if diff < 0 else "#ea3d2f"
 
-# Layout adjustments
-fig.update_layout(height=750, margin=dict(t=40, b=20), template="plotly_dark", hovermode="x unified", showlegend=False)
+k1, k2, k3, k4 = st.columns(4)
 
-st.plotly_chart(fig, use_container_width=True)
+
+def kpi_card(col, label, value, delta=None, d_color=None):
+    # Якщо дельти немає, вставляємо невидимий плейсхолдер, щоб зберегти висоту і вирівнювання
+    if delta:
+        delta_html = f"<div class='metric-delta' style='color:{d_color}'>{delta}</div>"
+    else:
+        delta_html = f"<div class='metric-delta' style='visibility:hidden;'>-</div>"
+
+    col.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{value}</div>
+            {delta_html}
+        </div>
+    """, unsafe_allow_html=True)
+
+
+kpi_card(k1, "ЦІНА BTC", f"${l_p:,.0f}")
+kpi_card(k2, "FAIR VALUE", f"${l_f:,.0f}", f"{diff:+.1f}% від моделі", diff_color)
+kpi_card(k3, "МОДЕЛЬНИЙ FIT (R²)", f"{current_r2:.2f}%")
+kpi_card(k4, "ПОТЕНЦІАЛ РОСТУ", f"+{pot:,.0f}%", "до верхньої межі", "#f0b90b")
