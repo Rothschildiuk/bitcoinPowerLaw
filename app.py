@@ -5,30 +5,37 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import ssl
-# Fix for MAC OS
+
+# Fix for MAC OS (SSL Certificate issue)
 try:
     _create_unverified_https_context = ssl._create_unverified_context
 except AttributeError:
     pass
 else:
     ssl._create_default_https_context = _create_unverified_https_context
+
 # Set Streamlit page configuration
 st.set_page_config(layout="wide", page_title="BTC Power Law & Percentiles")
-st.markdown("<h3 style='margin-top: -40px; margin-bottom: 0px;'>Bitcoin: Power Law Trend, R² та DSI Осцилятор</h3>", unsafe_allow_html=True)
+
+# Main Title (HTML for compact styling)
+st.markdown("<h3 style='margin-top: -40px; margin-bottom: 0px;'>Bitcoin: Power Law Trend, R² & DSI Oscillator</h3>", unsafe_allow_html=True)
 
 @st.cache_data
 def load_raw_data():
+    # Load early data (2010-2014)
     url = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
     early_df = pd.read_csv(url)
     early_df['Date'] = pd.to_datetime(early_df['Date'])
     early_df.set_index('Date', inplace=True)
     early_df.rename(columns={'Price': 'Close'}, inplace=True)
 
+    # Load recent data (from 2014) via yfinance
     recent_df = yf.download('BTC-USD', start='2014-09-17')
     recent_df = recent_df[['Close']].dropna()
     recent_df.columns = ['Close']
     recent_df.index = pd.to_datetime(recent_df.index).tz_localize(None)
 
+    # Merge datasets
     early_df = early_df[early_df.index < '2014-09-17']
     full_df = pd.concat([early_df, recent_df])
     return full_df
@@ -36,10 +43,10 @@ def load_raw_data():
 try:
     raw_df = load_raw_data()
 except Exception as e:
-    st.error(f"Помилка завантаження даних: {e}")
+    st.error(f"Error loading data: {e}")
     st.stop()
 
-# --- AUTOFIT MATHEMATICS ---
+# --- AUTOFIT MATHEMATICS (R-Squared Calculation) ---
 df_fit = raw_df.copy()
 genesis_date_fit = pd.to_datetime('2009-01-03')
 df_fit = df_fit[df_fit.index > genesis_date_fit]
@@ -50,13 +57,16 @@ price = df_fit['Close'].values
 log_days = np.log10(days)
 log_price = np.log10(price)
 
+# Calculate ideal A and B using Least Squares method
 B_ideal, A_ideal = np.polyfit(log_days, log_price, 1)
 
+# Calculate R-squared
 p = np.poly1d([B_ideal, A_ideal])
 yhat = p(log_days)
 ybar = np.sum(log_price) / len(log_price)
 r_squared = (np.sum((yhat - ybar)**2) / np.sum((log_price - ybar)**2)) * 100
 
+# Calculate Percentiles (Support/Resistance bands)
 perfect_residuals = log_price - yhat
 p2_5 = np.percentile(perfect_residuals, 2.5)
 p16_5 = np.percentile(perfect_residuals, 16.5)
@@ -64,17 +74,18 @@ p83_5 = np.percentile(perfect_residuals, 83.5)
 p97_5 = np.percentile(perfect_residuals, 97.5)
 
 # === SETTINGS PANEL (SIDEBAR) ===
-st.sidebar.header("1. Базовий тренд (Power Law)")
-st.sidebar.success(f"**Автопідгонка (Ідеал):**\n\nR² (Точність): **{r_squared:.2f}%**")
+st.sidebar.header("1. Power Law Trend")
+st.sidebar.success(f"**Auto-fit (Ideal Math):**\n\nR² (Accuracy): **{r_squared:.2f}%**")
 
-A = st.sidebar.slider("A (Axis Shift)", min_value=-25.0, max_value=0.0, value=float(A_ideal), step=0.01)  # type: ignore
-B = st.sidebar.slider("B (Slope Angle)", min_value=1.0, max_value=10.0, value=float(B_ideal), step=0.01)  # type: ignore
+# Sliders for Power Law parameters
+A = st.sidebar.slider("A (Intercept / Axis Shift)", min_value=-25.0, max_value=0.0, value=float(A_ideal), step=0.01)
+B = st.sidebar.slider("B (Slope)", min_value=1.0, max_value=10.0, value=float(B_ideal), step=0.01)
 
 st.sidebar.markdown("---")
 st.sidebar.header("2. Resonances (DSI Cycles)")
-genesis_offset = st.sidebar.slider("Genesis Offset (days from 03.01.2009)", min_value=-1000, max_value=1000, value=0, step=5)
-t1_age = st.sidebar.slider("Age of 1st Peak (Phase, years)", min_value=1.0, max_value=5.0, value=2.45, step=0.01)  # type: ignore
-lambda_val = st.sidebar.slider("Lambda (λ) - Multiplier", min_value=1.5, max_value=3.0, value=2.07, step=0.01)  # type: ignore
+genesis_offset = st.sidebar.slider("Genesis Offset (days from Jan 3, 2009)", min_value=-1000, max_value=1000, value=0, step=5)
+t1_age = st.sidebar.slider("Age of 1st Peak (Phase, years)", min_value=1.0, max_value=5.0, value=2.45, step=0.01)
+lambda_val = st.sidebar.slider("Lambda (λ) - Multiplier", min_value=1.5, max_value=3.0, value=2.07, step=0.01)
 
 # === SCALE SWITCHES (ABOVE CHART) ===
 col1, col2, _ = st.columns([1, 1, 4])
@@ -85,6 +96,7 @@ with col2:
 
 # === MAIN MODEL MATHEMATICS ===
 df = raw_df.copy()
+# Adjust Genesis date based on user offset
 genesis_date = pd.to_datetime('2009-01-03') + pd.Timedelta(days=genesis_offset)
 df = df[df.index > genesis_date].copy()
 
@@ -94,7 +106,7 @@ df['YearsFromGenesis'] = df['DaysFromGenesis'] / 365.25
 df['Log10_Price'] = np.log10(df['Close'])
 df['Log10_Days'] = np.log10(df['DaysFromGenesis'])
 
-# Calculate trend in logarithms
+# Calculate Trend in Logarithms
 df['PowerLaw_Log10'] = A + B * df['Log10_Days']
 df['Residuals'] = df['Log10_Price'] - df['PowerLaw_Log10']
 
@@ -105,9 +117,8 @@ y_83_5_usd = 10 ** (df['PowerLaw_Log10'] + p83_5)
 y_16_5_usd = 10 ** (df['PowerLaw_Log10'] + p16_5)
 y_2_5_usd = 10 ** (df['PowerLaw_Log10'] + p2_5)
 
-# DSI резонанси
-# DSI resonances
-cycles_to_draw = 6 # Number of cycles to draw
+# Calculate DSI Resonances (Future Peaks)
+cycles_to_draw = 6 # Number of future cycles
 red_lines_years = [t1_age * (lambda_val ** i) for i in range(cycles_to_draw)]
 blue_lines_years = [t1_age * (lambda_val ** (i + 0.5)) for i in range(cycles_to_draw)]
 
@@ -115,36 +126,41 @@ blue_lines_years = [t1_age * (lambda_val ** (i + 0.5)) for i in range(cycles_to_
 fig = make_subplots(rows=2, cols=1,
                     shared_xaxes=False,
                     vertical_spacing=0.08,
-                    subplot_titles=(f"1. Trend and Channels (Time: {time_scale} | Price: {price_scale})",
+                    subplot_titles=(f"1. Trend & Channels (Time: {time_scale} | Price: {price_scale})",
                                     f"2. Residuals Oscillator (Genesis: {genesis_date.strftime('%d %b %Y')})"))
 
-# Trend line (in USD)
+# --- TOP CHART: Price & Trend ---
+# Power Law Trend Line
 fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=df['PowerLaw_USD'], mode='lines', name='Power Law Trend', line=dict(color='cyan', dash='dash')), row=1, col=1)
 
-# Deviation channels (in USD)
-fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_97_5_usd, mode='lines', line=dict(color='red', width=1, dash='dot'), name='97.5th Percentile (Bubble)'), row=1, col=1)
+# Percentile Bands (Support/Resistance)
+fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_97_5_usd, mode='lines', line=dict(color='red', width=1, dash='dot'), name='97.5th Percentile (Top/Bubble)'), row=1, col=1)
 fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_83_5_usd, mode='lines', line=dict(color='blue', width=1, dash='dot'), name='83.5th Percentile'), row=1, col=1)
 fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_16_5_usd, mode='lines', line=dict(color='blue', width=1, dash='dot'), name='16.5th Percentile'), row=1, col=1)
 fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=y_2_5_usd, mode='lines', line=dict(color='red', width=1, dash='dot'), name='2.5th Percentile (Bottom)'), row=1, col=1)
 
-# Real BTC price (in USD)
+# Real Bitcoin Price
 fig.add_trace(go.Scatter(x=df['DaysFromGenesis'], y=df['Close'], mode='lines', name='Real Price (USD)', line=dict(color='orange')), row=1, col=1)
 
-# DYNAMIC AXES (Depend on switches)
-fig.update_xaxes(type="log" if time_scale == "Log" else "linear", title_text=f"Bitcoin Age (Days) - {time_scale}", row=1, col=1)
-fig.update_yaxes(type="log" if price_scale == "Log" else "linear", title_text=f"Price (USD) - {price_scale}", row=1, col=1)
+# Dynamic Axes Configuration (Log vs Linear)
+fig.update_xaxes(type="log" if time_scale == "Log" else "linear", title_text=f"Bitcoin Age (Days) - {time_scale} Scale", row=1, col=1)
+fig.update_yaxes(type="log" if price_scale == "Log" else "linear", title_text=f"Price (USD) - {price_scale} Scale", row=1, col=1)
 
-# Oscillator (The lower chart remains linear in time, as DSI waves work this way)
+# --- BOTTOM CHART: Oscillator ---
 fig.add_trace(go.Scatter(x=df['YearsFromGenesis'], y=df['Residuals'], mode='lines', name='Oscillator (Residuals)', line=dict(color='white', width=1)), row=2, col=1)
 
+# Draw Red Lines (Primary Peaks)
 for age in red_lines_years:
     fig.add_vline(x=age, line_width=1.5, line_dash="dash", line_color="red", row=2, col=1)
+
+# Draw Blue Lines (Half-Harmonics)
 for age in blue_lines_years:
     fig.add_vline(x=age, line_width=1, line_dash="dot", line_color="blue", row=2, col=1)
 
 fig.update_xaxes(title_text="Bitcoin Age (Linear Years from Genesis)", range=[0, 22], row=2, col=1)
-fig.update_yaxes(title_text="Residual (Log10)", row=2, col=1)
+fig.update_yaxes(title_text="Residuals (Log Deviation)", row=2, col=1)
 
+# Layout adjustments
 fig.update_layout(height=750, margin=dict(t=40, b=20), template="plotly_dark", hovermode="x unified", showlegend=False)
 
 st.plotly_chart(fig, use_container_width=True)
