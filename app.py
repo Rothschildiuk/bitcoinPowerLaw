@@ -67,14 +67,14 @@ p97_5 = np.percentile(perfect_residuals, 97.5)
 st.sidebar.header("1. Базовий тренд (Power Law)")
 st.sidebar.success(f"**Автопідгонка (Ідеал):**\n\nR² (Точність): **{r_squared:.2f}%**")
 
-A = st.sidebar.slider("A (Axis Shift)", min_value=-25.0, max_value=0.0, value=float(A_ideal), step=0.01)
-B = st.sidebar.slider("B (Slope Angle)", min_value=1.0, max_value=10.0, value=float(B_ideal), step=0.01)
+A = st.sidebar.slider("A (Axis Shift)", min_value=-25.0, max_value=0.0, value=float(A_ideal), step=0.01)  # type: ignore
+B = st.sidebar.slider("B (Slope Angle)", min_value=1.0, max_value=10.0, value=float(B_ideal), step=0.01)  # type: ignore
 
 st.sidebar.markdown("---")
 st.sidebar.header("2. Resonances (DSI Cycles)")
 genesis_offset = st.sidebar.slider("Genesis Offset (days from 03.01.2009)", min_value=-1000, max_value=1000, value=0, step=5)
-t1_age = st.sidebar.slider("Age of 1st Peak (Phase, years)", min_value=1.0, max_value=5.0, value=2.45, step=0.01)
-lambda_val = st.sidebar.slider("Lambda (λ) - Multiplier", min_value=1.5, max_value=3.0, value=2.07, step=0.01)
+t1_age = st.sidebar.slider("Age of 1st Peak (Phase, years)", min_value=1.0, max_value=5.0, value=2.45, step=0.01)  # type: ignore
+lambda_val = st.sidebar.slider("Lambda (λ) - Multiplier", min_value=1.5, max_value=3.0, value=2.07, step=0.01)  # type: ignore
 
 # === SCALE SWITCHES (ABOVE CHART) ===
 col1, col2, _ = st.columns([1, 1, 4])
