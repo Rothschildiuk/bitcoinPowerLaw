@@ -245,6 +245,14 @@ p2_5, p16_5, p83_5, p97_5 = np.percentile(res_vals, [2.5, 16.5, 83.5, 97.5])
 # Trend lines
 view_max = df['Days'].max() + 365 * 1.5
 m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
+
+# --- CALC DATES FOR HOVER ---
+# Calculate real dates for the model lines for tooltip display
+m_dates = [gen_date + pd.Timedelta(days=d) for d in m_x]
+m_dates_str = [d.strftime('%d.%m.%Y') for d in m_dates]
+# Calculate real dates for dataframe lines
+df_dates_str = df.index.strftime('%d.%m.%Y')
+
 m_log_d = np.log10(m_x)
 m_fair_log = A + B * m_log_d
 m_fair_usd = 10 ** m_fair_log
@@ -255,21 +263,34 @@ m_bbl, m_acc = 10 ** (m_fair_log + p97_5), 10 ** (m_fair_log + p2_5)
 fig = make_subplots(rows=2, cols=1, shared_xaxes=False, vertical_spacing=0.10, row_heights=[0.76, 0.24])
 
 # Zones
-fig.add_trace(go.Scatter(x=m_x, y=m_bbl, mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'), row=1,
-              col=1)
+# Added customdata and hovertemplate to display Date: dd.mm.yyyy
+fig.add_trace(go.Scatter(x=m_x, y=m_bbl, mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip',
+                         customdata=m_dates_str), row=1, col=1)
+
 fig.add_trace(go.Scatter(x=m_x, y=10 ** (m_fair_log + p83_5), mode='lines', line=dict(width=0), fill='tonexty',
-                         fillcolor='rgba(234, 61, 47, 0.15)', name='Bubble'), row=1, col=1)
+                         fillcolor='rgba(234, 61, 47, 0.15)', name='Bubble',
+                         customdata=m_dates_str,
+                         hovertemplate='Date: %{customdata}<br>Price: $%{y:,.0f}<extra></extra>'), row=1, col=1)
+
 fig.add_trace(go.Scatter(x=m_x, y=10 ** (m_fair_log + p16_5), mode='lines', line=dict(width=0), showlegend=False,
-                         hoverinfo='skip'), row=1, col=1)
+                         hoverinfo='skip', customdata=m_dates_str), row=1, col=1)
+
 fig.add_trace(
     go.Scatter(x=m_x, y=m_acc, mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)',
-               name='Accumulation'), row=1, col=1)
+               name='Accumulation',
+               customdata=m_dates_str,
+               hovertemplate='Date: %{customdata}<br>Price: $%{y:,.0f}<extra></extra>'), row=1, col=1)
 
 # Price lines
 fig.add_trace(go.Scatter(x=m_x, y=m_fair_usd, mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'),
-                         name='Fair Value'), row=1, col=1)
+                         name='Fair Value',
+                         customdata=m_dates_str,
+                         hovertemplate='Date: %{customdata}<br>Fair: $%{y:,.0f}<extra></extra>'), row=1, col=1)
+
 fig.add_trace(
-    go.Scatter(x=df['Days'], y=df['Close'], mode='lines', name='BTC Price', line=dict(color='#ffffff', width=1.3)),
+    go.Scatter(x=df['Days'], y=df['Close'], mode='lines', name='BTC Price', line=dict(color='#ffffff', width=1.3),
+               customdata=df_dates_str,
+               hovertemplate='Date: %{customdata}<br>Price: $%{y:,.0f}<extra></extra>'),
     row=1, col=1)
 
 t_vals = [(pd.Timestamp(f'{y}-01-01') - gen_date).days for y in range(gen_date.year + 1, 2028) if
@@ -285,8 +306,11 @@ fig.update_yaxes(type="log" if price_scale == "Log" else "linear",
 
 # Oscillator
 fig.add_trace(
-    go.Scatter(x=df['Days'], y=df['Res'], mode='lines', name='Oscillator', line=dict(color='#0ecb81', width=1.2)), row=2,
+    go.Scatter(x=df['Days'], y=df['Res'], mode='lines', name='Oscillator', line=dict(color='#0ecb81', width=1.2),
+               customdata=df_dates_str,
+               hovertemplate='Date: %{customdata}<br>Osc: %{y:.3f}<extra></extra>'), row=2,
     col=1)
+
 fig.add_hline(y=0, line_width=1, line_color="#848e9c", row=2, col=1)
 for i in range(6):
     fig.add_vline(x=t1_age * (lambda_val ** i) * 365.25, line_width=1, line_dash="dash", line_color="#ea3d2f",
