@@ -348,7 +348,7 @@ p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 9
 current_r2 = (1 - (np.sum(df_display['Res'] ** 2) / np.sum((df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2))) * 100
 
 # --- VIZ ---
-view_max = df_display['Days'].max() + 365 * 1.5
+view_max = df_display['Days'].max() + 365 * 10
 m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
 # Model dates
 m_dates = [current_gen_date + pd.Timedelta(days=float(d)) for d in m_x]
@@ -408,8 +408,8 @@ fig.add_trace(go.Scatter(
 ), 1, 1)
 
 # Axes Setup
-t_vals = [(pd.Timestamp(f'{y}-01-01') - current_gen_date).days for y in range(current_gen_date.year + 1, 2028) if (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
-t_text = [str(y) for y in range(current_gen_date.year + 1, 2028) if (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
+t_vals = [(pd.Timestamp(f'{y}-01-01') - current_gen_date).days for y in range(current_gen_date.year + 1, 2036) if (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
+t_text = [str(y) for y in range(current_gen_date.year + 1, 2036) if (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
 
 for r in [1, 2]:
     if is_log_time:
