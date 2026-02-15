@@ -284,32 +284,55 @@ p2_5, p16_5, p83_5, p97_5 = np.percentile(df['Res'], [2.5, 16.5, 83.5, 97.5])
 # --- VIZ ---
 view_max = df['Days'].max() + 365 * 1.5
 m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
-# String dates for Model lines
-m_dates_str = [(gen_date + pd.Timedelta(days=float(d))).strftime('%d.%m.%Y') for d in m_x]
+# Convert model days to Datetimes for the plot if Linear mode
+m_dates = [gen_date + pd.Timedelta(days=float(d)) for d in m_x]
 m_log_d = np.log10(m_x)
 m_fair_usd = 10 ** (st.session_state.A + st.session_state.B * m_log_d)
+
+# DETERMINE X-AXIS TYPE
+# If "Lin" (Linear), we use Dates on X-axis => Hover Header becomes Date
+# If "Log", we must use Numbers (Days) => Hover Header is Number (math requirement for log-log)
+is_log_time = (time_scale == "Log")
+
+if is_log_time:
+    plot_x_model = m_x
+    plot_x_main = df['Days']
+    plot_x_osc = df['Days']
+    xaxis_type_custom = "log"
+else:
+    plot_x_model = m_dates
+    plot_x_main = df.index
+    plot_x_osc = df.index
+    xaxis_type_custom = "date"
+
+# String dates for customdata (used in body if needed)
+m_dates_str = [
+    d.strftime('%d.%m.%Y') if isinstance(d, pd.Timestamp) else (gen_date + pd.Timedelta(days=float(d))).strftime(
+        '%d.%m.%Y') for d in m_x]
 
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=[0.75, 0.25])
 
 # 1. TOP BAND (No hover)
-fig.add_trace(go.Scatter(x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p97_5), mode='lines',
-                         line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
+fig.add_trace(
+    go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p97_5), mode='lines',
+               line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
 
 # 2. BUBBLE ZONE (Fill)
 fig.add_trace(go.Scatter(
-    x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
+    x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
     mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)',
     name=T['leg_bubble'], customdata=m_dates_str,
     hovertemplate=f"<b>{T['leg_bubble']}</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
 # 3. ACCUM ZONE TOP (No hover)
-fig.add_trace(go.Scatter(x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p16_5), mode='lines',
-                         line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
+fig.add_trace(
+    go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p16_5), mode='lines',
+               line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
 
 # 4. ACCUM ZONE FILL
 fig.add_trace(go.Scatter(
-    x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p2_5),
+    x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p2_5),
     mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)',
     name=T['leg_accum'], customdata=m_dates_str,
     hovertemplate=f"<b>{T['leg_accum']}</b>: $%{{y:,.0f}}<extra></extra>"
@@ -317,19 +340,26 @@ fig.add_trace(go.Scatter(
 
 # 5. FAIR VALUE (Dashed)
 fig.add_trace(go.Scatter(
-    x=m_x, y=m_fair_usd,
+    x=plot_x_model, y=m_fair_usd,
     mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'),
     name=T['leg_fair'], customdata=m_dates_str,
     hovertemplate=f"<b>{T['leg_fair']}</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
-# 6. BTC PRICE (MAIN TRACE with DATE Header)
+# 6. BTC PRICE
+# If Log Time: Header is Number, so we put Date in Body.
+# If Lin Time: Header is Date, so we clean Body.
+if is_log_time:
+    btc_hover = f"📅 %{{customdata}}<br><b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>"
+else:
+    btc_hover = f"<b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>"
+
 fig.add_trace(go.Scatter(
-    x=df['Days'], y=df['Close'],
+    x=plot_x_main, y=df['Close'],
     mode='lines', name=T['leg_price'],
     line=dict(color=pl_btc_color, width=1.5),
     customdata=df.index.strftime('%d.%m.%Y'),
-    hovertemplate=f"📅 %{{customdata}}<br><b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>"
+    hovertemplate=btc_hover
 ), 1, 1)
 
 # Axes Setup
@@ -337,17 +367,30 @@ t_vals = [(pd.Timestamp(f'{y}-01-01') - gen_date).days for y in range(gen_date.y
           (pd.Timestamp(f'{y}-01-01') - gen_date).days > 0]
 t_text = [str(y) for y in range(gen_date.year + 1, 2028) if (pd.Timestamp(f'{y}-01-01') - gen_date).days > 0]
 
-# High Visibility Ticks
+# X-Axes Configuration
 for r in [1, 2]:
-    fig.update_xaxes(
-        type="log" if time_scale == "Log" else "linear",
-        tickvals=t_vals,
-        ticktext=t_text,
-        range=[np.log10(t_vals[0]), np.log10(view_max)] if time_scale == "Log" else [0, view_max],
-        gridcolor=pl_grid_color,
-        tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"),
-        row=r, col=1
-    )
+    if is_log_time:
+        # LOG MODE: Use numeric ticks (years calculated as days)
+        fig.update_xaxes(
+            type="log",
+            tickvals=t_vals,
+            ticktext=t_text,
+            range=[np.log10(t_vals[0]), np.log10(view_max)],
+            gridcolor=pl_grid_color,
+            tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"),
+            row=r, col=1
+        )
+    else:
+        # LIN MODE: Use native Date axis (auto ticks)
+        fig.update_xaxes(
+            type="date",
+            gridcolor=pl_grid_color,
+            tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"),
+            # Ensure future is visible
+            range=[df.index.min(), m_dates[-1]],
+            hoverformat="%d.%m.%Y",  # Sets the header format to Date
+            row=r, col=1
+        )
 
 fig.update_yaxes(
     type="log" if price_scale == "Log" else "linear",
@@ -359,7 +402,7 @@ fig.update_yaxes(
 
 # 7. OSCILLATOR
 fig.add_trace(go.Scatter(
-    x=df['Days'], y=df['Res'],
+    x=plot_x_osc, y=df['Res'],
     mode='lines', name=T['leg_osc'],
     line=dict(color='#0ecb81', width=1.2),
     customdata=df.index.strftime('%d.%m.%Y'),
@@ -369,12 +412,19 @@ fig.add_hline(y=0, line_width=1, line_color=pl_legend_color, row=2, col=1)
 
 # Halving Lines
 for i in range(6):
-    halving_day = st.session_state.t1_age * (st.session_state.lambda_val ** i) * 365.25
-    fig.add_vline(x=halving_day, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8, row=2, col=1)
-    fig.add_vline(x=st.session_state.t1_age * (st.session_state.lambda_val ** (i + 0.5)) * 365.25, line_width=1,
-                  line_dash="dot", line_color="#2b6aff", opacity=0.5, row=2, col=1)
+    halving_days_val = st.session_state.t1_age * (st.session_state.lambda_val ** i) * 365.25
+    halving_days_mid = st.session_state.t1_age * (st.session_state.lambda_val ** (i + 0.5)) * 365.25
 
-# --- LAYOUT UPDATE (Unified Hover + Dark Theme) ---
+    if is_log_time:
+        hv_x1, hv_x2 = halving_days_val, halving_days_mid
+    else:
+        hv_x1 = gen_date + pd.Timedelta(days=halving_days_val)
+        hv_x2 = gen_date + pd.Timedelta(days=halving_days_mid)
+
+    fig.add_vline(x=hv_x1, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8, row=2, col=1)
+    fig.add_vline(x=hv_x2, line_width=1, line_dash="dot", line_color="#2b6aff", opacity=0.5, row=2, col=1)
+
+# --- LAYOUT UPDATE ---
 fig.update_layout(
     height=720,
     margin=dict(t=30, b=10, l=50, r=20),
@@ -386,12 +436,9 @@ fig.update_layout(
     plot_bgcolor=pl_bg_color,
     hovermode='x unified',
     hoverlabel=dict(
-        bgcolor=c_hover_bg,  # Dark background from theme
-        bordercolor=c_border,  # Border color from theme
-        font=dict(
-            color=c_hover_text,  # Text color
-            size=13
-        )
+        bgcolor=c_hover_bg,
+        bordercolor=c_border,
+        font=dict(color=c_hover_text, size=13)
     )
 )
 
