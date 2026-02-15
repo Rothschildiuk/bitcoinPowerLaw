@@ -115,23 +115,23 @@ else:
 # --- CSS ---
 st.markdown(f"""
     <style>
-    .stApp, [data-testid="stAppViewContainer"] {{ background-color: {c_main_bg} !important; }}
+    .stApp, [data-testId="stAppViewContainer"] {{ background-color: {c_main_bg} !important; }}
     .block-container {{ padding-top: 1rem !important; padding-bottom: 0rem !important; padding-left: 1rem !important; padding-right: 1rem !important; }}
     footer {{visibility: hidden; display: none;}}
-    [data-testid="stHeader"] {{ background-color: transparent; color: {c_text_main}; }}
-    [data-testid="stHeader"] button {{ color: {c_text_main} !important; }}
-    [data-testid="stAppDeployButton"] {{ display: none !important; }}
+    [data-testId="stHeader"] {{ background-color: transparent; color: {c_text_main}; }}
+    [data-testId="stHeader"] button {{ color: {c_text_main} !important; }}
+    [data-testId="stAppDeployButton"] {{ display: none !important; }}
     #MainMenu {{ visibility: hidden !important; }}
     
-    [data-testid="stSidebar"] {{ 
+    [data-testId="stSidebar"] {{ 
         width: 320px !important; 
         background-color: {c_sidebar_bg} !important; 
         border-right: 1px solid {c_border};
         overflow: hidden !important;
     }}
-    [data-testid="stSidebarContent"] {{ overflow: hidden !important; }}
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{ gap: 0.8rem !important; padding-top: 0.5rem !important; }}
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {{ color: {c_text_main} !important; }}
+    [data-testId="stSidebarContent"] {{ overflow: hidden !important; }}
+    [data-testId="stSidebar"] [data-testId="stVerticalBlock"] {{ gap: 0.8rem !important; padding-top: 0.5rem !important; }}
+    [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label {{ color: {c_text_main} !important; }}
 
     .metric-card {{
         background: {c_card_bg}; border: 1px solid {c_border}; border-radius: 8px; padding: 10px 16px; text-align: center;
@@ -141,8 +141,8 @@ st.markdown(f"""
     .metric-value {{ color: {c_text_val}; font-size: 22px; font-weight: 800; }}
     .metric-delta {{ font-size: 13px; font-weight: 600; margin-top: 2px; }}
 
-    div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] {{ gap: 10px; }}
-    div[data-testid="stSidebar"] .stRadio label p {{ font-size: 14px !important; }}
+    div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] {{ gap: 10px; }}
+    div[data-testId="stSidebar"] .stRadio label p {{ font-size: 14px !important; }}
     
     .stButton > button {{
         width: 100% !important; background-color: {c_btn_bg} !important; color: {c_btn_text} !important;
