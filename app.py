@@ -124,38 +124,38 @@ st.markdown(f"""
     #MainMenu {{ visibility: hidden !important; }}
     
     [data-testId="stSidebar"] {{ 
-        width: 320px !important; 
+        width: 290px !important; 
         background-color: {c_sidebar_bg} !important; 
         border-right: 1px solid {c_border};
-        overflow: hidden !important;
     }}
-    [data-testId="stSidebarContent"] {{ overflow: hidden !important; }}
-    [data-testId="stSidebar"] [data-testId="stVerticalBlock"] {{ gap: 0.8rem !important; padding-top: 0.5rem !important; }}
-    [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label {{ color: {c_text_main} !important; }}
+    [data-testId="stSidebarContent"] {{ overflow-x: hidden !important; }}
+    [data-testId="stSidebar"] [data-testId="stVerticalBlock"] {{ gap: 0.4rem !important; padding-top: 0.5rem !important; }}
+    [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label {{ color: {c_text_main} !important; font-size: 13px !important; }}
 
     .metric-card {{
         background: {c_card_bg}; border: 1px solid {c_border}; border-radius: 8px; padding: 10px 16px; text-align: center;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 5px; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;
     }}
     .metric-label {{ color: {c_text_main}; font-size: 13px; font-weight: 600; margin-bottom: 4px; opacity: 0.8; }}
-    .metric-value {{ color: {c_text_val}; font-size: 22px; font-weight: 800; }}
-    .metric-delta {{ font-size: 13px; font-weight: 600; margin-top: 2px; }}
+    .metric-value {{ color: {c_text_val}; font-size: 20px; font-weight: 800; }}
+    .metric-delta {{ font-size: 12px; font-weight: 600; margin-top: 2px; }}
 
-    div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] {{ gap: 10px; }}
-    div[data-testId="stSidebar"] .stRadio label p {{ font-size: 14px !important; }}
+    div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] {{ gap: 8px; }}
+    div[data-testId="stSidebar"] .stRadio label p {{ font-size: 13px !important; }}
     
     .stButton > button {{
         width: 100% !important; background-color: {c_btn_bg} !important; color: {c_btn_text} !important;
-        border: 1px solid {c_border} !important; border-radius: 4px !important; height: 32px !important;
-        line-height: 30px !important; font-size: 14px !important; transition: 0.2s; font-weight: bold !important;
+        border: 1px solid {c_border} !important; border-radius: 4px !important; height: 28px !important;
+        line-height: 26px !important; font-size: 13px !important; transition: 0.2s; font-weight: bold !important;
     }}
-    .stSlider {{ margin-bottom: -5px !important; margin-top: 5px !important; }}
+    .stSlider {{ margin-bottom: -10px !important; margin-top: 0px !important; }}
     
     .sidebar-title {{
-        text-align: center; color: #f0b90b; margin-bottom: 10px !important; font-size: 1.8rem; font-weight: bold;
+        text-align: center; color: #f0b90b; margin-bottom: 5px !important; font-size: 1.5rem; font-weight: bold;
     }}
     </style>
     """, unsafe_allow_html=True)
+
 
 # --- DATA LOADING (OPTIMIZED) ---
 @st.cache_data
@@ -177,34 +177,25 @@ def load_and_prep_data():
     full_df = pd.concat([early_df, recent_df])
 
     # --- PERFORMANCE OPTIMIZATION: Pre-calculate static arrays ---
-    # Convert index to absolute days since 2009-01-03 once
     genesis_static = pd.to_datetime('2009-01-03')
     full_df['AbsDays'] = (full_df.index - genesis_static).days
-    # Pre-calculate log price
     full_df['LogClose'] = np.log10(full_df['Close'])
 
     return full_df
 
+
 try:
     raw_df = load_and_prep_data()
-    # Extract numpy arrays for ultra-fast fitting
     ALL_ABS_DAYS = raw_df['AbsDays'].values
     ALL_LOG_CLOSE = raw_df['LogClose'].values
 except Exception as e:
-    st.error(f"Error loading data: {e}"); st.stop()
+    st.error(f"Error loading data: {e}");
+    st.stop()
 
-# --- MATH CORE: NUMPY OPTIMIZED (NO PANDAS INSIDE) ---
+
+# --- MATH CORE ---
 def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
-    """
-    Calculates Linear Regression using pure Numpy arrays.
-    Much faster than pandas-based operations inside loops.
-    """
-    # X = days since specific offset
-    # X = (AbsDays - offset)
     x_days = abs_days_array - offset_value
-
-    # Filter valid mask (days > 0)
-    # Since log_price > 0 is always true for BTC, we mainly check days
     mask = x_days > 0
 
     if np.sum(mask) < 100:
@@ -212,14 +203,10 @@ def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
 
     x_valid = x_days[mask]
     y_valid = log_price_array[mask]
-
     log_x = np.log10(x_valid)
-    # y_valid is already log_p
 
-    # Polyfit
     slope, intercept = np.polyfit(log_x, y_valid, 1)
 
-    # R2 Calculation
     y_pred = slope * log_x + intercept
     ss_res = np.sum((y_valid - y_pred) ** 2)
     ss_tot = np.sum((y_valid - np.mean(y_valid)) ** 2)
@@ -227,24 +214,19 @@ def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
 
     return slope, intercept, r2
 
+
 @st.cache_data
 def find_global_best_fit_optimized():
-    """
-    Optimized search using numpy arrays.
-    """
     best_r2, best_off, best_a, best_b = -1, 150, -17, 5.8
-    # Using numpy arrays from global scope (loaded once)
-
     for off in range(100, 400, 2):
         b, a, r2 = calculate_regression_numpy(ALL_ABS_DAYS, ALL_LOG_CLOSE, off)
         if r2 > best_r2:
             best_r2, best_off, best_a, best_b = r2, off, a, b
     return best_off, best_a, best_b, best_r2
 
-# Initial Calculation
+
 opt_offset, opt_a_ideal, opt_b_ideal, opt_r2_ideal = find_global_best_fit_optimized()
 
-# Initialize Session State
 if "genesis_offset" not in st.session_state:
     st.session_state["genesis_offset"] = int(opt_offset)
 if "A" not in st.session_state:
@@ -254,8 +236,10 @@ if "B" not in st.session_state:
 for k, v in {"t1_age": 1.88, "lambda_val": 2.12}.items():
     if k not in st.session_state: st.session_state[k] = v
 
+
 def update_param(param_name, delta):
     st.session_state[param_name] = round(st.session_state[param_name] + delta, 3)
+
 
 # --- SIDEBAR UI ---
 with st.sidebar:
@@ -265,21 +249,18 @@ with st.sidebar:
     price_scale = c_v1.radio(T['price_scale'], ["Log", "Lin"], index=0, horizontal=True)
     time_scale = c_v2.radio(T['time_scale'], ["Log", "Lin"], index=0, horizontal=True)
 
-    # AUTO-FIT LOGIC
     auto_fit = st.checkbox(T['auto_fit'], value=False, help=T['auto_fit_help'])
 
     if auto_fit:
-        # Use fast numpy calc
         curr_off = st.session_state.get("genesis_offset", opt_offset)
         calc_b, calc_a, calc_r2 = calculate_regression_numpy(ALL_ABS_DAYS, ALL_LOG_CLOSE, curr_off)
         st.session_state["A"] = float(round(calc_a, 3))
         st.session_state["B"] = float(round(calc_b, 3))
         display_r2 = calc_r2
     else:
-        # Calculate R2 just for display
         _, _, display_r2 = calculate_regression_numpy(ALL_ABS_DAYS, ALL_LOG_CLOSE, st.session_state.genesis_offset)
 
-    # Controls
+
     def fancy_control(label, key, step, min_v, max_v, disabled=False):
         st.markdown(f"**{label}**")
         c1, c2, c3 = st.columns([1, 2.5, 1])
@@ -287,70 +268,55 @@ with st.sidebar:
         if c3.button("➕", key=f"{key}_p", disabled=disabled): update_param(key, step)
         return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
 
+
     gen_off_slider = fancy_control(T['lbl_gen'], "genesis_offset", 1, 0, 300)
     a_slider = fancy_control(T['lbl_A'], "A", 0.01, -25.0, 0.0, disabled=auto_fit)
     b_slider = fancy_control(T['lbl_B'], "B", 0.01, 1.0, 7.0, disabled=auto_fit)
 
     st.markdown(
-        f"<p style='color:{c_text_main}; text-align:center; font-size: 0.85rem; margin-top: 5px; opacity: 0.7;'>"
+        f"<p style='color:{c_text_main}; text-align:center; font-size: 0.75rem; margin-top: 2px; opacity: 0.7;'>"
         f"{T['max_r2']}: {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True)
 
-    # st.divider()
     t1_age_slider = fancy_control(T['lbl_cycle'], "t1_age", 0.01, 1.0, 5.0)
     lambda_slider = fancy_control(T['lbl_lambda'], "lambda_val", 0.01, 1.5, 3.0)
 
-    # Bottom Settings
-    st.markdown("<hr style='margin: 15px 0 10px 0; opacity:0.1;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
     cl_l, cl_t = st.columns(2)
     with cl_l:
-        lang_choice = st.radio(T['lang_label'], ["EN 🇬🇧", "UA 🇺🇦"], index=0 if st.session_state.lang == "EN" else 1, horizontal=True)
+        lang_choice = st.radio(T['lang_label'], ["EN 🇬🇧", "UA 🇺🇦"], index=0 if st.session_state.lang == "EN" else 1,
+                               horizontal=True)
         new_lang = "EN" if "EN" in lang_choice else "UA"
         if new_lang != st.session_state.lang:
             st.session_state.lang = new_lang
             st.rerun()
     with cl_t:
-        new_theme = st.radio(T['theme_label'], ["Dark 🌑", "Light ☀️"], index=0 if "Dark" in st.session_state.theme_mode else 1, horizontal=True)
+        new_theme = st.radio(T['theme_label'], ["Dark 🌑", "Light ☀️"],
+                             index=0 if "Dark" in st.session_state.theme_mode else 1, horizontal=True)
         if new_theme != st.session_state.theme_mode:
             st.session_state.theme_mode = new_theme
             st.rerun()
 
-# --- MAIN CALCULATIONS (VECTORIZED) ---
-# We use the pre-calculated AbsDays for speed, but for plotting we need a DF for hover data mostly.
-# However, let's keep the main DF logic simple but efficient.
-
-# Filter DF for display (still needed for plotting x-axis correctly)
-# But we can assume the cost is negligible for one-time render compared to the loop.
-# To be consistent with "AbsDays", let's use it.
-
+# --- MAIN CALCULATIONS ---
 gen_date_static = pd.to_datetime('2009-01-03')
 current_gen_date = gen_date_static + pd.Timedelta(days=st.session_state.genesis_offset)
 
-# Slice using boolean indexing on numpy array (faster)
 valid_idx = ALL_ABS_DAYS > st.session_state.genesis_offset
-# We need to construct the display DF
 df_display = raw_df.iloc[valid_idx].copy()
 
-# Recalculate model-specific columns
-# days_from_gen = abs_days - offset
 df_display['Days'] = df_display['AbsDays'] - st.session_state.genesis_offset
 df_display['LogD'] = np.log10(df_display['Days'])
-# LogP is already calculated as LogClose
 df_display['ModelLog'] = st.session_state.A + st.session_state.B * df_display['LogD']
 df_display['Res'] = df_display['LogClose'] - df_display['ModelLog']
-# Fair value
 df_display['Fair'] = 10 ** df_display['ModelLog']
 
-# Quantiles
 p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 97.5])
-
-# Calculate R2 based on CURRENT A/B settings for the KPI card
-current_r2 = (1 - (np.sum(df_display['Res'] ** 2) / np.sum((df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2))) * 100
+current_r2 = (1 - (np.sum(df_display['Res'] ** 2) / np.sum(
+    (df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2))) * 100
 
 # --- VIZ ---
 view_max = df_display['Days'].max() + 365 * 10
 m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
-# Model dates
 m_dates = [current_gen_date + pd.Timedelta(days=float(d)) for d in m_x]
 m_log_d = np.log10(m_x)
 m_fair_usd = 10 ** (st.session_state.A + st.session_state.B * m_log_d)
@@ -361,16 +327,17 @@ plot_x_main = df_display['Days'] if is_log_time else df_display.index
 plot_x_osc = df_display['Days'] if is_log_time else df_display.index
 
 m_dates_str = [
-    d.strftime('%d.%m.%Y') if isinstance(d, pd.Timestamp) else (current_gen_date + pd.Timedelta(days=float(d))).strftime('%d.%m.%Y')
+    d.strftime('%d.%m.%Y') if isinstance(d, pd.Timestamp) else (
+                current_gen_date + pd.Timedelta(days=float(d))).strftime('%d.%m.%Y')
     for d in m_x
 ]
 
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=[0.75, 0.25])
 
-# 1. TOP BAND
-fig.add_trace(go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p97_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
+fig.add_trace(
+    go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p97_5), mode='lines',
+               line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
 
-# 2. BUBBLE ZONE
 fig.add_trace(go.Scatter(
     x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
     mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)',
@@ -378,10 +345,10 @@ fig.add_trace(go.Scatter(
     hovertemplate=f"<b>{T['leg_bubble']}</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
-# 3. ACCUM ZONE TOP
-fig.add_trace(go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p16_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
+fig.add_trace(
+    go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p16_5), mode='lines',
+               line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
 
-# 4. ACCUM ZONE FILL
 fig.add_trace(go.Scatter(
     x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p2_5),
     mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)',
@@ -389,7 +356,6 @@ fig.add_trace(go.Scatter(
     hovertemplate=f"<b>{T['leg_accum']}</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
-# 5. FAIR VALUE
 fig.add_trace(go.Scatter(
     x=plot_x_model, y=m_fair_usd,
     mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'),
@@ -397,7 +363,6 @@ fig.add_trace(go.Scatter(
     hovertemplate=f"<b>{T['leg_fair']}</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
-# 6. BTC PRICE
 btc_hover = f"📅 %{{customdata}}<br><b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>" if is_log_time else f"<b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>"
 fig.add_trace(go.Scatter(
     x=plot_x_main, y=df_display['Close'],
@@ -407,16 +372,18 @@ fig.add_trace(go.Scatter(
     hovertemplate=btc_hover
 ), 1, 1)
 
-# Axes Setup
-t_vals = [(pd.Timestamp(f'{y}-01-01') - current_gen_date).days for y in range(current_gen_date.year + 1, 2036) if (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
-t_text = [str(y) for y in range(current_gen_date.year + 1, 2036) if (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
+t_vals = [(pd.Timestamp(f'{y}-01-01') - current_gen_date).days for y in range(current_gen_date.year + 1, 2036) if
+          (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
+t_text = [str(y) for y in range(current_gen_date.year + 1, 2036) if
+          (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
 
 for r in [1, 2]:
     if is_log_time:
         fig.update_xaxes(
             type="log", tickvals=t_vals, ticktext=t_text,
             range=[np.log10(t_vals[0]), np.log10(view_max)],
-            gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"), row=r, col=1
+            gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"),
+            row=r, col=1
         )
     else:
         fig.update_xaxes(
@@ -432,7 +399,6 @@ fig.update_yaxes(
     gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"), row=1, col=1
 )
 
-# 7. OSCILLATOR
 fig.add_trace(go.Scatter(
     x=plot_x_osc, y=df_display['Res'],
     mode='lines', name=T['leg_osc'],
@@ -442,7 +408,6 @@ fig.add_trace(go.Scatter(
 ), 2, 1)
 fig.add_hline(y=0, line_width=1, line_color=pl_legend_color, row=2, col=1)
 
-# Halving Lines
 for i in range(6):
     halving_days_val = st.session_state.t1_age * (st.session_state.lambda_val ** i) * 365.25
     halving_days_mid = st.session_state.t1_age * (st.session_state.lambda_val ** (i + 0.5)) * 365.25
@@ -459,12 +424,13 @@ for i in range(6):
 fig.update_layout(
     height=720, margin=dict(t=30, b=10, l=50, r=20), template=pl_template,
     font=dict(color=pl_text_color),
-    legend=dict(orientation="h", y=1.02, x=0.5, xanchor="center", font=dict(size=15, color=pl_legend_color), bgcolor="rgba(0,0,0,0)"),
+    legend=dict(orientation="h", y=1.02, x=0.5, xanchor="center", font=dict(size=14, color=pl_legend_color),
+                bgcolor="rgba(0,0,0,0)"),
     paper_bgcolor=pl_bg_color, plot_bgcolor=pl_bg_color, hovermode='x unified',
     hoverlabel=dict(bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13))
 )
 
-st.plotly_chart(fig, width='stretch', theme=None, config={'displayModeBar': False})
+st.plotly_chart(fig, use_container_width=True, theme=None, config={'displayModeBar': False})
 
 # --- KPI ---
 l_p, l_f = df_display['Close'].iloc[-1], df_display['Fair'].iloc[-1]
