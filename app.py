@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import ssl
 
-# SSL Fix for data downloading
+# --- SSL Fix for data downloading ---
 try:
     _create_unverified_https_context = ssl._create_unverified_context
 except AttributeError:
@@ -14,7 +14,7 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
-# Page Configuration
+# --- Page Configuration ---
 st.set_page_config(
     layout="wide",
     page_title="BTC Power Law Pro",
@@ -99,12 +99,16 @@ if is_dark:
     c_btn_bg, c_btn_hover, c_btn_text = "#2d323e", "#3d4251", "#d1d4dc"
     pl_template, pl_bg_color, pl_grid_color = "plotly_dark", "rgba(0,0,0,0)", "#1e222d"
     pl_btc_color, pl_legend_color, pl_text_color = "#ffffff", "#848e9c", "#848e9c"
+    # Hover specific colors
+    c_hover_bg, c_hover_text = "#1e222d", "#ffffff"
 else:
     c_main_bg, c_sidebar_bg, c_card_bg = "#ffffff", "#f4f4f4", "#f8f9fa"
     c_border, c_text_main, c_text_val = "#d0d0d0", "#000000", "#000000"
     c_btn_bg, c_btn_hover, c_btn_text = "#ffffff", "#e0e0e0", "#000000"
     pl_template, pl_bg_color, pl_grid_color = "plotly_white", "rgba(255,255,255,1)", "#e6e6e6"
     pl_btc_color, pl_legend_color, pl_text_color = "#000000", "#000000", "#000000"
+    # Hover specific colors
+    c_hover_bg, c_hover_text = "#ffffff", "#000000"
 
 # --- EXCLUSIVE CSS ---
 st.markdown(f"""
@@ -166,6 +170,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
+
 @st.cache_data
 def load_raw_data():
     url = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
@@ -181,10 +186,13 @@ def load_raw_data():
     early_df = early_df[early_df.index < '2014-09-17']
     return pd.concat([early_df, recent_df])
 
+
 try:
     raw_df = load_raw_data()
 except Exception as e:
-    st.error(f"Error: {e}"); st.stop()
+    st.error(f"Error: {e}");
+    st.stop()
+
 
 @st.cache_data
 def find_best_fit_params(df_in):
@@ -192,26 +200,30 @@ def find_best_fit_params(df_in):
     for off in range(180, 230):
         gen_test = pd.to_datetime('2009-01-03') + pd.Timedelta(days=off)
         df_test = df_in[df_in.index > gen_test].copy()
-        # Explicit conversion to numpy array to avoid float vs series issues
+        # Explicit conversion to numpy array
         d_vals = (df_test.index - gen_test).days.to_numpy()
         p_vals = df_test['Close'].to_numpy()
         valid = (d_vals > 0) & (p_vals > 0)
         if np.sum(valid) < 100: continue
         log_d, log_p = np.log10(d_vals[valid]), np.log10(p_vals[valid])
         slope, intercept = np.polyfit(log_d, log_p, 1)
-        r2 = 1 - (np.sum((log_p - (slope * log_d + intercept))**2) / np.sum((log_p - np.mean(log_p))**2))
+        r2 = 1 - (np.sum((log_p - (slope * log_d + intercept)) ** 2) / np.sum((log_p - np.mean(log_p)) ** 2))
         if r2 > best_r2_val:
             best_r2_val, best_off_val, best_a_val, best_b_val = r2, off, intercept, slope
     return best_off_val, best_a_val, best_b_val, best_r2_val
 
+
 opt_offset, opt_a_ideal, opt_b_ideal, opt_r2_ideal = find_best_fit_params(raw_df)
 
 # Initialize defaults
-for k, v in {"genesis_offset": int(opt_offset), "A": float(round(opt_a_ideal, 3)), "B": float(round(opt_b_ideal, 3)), "t1_age": 1.88, "lambda_val": 2.12}.items():
+for k, v in {"genesis_offset": int(opt_offset), "A": float(round(opt_a_ideal, 3)), "B": float(round(opt_b_ideal, 3)),
+             "t1_age": 1.88, "lambda_val": 2.12}.items():
     if k not in st.session_state: st.session_state[k] = v
+
 
 def update_param(param_name, delta):
     st.session_state[param_name] = round(st.session_state[param_name] + delta, 3)
+
 
 # --- SIDEBAR UI ---
 with st.sidebar:
@@ -221,7 +233,10 @@ with st.sidebar:
     price_scale = c_v1.radio(T['price_scale'], ["Log", "Lin"], index=0, horizontal=True)
     time_scale = c_v2.radio(T['time_scale'], ["Log", "Lin"], index=0, horizontal=True)
 
-    st.markdown(f"<p style='color:{c_text_main}; text-align:center; font-size: 0.85rem;'>{T['max_r2']}: {opt_r2_ideal * 100:.3f}% ({T['offset_txt']} {opt_offset}d)</p>", unsafe_allow_html=True)
+    st.markdown(
+        f"<p style='color:{c_text_main}; text-align:center; font-size: 0.85rem;'>{T['max_r2']}: {opt_r2_ideal * 100:.3f}% ({T['offset_txt']} {opt_offset}d)</p>",
+        unsafe_allow_html=True)
+
 
     def fancy_control(label, key, step, min_v, max_v):
         st.markdown(f"**{label}**")
@@ -229,6 +244,7 @@ with st.sidebar:
         if c1.button("➖", key=f"{key}_m"): update_param(key, -step)
         if c3.button("➕", key=f"{key}_p"): update_param(key, step)
         return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed")
+
 
     a_slider = fancy_control(T['lbl_A'], "A", 0.01, -25.0, 0.0)
     b_slider = fancy_control(T['lbl_B'], "B", 0.01, 1.0, 10.0)
@@ -240,13 +256,15 @@ with st.sidebar:
     st.markdown("<hr style='margin: 15px 0 10px 0; opacity:0.1;'>", unsafe_allow_html=True)
     cl_l, cl_t = st.columns(2)
     with cl_l:
-        lang_choice = st.radio(T['lang_label'], ["EN 🇬🇧", "UA 🇺🇦"], index=0 if st.session_state.lang=="EN" else 1, horizontal=True)
+        lang_choice = st.radio(T['lang_label'], ["EN 🇬🇧", "UA 🇺🇦"], index=0 if st.session_state.lang == "EN" else 1,
+                               horizontal=True)
         new_lang = "EN" if "EN" in lang_choice else "UA"
         if new_lang != st.session_state.lang:
             st.session_state.lang = new_lang
             st.rerun()
     with cl_t:
-        new_theme = st.radio(T['theme_label'], ["Dark 🌑", "Light ☀️"], index=0 if "Dark" in st.session_state.theme_mode else 1, horizontal=True)
+        new_theme = st.radio(T['theme_label'], ["Dark 🌑", "Light ☀️"],
+                             index=0 if "Dark" in st.session_state.theme_mode else 1, horizontal=True)
         if new_theme != st.session_state.theme_mode:
             st.session_state.theme_mode = new_theme
             st.rerun()
@@ -260,25 +278,63 @@ df['LogP'], df['LogD'] = np.log10(df['Close']), np.log10(df['Days'])
 df['ModelLog'] = st.session_state.A + st.session_state.B * df['LogD']
 df['Res'] = df['LogP'] - df['ModelLog']
 df['Fair'] = 10 ** df['ModelLog']
-current_r2 = (1 - (np.sum(df['Res']**2) / np.sum((df['LogP'] - np.mean(df['LogP']))**2))) * 100
+current_r2 = (1 - (np.sum(df['Res'] ** 2) / np.sum((df['LogP'] - np.mean(df['LogP'])) ** 2))) * 100
 p2_5, p16_5, p83_5, p97_5 = np.percentile(df['Res'], [2.5, 16.5, 83.5, 97.5])
 
 # --- VIZ ---
 view_max = df['Days'].max() + 365 * 1.5
 m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
+# String dates for Model lines
 m_dates_str = [(gen_date + pd.Timedelta(days=float(d))).strftime('%d.%m.%Y') for d in m_x]
 m_log_d = np.log10(m_x)
 m_fair_usd = 10 ** (st.session_state.A + st.session_state.B * m_log_d)
 
-fig = make_subplots(rows=2, cols=1, shared_xaxes=False, vertical_spacing=0.10, row_heights=[0.76, 0.24])
-fig.add_trace(go.Scatter(x=m_x, y=10**(st.session_state.A+st.session_state.B*m_log_d+p97_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
-fig.add_trace(go.Scatter(x=m_x, y=10**(st.session_state.A+st.session_state.B*m_log_d+p83_5), mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)', name=T['leg_bubble'], customdata=m_dates_str, hovertemplate=f"{T['hover_date']}: %{{customdata}}<br>{T['hover_price']}: $%{{y:,.0f}}<extra></extra>"), 1, 1)
-fig.add_trace(go.Scatter(x=m_x, y=10**(st.session_state.A+st.session_state.B*m_log_d+p16_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
-fig.add_trace(go.Scatter(x=m_x, y=10**(st.session_state.A+st.session_state.B*m_log_d+p2_5), mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)', name=T['leg_accum'], customdata=m_dates_str, hovertemplate=f"{T['hover_date']}: %{{customdata}}<br>{T['hover_price']}: $%{{y:,.0f}}<extra></extra>"), 1, 1)
-fig.add_trace(go.Scatter(x=m_x, y=m_fair_usd, mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'), name=T['leg_fair'], customdata=m_dates_str, hovertemplate=f"{T['hover_date']}: %{{customdata}}<br>{T['hover_fair']}: $%{{y:,.0f}}<extra></extra>"), 1, 1)
-fig.add_trace(go.Scatter(x=df['Days'], y=df['Close'], mode='lines', name=T['leg_price'], line=dict(color=pl_btc_color, width=1.3), customdata=df.index.strftime('%d.%m.%Y'), hovertemplate=f"{T['hover_date']}: %{{customdata}}<br>{T['hover_price']}: $%{{y:,.0f}}<extra></extra>"), 1, 1)
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=[0.75, 0.25])
 
-t_vals = [(pd.Timestamp(f'{y}-01-01') - gen_date).days for y in range(gen_date.year + 1, 2028) if (pd.Timestamp(f'{y}-01-01') - gen_date).days > 0]
+# 1. TOP BAND (No hover)
+fig.add_trace(go.Scatter(x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p97_5), mode='lines',
+                         line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
+
+# 2. BUBBLE ZONE (Fill)
+fig.add_trace(go.Scatter(
+    x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
+    mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)',
+    name=T['leg_bubble'], customdata=m_dates_str,
+    hovertemplate=f"<b>{T['leg_bubble']}</b>: $%{{y:,.0f}}<extra></extra>"
+), 1, 1)
+
+# 3. ACCUM ZONE TOP (No hover)
+fig.add_trace(go.Scatter(x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p16_5), mode='lines',
+                         line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
+
+# 4. ACCUM ZONE FILL
+fig.add_trace(go.Scatter(
+    x=m_x, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p2_5),
+    mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)',
+    name=T['leg_accum'], customdata=m_dates_str,
+    hovertemplate=f"<b>{T['leg_accum']}</b>: $%{{y:,.0f}}<extra></extra>"
+), 1, 1)
+
+# 5. FAIR VALUE (Dashed)
+fig.add_trace(go.Scatter(
+    x=m_x, y=m_fair_usd,
+    mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'),
+    name=T['leg_fair'], customdata=m_dates_str,
+    hovertemplate=f"<b>{T['leg_fair']}</b>: $%{{y:,.0f}}<extra></extra>"
+), 1, 1)
+
+# 6. BTC PRICE (MAIN TRACE with DATE Header)
+fig.add_trace(go.Scatter(
+    x=df['Days'], y=df['Close'],
+    mode='lines', name=T['leg_price'],
+    line=dict(color=pl_btc_color, width=1.5),
+    customdata=df.index.strftime('%d.%m.%Y'),
+    hovertemplate=f"📅 %{{customdata}}<br><b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>"
+), 1, 1)
+
+# Axes Setup
+t_vals = [(pd.Timestamp(f'{y}-01-01') - gen_date).days for y in range(gen_date.year + 1, 2028) if
+          (pd.Timestamp(f'{y}-01-01') - gen_date).days > 0]
 t_text = [str(y) for y in range(gen_date.year + 1, 2028) if (pd.Timestamp(f'{y}-01-01') - gen_date).days > 0]
 
 # High Visibility Ticks
@@ -301,34 +357,59 @@ fig.update_yaxes(
     row=1, col=1
 )
 
-fig.add_trace(go.Scatter(x=df['Days'], y=df['Res'], mode='lines', name=T['leg_osc'], line=dict(color='#0ecb81', width=1.2), customdata=df.index.strftime('%d.%m.%Y'), hovertemplate=f"{T['hover_date']}: %{{customdata}}<br>{T['hover_osc']}: %{{y:.3f}}<extra></extra>"), 2, 1)
+# 7. OSCILLATOR
+fig.add_trace(go.Scatter(
+    x=df['Days'], y=df['Res'],
+    mode='lines', name=T['leg_osc'],
+    line=dict(color='#0ecb81', width=1.2),
+    customdata=df.index.strftime('%d.%m.%Y'),
+    hovertemplate=f"<b>{T['leg_osc']}</b>: %{{y:.3f}}<extra></extra>"
+), 2, 1)
 fig.add_hline(y=0, line_width=1, line_color=pl_legend_color, row=2, col=1)
-for i in range(6):
-    fig.add_vline(x=st.session_state.t1_age * (st.session_state.lambda_val ** i) * 365.25, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8, row=2, col=1)
-    fig.add_vline(x=st.session_state.t1_age * (st.session_state.lambda_val ** (i + 0.5)) * 365.25, line_width=1, line_dash="dot", line_color="#2b6aff", opacity=0.5, row=2, col=1)
 
+# Halving Lines
+for i in range(6):
+    halving_day = st.session_state.t1_age * (st.session_state.lambda_val ** i) * 365.25
+    fig.add_vline(x=halving_day, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8, row=2, col=1)
+    fig.add_vline(x=st.session_state.t1_age * (st.session_state.lambda_val ** (i + 0.5)) * 365.25, line_width=1,
+                  line_dash="dot", line_color="#2b6aff", opacity=0.5, row=2, col=1)
+
+# --- LAYOUT UPDATE (Unified Hover + Dark Theme) ---
 fig.update_layout(
     height=720,
     margin=dict(t=30, b=10, l=50, r=20),
     template=pl_template,
     font=dict(color=pl_text_color),
-    legend=dict(orientation="h", y=0.27, x=0.5, xanchor="center", font=dict(size=15, color=pl_legend_color)),
+    legend=dict(orientation="h", y=1.02, x=0.5, xanchor="center", font=dict(size=15, color=pl_legend_color),
+                bgcolor="rgba(0,0,0,0)"),
     paper_bgcolor=pl_bg_color,
     plot_bgcolor=pl_bg_color,
-    hovermode='x unified'
+    hovermode='x unified',
+    hoverlabel=dict(
+        bgcolor=c_hover_bg,  # Dark background from theme
+        bordercolor=c_border,  # Border color from theme
+        font=dict(
+            color=c_hover_text,  # Text color
+            size=13
+        )
+    )
 )
 
-# Robust call for st.plotly_chart with proper width setting
 st.plotly_chart(fig, use_container_width=True, theme=None, config={'displayModeBar': False})
 
 # --- KPI ---
 l_p, l_f = df['Close'].iloc[-1], df['Fair'].iloc[-1]
-diff, pot = ((l_p - l_f) / l_f) * 100, ((10**(st.session_state.A+st.session_state.B*np.log10(df['Days'].max())+p97_5) - l_p) / l_p) * 100
+diff, pot = ((l_p - l_f) / l_f) * 100, (
+            (10 ** (st.session_state.A + st.session_state.B * np.log10(df['Days'].max()) + p97_5) - l_p) / l_p) * 100
 k1, k2, k3, k4 = st.columns(4)
+
 
 def kpi_card(col, label, value, delta=None, d_color=None):
     delta_html = f"<div class='metric-delta' style='color:{d_color}'>{delta}</div>" if delta else "<div class='metric-delta' style='visibility:hidden;'>-</div>"
-    col.markdown(f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div>{delta_html}</div>", unsafe_allow_html=True)
+    col.markdown(
+        f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div>{delta_html}</div>",
+        unsafe_allow_html=True)
+
 
 kpi_card(k1, T['kpi_price'], f"${l_p:,.0f}")
 kpi_card(k2, T['kpi_fair'], f"${l_f:,.0f}", f"{diff:+.1f}% {T['txt_from_model']}", "#0ecb81" if diff < 0 else "#ea3d2f")
