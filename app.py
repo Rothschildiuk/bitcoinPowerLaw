@@ -264,7 +264,7 @@ plot_x_osc = df_display['Days'] if is_log_time else df_display.index
 
 m_dates_str = [
     d.strftime('%d.%m.%Y') if isinstance(d, pd.Timestamp) else (
-                current_gen_date + pd.Timedelta(days=float(d))).strftime('%d.%m.%Y')
+            current_gen_date + pd.Timedelta(days=float(d))).strftime('%d.%m.%Y')
     for d in m_x
 ]
 
@@ -376,11 +376,13 @@ pot = ((pot_target - l_p) / l_p) * 100
 
 k1, k2, k3, k4 = st.columns(4)
 
+
 def kpi_card(col, label, value, delta=None, d_color=None):
     delta_html = f"<div class='metric-delta' style='color:{d_color}'>{delta}</div>" if delta else "<div class='metric-delta' style='visibility:hidden;'>-</div>"
     col.markdown(
         f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div>{delta_html}</div>",
         unsafe_allow_html=True)
+
 
 kpi_card(k1, T['kpi_price'], f"${l_p:,.0f}")
 kpi_card(k2, T['kpi_fair'], f"${l_f:,.0f}", f"{diff:+.1f}% {T['txt_from_model']}", "#0ecb81" if diff < 0 else "#ea3d2f")
