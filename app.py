@@ -464,7 +464,7 @@ fig.update_layout(
     hoverlabel=dict(bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13))
 )
 
-st.plotly_chart(fig, use_container_width=True, theme=None, config={'displayModeBar': False})
+st.plotly_chart(fig, width='stretch', theme=None, config={'displayModeBar': False})
 
 # --- KPI ---
 l_p, l_f = df_display['Close'].iloc[-1], df_display['Fair'].iloc[-1]
