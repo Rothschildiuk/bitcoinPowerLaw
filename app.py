@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from translations import TRANS
 import ssl
 
 # --- SSL Fix for data downloading ---
@@ -27,72 +28,6 @@ if 'lang' not in st.session_state:
     st.session_state.lang = "EN"
 if 'theme_mode' not in st.session_state:
     st.session_state.theme_mode = "Dark 🌑"
-
-# --- TRANSLATIONS ---
-TRANS = {
-    "EN": {
-        "title": "BTC MODEL",
-        "theme_label": "Theme",
-        "lang_label": "Language",
-        "price_scale": "Price",
-        "time_scale": "Time",
-        "max_r2": "Current R²",
-        "offset_txt": "offset",
-        "lbl_A": "A (Intercept)",
-        "lbl_B": "B (Slope)",
-        "lbl_gen": "Genesis Offset",
-        "lbl_cycle": "1st Cycle Age",
-        "lbl_lambda": "Lambda",
-        "leg_bubble": "Bubble",
-        "leg_accum": "Accumulation",
-        "leg_fair": "Fair Value",
-        "leg_price": "BTC Price",
-        "leg_osc": "Oscillator",
-        "kpi_price": "BTC PRICE",
-        "kpi_fair": "FAIR VALUE",
-        "kpi_fit": "MODEL FIT (R²)",
-        "kpi_pot": "GROWTH POTENTIAL",
-        "txt_from_model": "from model",
-        "txt_to_top": "to top band",
-        "hover_date": "Date",
-        "hover_price": "Price",
-        "hover_fair": "Fair",
-        "hover_osc": "Osc",
-        "auto_fit": "Auto-Fit A & B",
-        "auto_fit_help": "Automatically calculate best Slope (B) and Intercept (A) when Offset changes."
-    },
-    "UA": {
-        "title": "BTC МОДЕЛЬ",
-        "theme_label": "Тема",
-        "lang_label": "Мова",
-        "price_scale": "Ціна",
-        "time_scale": "Час",
-        "max_r2": "Поточний R²",
-        "offset_txt": "зсув",
-        "lbl_A": "A (Константа)",
-        "lbl_B": "B (Нахил)",
-        "lbl_gen": "Зсув Генезису",
-        "lbl_cycle": "Вік 1-го циклу",
-        "lbl_lambda": "Лямбда",
-        "leg_bubble": "Бульбашка",
-        "leg_accum": "Накопичення",
-        "leg_fair": "Справедлива ціна",
-        "leg_price": "Ціна BTC",
-        "leg_osc": "Осцилятор",
-        "kpi_price": "ЦІНА BTC",
-        "kpi_fair": "СПРАВЕДЛИВА ЦІНА",
-        "kpi_fit": "ТОЧНІСТЬ (R²)",
-        "kpi_pot": "ПОТЕНЦІАЛ РОСТУ",
-        "txt_from_model": "від моделі",
-        "txt_to_top": "до верху",
-        "hover_date": "Дата",
-        "hover_price": "Ціна",
-        "hover_fair": "Fair",
-        "hover_osc": "Osc",
-        "auto_fit": "Авто-підбір A та B",
-        "auto_fit_help": "Автоматично розраховує ідеальні Нахил (B) та Константу (A) при зміні Зсуву."
-    }
-}
 
 T = TRANS[st.session_state.lang]
 is_dark = "Dark" in st.session_state.theme_mode
