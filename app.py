@@ -205,7 +205,7 @@ with st.sidebar:
         return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
 
 
-    gen_off_slider = fancy_control(T['lbl_gen'], "genesis_offset", 1, 0, 300)
+    gen_off_slider = fancy_control(T['lbl_gen'], "genesis_offset", 1, 0, 700)
     a_slider = fancy_control(T['lbl_A'], "A", 0.01, -25.0, 0.0, disabled=auto_fit)
     b_slider = fancy_control(T['lbl_B'], "B", 0.01, 1.0, 7.0, disabled=auto_fit)
 
