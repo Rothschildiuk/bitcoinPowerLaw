@@ -209,7 +209,7 @@ with st.sidebar:
         f"{T['max_r2']}: {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True)
 
-    t1_age_slider = fancy_control(T['lbl_cycle'], "t1_age", 0.01, 1.0, 5.0)
+    t1_age_slider = fancy_control(T['lbl_cycle'], "t1_age", 0.01, 0.1, 5.0)
     lambda_slider = fancy_control(T['lbl_lambda'], "lambda_val", 0.01, 1.5, 3.0)
 
     st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
@@ -340,7 +340,7 @@ fig.add_trace(go.Scatter(
 ), 2, 1)
 fig.add_hline(y=0, line_width=1, line_color=pl_legend_color, row=2, col=1)
 
-for i in range(6):
+for i in range(10):
     halving_days_val = st.session_state.t1_age * (st.session_state.lambda_val ** i) * 365.25
     halving_days_mid = st.session_state.t1_age * (st.session_state.lambda_val ** (i + 0.5)) * 365.25
 
