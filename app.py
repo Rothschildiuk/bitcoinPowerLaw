@@ -274,12 +274,6 @@ fig.add_trace(
     go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p97_5), mode='lines',
                line=dict(width=0), showlegend=False, hoverinfo='skip'), 1, 1)
 
-fig.add_trace(go.Scatter(
-    x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
-    mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)',
-    name=T['leg_bubble'], customdata=m_dates_str,
-    hovertemplate=f"<b>{T['leg_bubble']}</b>: $%{{y:,.0f}}<extra></extra>"
-), 1, 1)
 
 fig.add_trace(
     go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p16_5), mode='lines',
@@ -297,6 +291,13 @@ fig.add_trace(go.Scatter(
     mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'),
     name=T['leg_fair'], customdata=m_dates_str,
     hovertemplate=f"<b>{T['leg_fair']}</b>: $%{{y:,.0f}}<extra></extra>"
+), 1, 1)
+
+fig.add_trace(go.Scatter(
+    x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
+    mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)',
+    name=T['leg_bubble'], customdata=m_dates_str,
+    hovertemplate=f"<b>{T['leg_bubble']}</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
 btc_hover = f"📅 %{{customdata}}<br><b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>" if is_log_time else f"<b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>"
