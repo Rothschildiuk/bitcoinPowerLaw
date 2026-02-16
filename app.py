@@ -153,23 +153,19 @@ def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
 
 @st.cache_data
 def find_global_best_fit_optimized():
-    best_r2, best_off, best_a, best_b = -1, 150, -17, 5.8
-    for off in range(100, 400, 2):
-        b, a, r2 = calculate_regression_numpy(ALL_ABS_DAYS, ALL_LOG_CLOSE, off)
-        if r2 > best_r2:
-            best_r2, best_off, best_a, best_b = r2, off, a, b
-    return best_off, best_a, best_b, best_r2
+    b, a, r2 = calculate_regression_numpy(ALL_ABS_DAYS, ALL_LOG_CLOSE, 0)
+    return 0, a, b, r2
 
 
 opt_offset, opt_a_ideal, opt_b_ideal, opt_r2_ideal = find_global_best_fit_optimized()
 
 if "genesis_offset" not in st.session_state:
-    st.session_state["genesis_offset"] = int(opt_offset)
+    st.session_state["genesis_offset"] = 0
 if "A" not in st.session_state:
     st.session_state["A"] = float(round(opt_a_ideal, 3))
 if "B" not in st.session_state:
     st.session_state["B"] = float(round(opt_b_ideal, 3))
-for k, v in {"t1_age": 1.88, "lambda_val": 2.12}.items():
+for k, v in {"t1_age": 2.42, "lambda_val": 1.93}.items():
     if k not in st.session_state: st.session_state[k] = v
 
 
@@ -205,7 +201,6 @@ with st.sidebar:
         return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
 
 
-    gen_off_slider = fancy_control(T['lbl_gen'], "genesis_offset", 1, 0, 700)
     a_slider = fancy_control(T['lbl_A'], "A", 0.01, -25.0, 0.0, disabled=auto_fit)
     b_slider = fancy_control(T['lbl_B'], "B", 0.01, 1.0, 7.0, disabled=auto_fit)
 
@@ -367,7 +362,7 @@ fig.update_layout(
     hoverlabel=dict(bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13))
 )
 
-st.plotly_chart(fig, use_container_width=True, theme=None, config={'displayModeBar': False})
+st.plotly_chart(fig, width='stretch', theme=None, config={'displayModeBar': False})
 
 # --- KPI ---
 l_p, l_f = df_display['Close'].iloc[-1], df_display['Fair'].iloc[-1]
