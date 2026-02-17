@@ -301,7 +301,13 @@ fig.update_layout(
     hoverlabel=dict(bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13))
 )
 
-st.plotly_chart(fig, width='stretch', theme=None, config={'displayModeBar': False})
+st.plotly_chart(
+    fig,
+    width='stretch',
+    theme=None,
+    config={'displayModeBar': False},
+    key=f"chart_{mode}_{st.session_state.theme_mode}"
+)
 
 # --- KPI ---
 l_p, l_f = df_display['Close'].iloc[-1], df_display['Fair'].iloc[-1]
@@ -309,7 +315,7 @@ diff = ((l_p - l_f) / l_f) * 100
 pot_target = 10 ** (st.session_state.A + st.session_state.B * np.log10(df_display['Days'].max()) + p97_5)
 pot = ((pot_target - l_p) / l_p) * 100
 
-k1, k2, k3, k4 = st.columns(4)
+k1, k2, k3 = st.columns(3)
 
 def kpi_card(col, label, value, delta=None, d_color=None):
     delta_html = f"<div class='metric-delta' style='color:{d_color}'>{delta}</div>" if delta else "<div class='metric-delta' style='visibility:hidden;'>-</div>"
@@ -317,5 +323,4 @@ def kpi_card(col, label, value, delta=None, d_color=None):
 
 kpi_card(k1, "BTC PRICE", f"${l_p:,.0f}")
 kpi_card(k2, "FAIR VALUE", f"${l_f:,.0f}", f"{diff:+.1f}% from model", "#0ecb81" if diff < 0 else "#ea3d2f")
-kpi_card(k3, "MODEL FIT (R²)", f"{r2_combined:.4f}%", f"Trend: {current_r2 * 100:.2f}%", "#f0b90b")
-kpi_card(k4, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
+kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
