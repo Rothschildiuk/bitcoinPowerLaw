@@ -1,19 +1,6 @@
 import streamlit as st
 import numpy as np
-
-# --- HELPER UI ---
-def fancy_control(label, key, step, min_v, max_v, disabled=False):
-    c1, c2, c3 = st.columns([1, 2.5, 1])
-
-    def on_minus():
-        st.session_state[key] = round(st.session_state[key] - step, 3)
-    def on_plus():
-        st.session_state[key] = round(st.session_state[key] + step, 3)
-
-    if c1.button("➖", key=f"{key}_m", disabled=disabled, on_click=on_minus): pass
-    if c3.button("➕", key=f"{key}_p", disabled=disabled, on_click=on_plus): pass
-
-    return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
+from utils import fancy_control
 
 # --- MATH CORE ---
 def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
@@ -64,7 +51,7 @@ def find_global_best_fit_optimized(all_abs_days, all_log_close):
     return 0, a, b, r2
 
 # --- SIDEBAR RENDERER ---
-def render_sidebar(all_abs_days, all_log_close):
+def render_sidebar(all_abs_days, all_log_close, text_color):
 
     # Initialize defaults if needed
     if "genesis_offset" not in st.session_state:
@@ -105,9 +92,8 @@ def render_sidebar(all_abs_days, all_log_close):
     st.markdown("**B (Slope)**")
     fancy_control("B (Slope)", "B", 0.01, 1.0, 7.0, disabled=auto_fit)
 
-    c_text_main = "#d1d4dc" if "Dark" in st.session_state.get('theme_mode', 'Dark') else "#000000"
     st.markdown(
-        f"<p style='color:{c_text_main}; margin-top: 2px;'>"
+        f"<p style='color:{text_color}; margin-top: 2px;'>"
         f"PowerLaw R² = {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True)
 

@@ -139,11 +139,11 @@ with st.sidebar:
     time_scale = "Log" # Default
 
     if mode == "Power Law":
-        price_scale, time_scale, current_r2 = powerLaw.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE)
+        price_scale, time_scale, current_r2 = powerLaw.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE, c_text_main)
     else:
         # Oscillator Mode
         time_scale = st.radio("Time", ["Log", "Lin"], index=0, horizontal=True)
-        oscillator.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE)
+        oscillator.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE, c_text_main)
 
     st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
 

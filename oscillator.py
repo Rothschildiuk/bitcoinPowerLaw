@@ -1,19 +1,6 @@
 import streamlit as st
 import numpy as np
-
-# --- HELPER UI (Duplicated to avoid circular imports or extra util file) ---
-def fancy_control(label, key, step, min_v, max_v, disabled=False):
-    c1, c2, c3 = st.columns([1, 2.5, 1])
-
-    def on_minus():
-        st.session_state[key] = round(st.session_state[key] - step, 3)
-    def on_plus():
-        st.session_state[key] = round(st.session_state[key] + step, 3)
-
-    if c1.button("➖", key=f"{key}_m", disabled=disabled, on_click=on_minus): pass
-    if c3.button("➕", key=f"{key}_p", disabled=disabled, on_click=on_plus): pass
-
-    return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
+from utils import fancy_control
 
 # --- OSCILLATOR MATH (SINUSOID) ---
 def get_oscillator_wave(phase_array):
@@ -38,7 +25,7 @@ def oscillator_func_manual(x_log, amp, omega, phi, f_top, f_bot):
     return y
 
 # --- SIDEBAR RENDERER ---
-def render_sidebar(all_abs_days, all_log_close):
+def render_sidebar(all_abs_days, all_log_close, text_color):
     # Defaults
     defaults = {"t1_age": 2.48, "lambda_val": 2.01, "amp_factor_top": 1.18, "amp_factor_bottom": 0.88}
     for k, v in defaults.items():
@@ -90,8 +77,7 @@ def render_sidebar(all_abs_days, all_log_close):
         ss_tot_osc = np.sum((c_res - np.mean(c_res)) ** 2)
         osc_r2_display = (1 - (ss_res_osc / ss_tot_osc)) * 100
 
-    c_text_main = "#d1d4dc" if "Dark" in st.session_state.get('theme_mode', 'Dark') else "#000000"
     st.markdown(
-        f"<p style='color:{c_text_main}; margin-top: 2px;'>"
+        f"<p style='color:{text_color}; margin-top: 2px;'>"
         f"Oscillator R² = {osc_r2_display:.4f}%</p>",
         unsafe_allow_html=True)

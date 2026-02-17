@@ -1,0 +1,14 @@
+import streamlit as st
+
+def fancy_control(label, key, step, min_v, max_v, disabled=False):
+    c1, c2, c3 = st.columns([1, 2.5, 1])
+
+    def on_minus():
+        st.session_state[key] = round(st.session_state[key] - step, 3)
+    def on_plus():
+        st.session_state[key] = round(st.session_state[key] + step, 3)
+
+    if c1.button("➖", key=f"{key}_m", disabled=disabled, on_click=on_minus): pass
+    if c3.button("➕", key=f"{key}_p", disabled=disabled, on_click=on_plus): pass
+
+    return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
