@@ -24,12 +24,14 @@ st.set_page_config(
 )
 
 # --- THEME & LANGUAGE STATE MANAGEMENT ---
+# Forced English language
 if 'lang' not in st.session_state:
     st.session_state.lang = "EN"
+
 if 'theme_mode' not in st.session_state:
     st.session_state.theme_mode = "Dark 🌑"
 
-T = TRANS[st.session_state.lang]
+T = TRANS["EN"] # Force English translations
 is_dark = "Dark" in st.session_state.theme_mode
 
 # --- DYNAMIC COLOR PALETTE ---
@@ -165,12 +167,54 @@ if "A" not in st.session_state:
     st.session_state["A"] = float(round(opt_a_ideal, 3))
 if "B" not in st.session_state:
     st.session_state["B"] = float(round(opt_b_ideal, 3))
-for k, v in {"t1_age": 2.42, "lambda_val": 1.93}.items():
+
+for k, v in {"t1_age": 2.53, "lambda_val": 1.94, "amp_factor_top": 1.12, "amp_factor_bottom": 0.84}.items():
     if k not in st.session_state: st.session_state[k] = v
 
 
 def update_param(param_name, delta):
     st.session_state[param_name] = round(st.session_state[param_name] + delta, 3)
+
+
+# --- CYCLOID MATH ---
+def get_cycloid_wave(phase_array):
+    """
+    Calculates an Inverted Cycloid wave (Sharp peaks, smooth valleys).
+    Input: phase_array (linear phase).
+    Output: Normalized wave values centered around 0.
+    """
+    # Normalize phase to [-pi, pi] to handle periodicity
+    # We want phase=0 to correspond to the Cusp (Peak).
+    x_norm = (phase_array + np.pi) % (2 * np.pi) - np.pi
+    x_abs = np.abs(x_norm)
+
+    # Solve Kepler-like equation: theta - sin(theta) = x
+    # Initial guess:
+    # For small x (near cusp), theta ~ (6x)^(1/3)
+    # For large x (near valley), theta ~ x
+    theta = np.where(x_abs < 1.0, np.power(6 * x_abs, 1/3), x_abs)
+
+    # Newton's method (5 iterations is enough for high precision)
+    for _ in range(5):
+        f = theta - np.sin(theta) - x_abs
+        df = 1 - np.cos(theta)
+        # Avoid division by zero at the cusp (theta=0)
+        df = np.where(df < 1e-5, 1e-5, df)
+        theta = theta - f / df
+
+    # Inverted Cycloid shape:
+    # Standard cycloid y = 1 - cos(theta) (Cusp at bottom)
+    # Inverted: y = 1 + cos(theta) (Cusp at top, Peak value 2, Valley value 0)
+    y_vals = 1 + np.cos(theta)
+
+    # Remove DC component (Mean of cycloid over 2pi is 0.5 * Peak = 1.0?
+    # Area = integral(1+cos t)(1-cos t)dt = pi. Mean = pi/2pi = 0.5.
+    # Wait, integral y dx. y=1+cos(theta). dx = (1-cos(theta)) dtheta.
+    # Int (1+cos)(1-cos) = Int (1 - cos^2) = Int sin^2 = pi.
+    # Mean = Area / Length(2pi) = 0.5.
+    # So we subtract 0.5 to center it.
+
+    return y_vals - 0.5
 
 
 # --- SIDEBAR UI ---
@@ -212,21 +256,71 @@ with st.sidebar:
     t1_age_slider = fancy_control(T['lbl_cycle'], "t1_age", 0.01, 0.1, 5.0)
     lambda_slider = fancy_control(T['lbl_lambda'], "lambda_val", 0.01, 1.5, 3.0)
 
+    # --- NEW: Two Amplitude Sliders (Top & Bottom) ---
+    lbl_amp_top = "Top Amplitude"
+    lbl_amp_bot = "Bottom Amplitude"
+
+    amp_top_slider = fancy_control(lbl_amp_top, "amp_factor_top", 0.01, 0.1, 10.0)
+    amp_bot_slider = fancy_control(lbl_amp_bot, "amp_factor_bottom", 0.01, 0.1, 10.0)
+
+    # --- NEW: Oscillator R2 Calculation & Display in Sidebar ---
+    # We calculate the R2 of the Oscillator (Red line) vs Residuals (Price in Oscillator) locally here
+    calc_days = ALL_ABS_DAYS - st.session_state.genesis_offset
+    mask_calc = calc_days > 0
+
+    osc_r2_display = 0.0
+    if np.sum(mask_calc) > 100:
+        c_log_d = np.log10(calc_days[mask_calc])
+        # Re-calc Trend and Residuals for current A/B
+        c_model_log = st.session_state.A + st.session_state.B * c_log_d
+        c_res = ALL_LOG_CLOSE[mask_calc] - c_model_log
+
+        # Calc Oscillator Params based on current Sliders
+        l_log = np.log10(st.session_state.lambda_val)
+        t1_log = np.log10(st.session_state.t1_age * 365.25)
+        osc_omega = 2 * np.pi / l_log
+
+        # Phi (Phase): Align CUSP (Peak) with t1.
+        # Cycloid peak is at phase = 0.
+        # So omega * t1_log + phi = 0  =>  phi = -omega * t1_log
+        osc_phi = -osc_omega * t1_log
+
+        # Generate Cycloid Wave
+        # Phase for calculation
+        calc_phase = osc_omega * c_log_d + osc_phi
+        u_wave = get_cycloid_wave(calc_phase)
+
+        # Fit Amplitude
+        num = np.dot(c_res, u_wave)
+        den = np.dot(u_wave, u_wave)
+        amp = num / den if den != 0 else 0
+
+        # --- APPLY DUAL FACTORS ---
+        # Scale the wave shape itself based on polarity
+        # u_wave > 0 is the "peak" part (cusp), u_wave < 0 is the "valley" part
+        c_osc_pred = amp * u_wave
+        c_osc_pred = np.where(u_wave > 0, c_osc_pred * st.session_state.amp_factor_top, c_osc_pred)
+        c_osc_pred = np.where(u_wave < 0, c_osc_pred * st.session_state.amp_factor_bottom, c_osc_pred)
+
+        # Calculate R2 of Red Line (pred) vs Green Line (c_res)
+        ss_res_osc = np.sum((c_res - c_osc_pred) ** 2)
+        ss_tot_osc = np.sum((c_res - np.mean(c_res)) ** 2)
+        osc_r2_display = (1 - (ss_res_osc / ss_tot_osc)) * 100
+
+    st.markdown(
+        f"<p style='color:{c_text_main}; text-align:center; font-size: 0.75rem; margin-top: 2px; opacity: 0.7;'>"
+        f"Oscillator R²: {osc_r2_display:.4f}%</p>",
+        unsafe_allow_html=True)
+    # -----------------------------------------------------------
+
     st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
-    cl_l, cl_t = st.columns(2)
-    with cl_l:
-        lang_choice = st.radio(T['lang_label'], ["EN 🇬🇧", "UA 🇺🇦"], index=0 if st.session_state.lang == "EN" else 1,
-                               horizontal=True)
-        new_lang = "EN" if "EN" in lang_choice else "UA"
-        if new_lang != st.session_state.lang:
-            st.session_state.lang = new_lang
-            st.rerun()
-    with cl_t:
-        new_theme = st.radio(T['theme_label'], ["Dark 🌑", "Light ☀️"],
-                             index=0 if "Dark" in st.session_state.theme_mode else 1, horizontal=True)
-        if new_theme != st.session_state.theme_mode:
-            st.session_state.theme_mode = new_theme
-            st.rerun()
+
+    # --- UPDATED: Removed Language Switcher, Only Theme Switcher Remains ---
+    new_theme = st.radio(T['theme_label'], ["Dark 🌑", "Light ☀️"],
+                         index=0 if "Dark" in st.session_state.theme_mode else 1, horizontal=True)
+    if new_theme != st.session_state.theme_mode:
+        st.session_state.theme_mode = new_theme
+        st.rerun()
 
 # --- MAIN CALCULATIONS ---
 gen_date_static = pd.to_datetime('2009-01-03')
@@ -245,12 +339,67 @@ p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 9
 current_r2 = (1 - (np.sum(df_display['Res'] ** 2) / np.sum(
     (df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2))) * 100
 
+# --- NEW: Oscillator Controlled by Sidebar Parameters ---
+# Replaces curve_fit with manual Cycloid model.
+
+try:
+    lambda_log = np.log10(st.session_state.lambda_val)
+    t1_days_log = np.log10(st.session_state.t1_age * 365.25)
+
+    # Omega (Frequency)
+    osc_omega = 2 * np.pi / lambda_log
+
+    # Phi (Phase): Peak at t1
+    osc_phi = -osc_omega * t1_days_log
+
+    # Generate Unit Wave (Inverted Cycloid)
+    full_phase = osc_omega * df_display['LogD'] + osc_phi
+    unit_wave = get_cycloid_wave(full_phase)
+
+    # Fit Amplitude analytically
+    numerator = np.dot(df_display['Res'], unit_wave)
+    denominator = np.dot(unit_wave, unit_wave)
+    osc_amp = numerator / denominator if denominator != 0 else 0
+
+    # --- APPLY DUAL FACTORS ---
+    # Not creating separate variables here just to calc R2_combined properly
+    # We apply the same logic as in sidebar for the final combined fit metric
+    osc_model_vals = osc_amp * unit_wave
+    osc_model_vals = np.where(unit_wave > 0, osc_model_vals * st.session_state.amp_factor_top, osc_model_vals)
+    osc_model_vals = np.where(unit_wave < 0, osc_model_vals * st.session_state.amp_factor_bottom, osc_model_vals)
+
+    # 3. Calculate Combined R2
+    total_model_log = df_display['ModelLog'] + osc_model_vals
+
+    ss_res_total = np.sum((df_display['LogClose'] - total_model_log) ** 2)
+    ss_tot = np.sum((df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2)
+    r2_combined = (1 - (ss_res_total / ss_tot)) * 100
+
+except Exception as e:
+    osc_amp, osc_omega, osc_phi = 0, 0, 0
+    r2_combined = current_r2
+
+# Function for plotting later (wraps the cycloid gen with dual amp)
+def cycloid_func_manual(x_log, amp, omega, phi, f_top, f_bot):
+    phase = omega * x_log + phi
+    base_wave = get_cycloid_wave(phase)
+    y = amp * base_wave
+    y = np.where(base_wave > 0, y * f_top, y)
+    y = np.where(base_wave < 0, y * f_bot, y)
+    return y
+
 # --- VIZ ---
 view_max = df_display['Days'].max() + 365 * 10
 m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
 m_dates = [current_gen_date + pd.Timedelta(days=float(d)) for d in m_x]
 m_log_d = np.log10(m_x)
 m_fair_usd = 10 ** (st.session_state.A + st.session_state.B * m_log_d)
+
+# Calculate Oscillator Model Line (Red Line) using CYCLOID with DUAL AMPS
+m_osc_y = cycloid_func_manual(
+    m_log_d, osc_amp, osc_omega, osc_phi,
+    st.session_state.amp_factor_top, st.session_state.amp_factor_bottom
+)
 
 is_log_time = (time_scale == "Log")
 plot_x_model = m_x if is_log_time else m_dates
@@ -338,6 +487,15 @@ fig.add_trace(go.Scatter(
     customdata=df_display.index.strftime('%d.%m.%Y'),
     hovertemplate=f"<b>{T['leg_osc']}</b>: %{{y:.3f}}<extra></extra>"
 ), 2, 1)
+
+# --- NEW: Add the red oscillator model line to the bottom chart ---
+fig.add_trace(go.Scatter(
+    x=plot_x_model, y=m_osc_y,
+    mode='lines', name='Osc Model',
+    line=dict(color='#ea3d2f', width=2),
+    hoverinfo='skip'
+), 2, 1)
+
 fig.add_hline(y=0, line_width=1, line_color=pl_legend_color, row=2, col=1)
 
 for i in range(6):
@@ -382,5 +540,8 @@ def kpi_card(col, label, value, delta=None, d_color=None):
 
 kpi_card(k1, T['kpi_price'], f"${l_p:,.0f}")
 kpi_card(k2, T['kpi_fair'], f"${l_f:,.0f}", f"{diff:+.1f}% {T['txt_from_model']}", "#0ecb81" if diff < 0 else "#ea3d2f")
-kpi_card(k3, T['kpi_fit'], f"{current_r2:.4f}%")
+
+# --- UPDATED: Show Combined R2 (Trend + Oscillator) and Trend R2 separately ---
+kpi_card(k3, T['kpi_fit'], f"{r2_combined:.4f}%", f"Trend: {current_r2:.2f}%", "#f0b90b")
+
 kpi_card(k4, T['kpi_pot'], f"+{pot:,.0f}%", T['txt_to_top'], "#f0b90b")
