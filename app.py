@@ -9,6 +9,31 @@ import ssl
 import powerLaw
 import oscillator
 
+def safe_r2(y_true, y_pred):
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    if ss_tot <= 1e-12:
+        return 0.0
+    return 1 - (ss_res / ss_tot)
+
+def get_stable_trend_params(all_abs_days, all_log_close, df_view, mode_name):
+    a = float(st.session_state.get("A", -17.0))
+    b = float(st.session_state.get("B", 5.8))
+    model_log = a + b * df_view['LogD'].values
+    residuals = df_view['LogClose'].values - model_log
+
+    # In oscillator mode, fallback to best-fit trend when session A/B is clearly invalid.
+    # This prevents "price-like" residuals after mode toggles or stale widget state.
+    if mode_name == "Oscillator":
+        median_abs_res = float(np.median(np.abs(residuals)))
+        if (not np.isfinite(median_abs_res)) or median_abs_res > 5.0:
+            _, fit_a, fit_b, _ = powerLaw.find_global_best_fit_optimized(all_abs_days, all_log_close)
+            a, b = float(fit_a), float(fit_b)
+            model_log = a + b * df_view['LogD'].values
+            residuals = df_view['LogClose'].values - model_log
+
+    return a, b, model_log, residuals
+
 # --- SSL Fix ---
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -23,6 +48,10 @@ st.set_page_config(layout="wide", page_icon="🚀", page_title="BTC Power Law Pr
 # --- THEME STATE ---
 if 'theme_mode' not in st.session_state:
     st.session_state.theme_mode = "Dark 🌑"
+if 'last_mode' not in st.session_state:
+    st.session_state.last_mode = "Power Law"
+if 'chart_revision' not in st.session_state:
+    st.session_state.chart_revision = 0
 
 is_dark = "Dark" in st.session_state.theme_mode
 
@@ -133,6 +162,9 @@ with st.sidebar:
 
     # NAVIGATION (Mode Switcher)
     mode = st.radio("Mode", ["Power Law", "Oscillator"], horizontal=True, label_visibility="collapsed")
+    if mode != st.session_state.last_mode:
+        st.session_state.chart_revision += 1
+        st.session_state.last_mode = mode
 
     # GLOBAL TIME SCALE (Moved from powerLaw.py)
     time_scale = st.radio("Time", ["Log", "Lin"], index=0, horizontal=True)
@@ -161,23 +193,21 @@ current_gen_date = gen_date_static + pd.Timedelta(days=st.session_state.get("gen
 
 valid_idx = ALL_ABS_DAYS > st.session_state.get("genesis_offset", 0)
 df_display = raw_df.iloc[valid_idx].copy()
+if df_display.empty:
+    st.error("No data available for the selected parameters.")
+    st.stop()
 
 df_display['Days'] = df_display['AbsDays'] - st.session_state.get("genesis_offset", 0)
 df_display['LogD'] = np.log10(df_display['Days'])
-df_display['ModelLog'] = st.session_state.A + st.session_state.B * df_display['LogD']
-df_display['Res'] = df_display['LogClose'] - df_display['ModelLog']
+a_active, b_active, model_log_vals, residual_vals = get_stable_trend_params(ALL_ABS_DAYS, ALL_LOG_CLOSE, df_display, mode)
+df_display['ModelLog'] = model_log_vals
+df_display['Res'] = residual_vals
 df_display['Fair'] = 10 ** df_display['ModelLog']
 
 # Calculate R2 for Trend if not returned by sidebar (Oscillator mode)
 if mode == "Oscillator":
-    ss_res = np.sum(df_display['Res'] ** 2)
-    ss_tot = np.sum((df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2)
-    current_r2 = 1 - (ss_res / ss_tot)
+    current_r2 = safe_r2(df_display['LogClose'].values, df_display['ModelLog'].values)
 
-p2_5, p16_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 97.5])
-# Added p83_5 explicitly for Bubble calculation if needed,
-# though originally it was unpacking 4 values. Checking original code...
-# Original was: p2_5, p16_5, p83_5, p97_5 = np.percentile(...)
 p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 97.5])
 
 # --- OSCILLATOR CALC ---
@@ -203,9 +233,7 @@ try:
     osc_model_vals = np.where(unit_wave < 0, osc_model_vals * st.session_state.get("amp_factor_bottom", 0.84), osc_model_vals)
 
     total_model_log = df_display['ModelLog'] + osc_model_vals
-    ss_res_total = np.sum((df_display['LogClose'] - total_model_log) ** 2)
-    ss_tot = np.sum((df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2)
-    r2_combined = (1 - (ss_res_total / ss_tot)) * 100
+    r2_combined = safe_r2(df_display['LogClose'].values, total_model_log) * 100
 except Exception as e:
     st.error(f"Oscillator Error: {e}")
     osc_amp, osc_omega, osc_phi, r2_combined = 0, 0, 0, current_r2
@@ -215,7 +243,7 @@ view_max = df_display['Days'].max() + 365 * 10
 m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
 m_dates = [current_gen_date + pd.Timedelta(days=float(d)) for d in m_x]
 m_log_d = np.log10(m_x)
-m_fair_usd = 10 ** (st.session_state.A + st.session_state.B * m_log_d)
+m_fair_usd = 10 ** (a_active + b_active * m_log_d)
 
 m_osc_y = oscillator.oscillator_func_manual(
     m_log_d, osc_amp, osc_omega, osc_phi,
@@ -238,11 +266,11 @@ fig = go.Figure()
 
 if mode == "Power Law":
     # --- CHART 1: POWER LAW ---
-    fig.add_trace(go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p97_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'))
-    fig.add_trace(go.Scatter(x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p16_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'))
+    fig.add_trace(go.Scatter(x=plot_x_model, y=10 ** (a_active + b_active * m_log_d + p97_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'))
+    fig.add_trace(go.Scatter(x=plot_x_model, y=10 ** (a_active + b_active * m_log_d + p16_5), mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'))
 
     fig.add_trace(go.Scatter(
-        x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p2_5),
+        x=plot_x_model, y=10 ** (a_active + b_active * m_log_d + p2_5),
         mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)',
         name="Accumulation", customdata=m_dates_str, hovertemplate=f"<b>Accumulation</b>: $%{{y:,.0f}}<extra></extra>"
     ))
@@ -254,7 +282,7 @@ if mode == "Power Law":
     ))
 
     fig.add_trace(go.Scatter(
-        x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
+        x=plot_x_model, y=10 ** (a_active + b_active * m_log_d + p83_5),
         mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)',
         name="Bubble", customdata=m_dates_str, hovertemplate=f"<b>Bubble</b>: $%{{y:,.0f}}<extra></extra>"
     ))
@@ -280,6 +308,11 @@ elif mode == "Oscillator":
 
     fig.add_trace(go.Scatter(x=plot_x_model, y=m_osc_y, mode='lines', name='Osc Model', line=dict(color='#ea3d2f', width=2), hoverinfo='skip'))
     fig.add_hline(y=0, line_width=1, line_color=pl_legend_color)
+    fig.update_yaxes(
+        type="linear",
+        gridcolor=pl_grid_color,
+        tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
+    )
 
     # Halving lines (useful context)
     for i in range(6):
@@ -296,7 +329,10 @@ t_vals = [(pd.Timestamp(f'{y}-01-01') - current_gen_date).days for y in range(cu
 t_text = [str(y) for y in range(current_gen_date.year + 1, 2036) if (pd.Timestamp(f'{y}-01-01') - current_gen_date).days > 0]
 
 if is_log_time:
-    fig.update_xaxes(type="log", tickvals=t_vals, ticktext=t_text, range=[np.log10(t_vals[0]), np.log10(view_max)], gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"))
+    x_range = [np.log10(max(1.0, view_max / 1000.0)), np.log10(view_max)]
+    if t_vals:
+        x_range = [np.log10(t_vals[0]), np.log10(view_max)]
+    fig.update_xaxes(type="log", tickvals=t_vals, ticktext=t_text, range=x_range, gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"))
 else:
     fig.update_xaxes(type="date", gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color, size=14, family="Arial Black, sans-serif"), range=[df_display.index.min(), m_dates[-1]], hoverformat="%d.%m.%Y")
 
@@ -312,13 +348,13 @@ st.plotly_chart(
     width='stretch',
     theme=None,
     config={'displayModeBar': False},
-    key=f"chart_{mode}_{st.session_state.theme_mode}"
+    key=f"chart_{mode}_{st.session_state.theme_mode}_{st.session_state.chart_revision}"
 )
 
 # --- KPI ---
 l_p, l_f = df_display['Close'].iloc[-1], df_display['Fair'].iloc[-1]
 diff = ((l_p - l_f) / l_f) * 100
-pot_target = 10 ** (st.session_state.A + st.session_state.B * np.log10(df_display['Days'].max()) + p97_5)
+pot_target = 10 ** (a_active + b_active * np.log10(df_display['Days'].max()) + p97_5)
 pot = ((pot_target - l_p) / l_p) * 100
 
 k1, k2, k3 = st.columns(3)

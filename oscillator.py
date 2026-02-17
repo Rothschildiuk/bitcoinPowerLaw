@@ -2,6 +2,13 @@ import streamlit as st
 import numpy as np
 from utils import fancy_control
 
+def safe_r2(y_true, y_pred):
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    if ss_tot <= 1e-12:
+        return 0.0
+    return 1 - (ss_res / ss_tot)
+
 # --- OSCILLATOR MATH (SINUSOID) ---
 def get_oscillator_wave(phase_array):
     """
@@ -54,6 +61,13 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         c_model_log = st.session_state.A + st.session_state.B * c_log_d
         c_res = all_log_close[mask_calc] - c_model_log
 
+        # Fallback if session trend is clearly invalid.
+        median_abs_res = float(np.median(np.abs(c_res)))
+        if (not np.isfinite(median_abs_res)) or median_abs_res > 5.0:
+            fit_b, fit_a = np.polyfit(c_log_d, all_log_close[mask_calc], 1)
+            c_model_log = fit_a + fit_b * c_log_d
+            c_res = all_log_close[mask_calc] - c_model_log
+
         l_log = np.log10(st.session_state.lambda_val)
         t1_log = np.log10(st.session_state.t1_age * 365.25)
         osc_omega = 2 * np.pi / l_log
@@ -73,9 +87,7 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         c_osc_pred = np.where(u_wave > 0, c_osc_pred * st.session_state.amp_factor_top, c_osc_pred)
         c_osc_pred = np.where(u_wave < 0, c_osc_pred * st.session_state.amp_factor_bottom, c_osc_pred)
 
-        ss_res_osc = np.sum((c_res - c_osc_pred) ** 2)
-        ss_tot_osc = np.sum((c_res - np.mean(c_res)) ** 2)
-        osc_r2_display = (1 - (ss_res_osc / ss_tot_osc)) * 100
+        osc_r2_display = safe_r2(c_res, c_osc_pred) * 100
 
     st.markdown(
         f"<p style='color:{text_color}; margin-top: 2px;'>"

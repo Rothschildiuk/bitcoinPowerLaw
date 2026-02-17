@@ -3,6 +3,13 @@ import numpy as np
 from utils import fancy_control
 
 # --- MATH CORE ---
+def safe_r2(y_true, y_pred):
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    if ss_tot <= 1e-12:
+        return 0.0
+    return 1 - (ss_res / ss_tot)
+
 def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
     """Calculates the optimal Slope(B) and Intercept(A) for a given offset."""
     x_days = abs_days_array - offset_value
@@ -18,9 +25,7 @@ def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
     slope, intercept = np.polyfit(log_x, y_valid, 1)
 
     y_pred = slope * log_x + intercept
-    ss_res = np.sum((y_valid - y_pred) ** 2)
-    ss_tot = np.sum((y_valid - np.mean(y_valid)) ** 2)
-    r2 = 1 - (ss_res / ss_tot)
+    r2 = safe_r2(y_valid, y_pred)
 
     return slope, intercept, r2
 
@@ -39,12 +44,7 @@ def calculate_manual_r2(abs_days_array, log_price_array, offset_value, A, B):
     # Prediction based on manual A and B
     y_pred = A + B * log_x
 
-    ss_res = np.sum((y_valid - y_pred) ** 2)
-    ss_tot = np.sum((y_valid - np.mean(y_valid)) ** 2)
-
-    # R2 calculation
-    r2 = 1 - (ss_res / ss_tot)
-    return r2
+    return safe_r2(y_valid, y_pred)
 
 def find_global_best_fit_optimized(all_abs_days, all_log_close):
     b, a, r2 = calculate_regression_numpy(all_abs_days, all_log_close, 0)
