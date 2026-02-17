@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from translations import TRANS
 import ssl
 
 # --- SSL Fix for data downloading ---
@@ -23,15 +22,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- THEME & LANGUAGE STATE MANAGEMENT ---
-# Forced English language
-if 'lang' not in st.session_state:
-    st.session_state.lang = "EN"
-
+# --- THEME STATE MANAGEMENT ---
 if 'theme_mode' not in st.session_state:
     st.session_state.theme_mode = "Dark 🌑"
 
-T = TRANS["EN"] # Force English translations
 is_dark = "Dark" in st.session_state.theme_mode
 
 # --- DYNAMIC COLOR PALETTE ---
@@ -219,13 +213,13 @@ def get_cycloid_wave(phase_array):
 
 # --- SIDEBAR UI ---
 with st.sidebar:
-    st.markdown(f"<div class='sidebar-title'>{T['title']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sidebar-title'>BTC MODEL</div>", unsafe_allow_html=True)
 
     c_v1, c_v2 = st.columns(2)
-    price_scale = c_v1.radio(T['price_scale'], ["Log", "Lin"], index=0, horizontal=True)
-    time_scale = c_v2.radio(T['time_scale'], ["Log", "Lin"], index=0, horizontal=True)
+    price_scale = c_v1.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
+    time_scale = c_v2.radio("Time", ["Log", "Lin"], index=0, horizontal=True)
 
-    auto_fit = st.checkbox(T['auto_fit'], value=False, help=T['auto_fit_help'])
+    auto_fit = st.checkbox("Auto-Fit A & B", value=False, help="Automatically calculate best Slope (B) and Intercept (A) when Offset changes.")
 
     if auto_fit:
         curr_off = st.session_state.get("genesis_offset", opt_offset)
@@ -245,16 +239,16 @@ with st.sidebar:
         return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
 
 
-    a_slider = fancy_control(T['lbl_A'], "A", 0.01, -25.0, 0.0, disabled=auto_fit)
-    b_slider = fancy_control(T['lbl_B'], "B", 0.01, 1.0, 7.0, disabled=auto_fit)
+    a_slider = fancy_control("A (Intercept)", "A", 0.01, -25.0, 0.0, disabled=auto_fit)
+    b_slider = fancy_control("B (Slope)", "B", 0.01, 1.0, 7.0, disabled=auto_fit)
 
     st.markdown(
         f"<p style='color:{c_text_main}; text-align:center; font-size: 0.75rem; margin-top: 2px; opacity: 0.7;'>"
-        f"{T['max_r2']}: {display_r2 * 100:.4f}%</p>",
+        f"Current R²: {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True)
 
-    t1_age_slider = fancy_control(T['lbl_cycle'], "t1_age", 0.01, 0.1, 5.0)
-    lambda_slider = fancy_control(T['lbl_lambda'], "lambda_val", 0.01, 1.5, 3.0)
+    t1_age_slider = fancy_control("1st Cycle Age", "t1_age", 0.01, 0.1, 5.0)
+    lambda_slider = fancy_control("Lambda", "lambda_val", 0.01, 1.5, 3.0)
 
     # --- NEW: Two Amplitude Sliders (Top & Bottom) ---
     lbl_amp_top = "Top Amplitude"
@@ -316,7 +310,7 @@ with st.sidebar:
     st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
 
     # --- UPDATED: Removed Language Switcher, Only Theme Switcher Remains ---
-    new_theme = st.radio(T['theme_label'], ["Dark 🌑", "Light ☀️"],
+    new_theme = st.radio("Theme", ["Dark 🌑", "Light ☀️"],
                          index=0 if "Dark" in st.session_state.theme_mode else 1, horizontal=True)
     if new_theme != st.session_state.theme_mode:
         st.session_state.theme_mode = new_theme
@@ -426,28 +420,28 @@ fig.add_trace(
 fig.add_trace(go.Scatter(
     x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p2_5),
     mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(14, 203, 129, 0.15)',
-    name=T['leg_accum'], customdata=m_dates_str,
-    hovertemplate=f"<b>{T['leg_accum']}</b>: $%{{y:,.0f}}<extra></extra>"
+    name="Accumulation", customdata=m_dates_str,
+    hovertemplate=f"<b>Accumulation</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
 fig.add_trace(go.Scatter(
     x=plot_x_model, y=m_fair_usd,
     mode='lines', line=dict(color='#f0b90b', width=1.5, dash='dash'),
-    name=T['leg_fair'], customdata=m_dates_str,
-    hovertemplate=f"<b>{T['leg_fair']}</b>: $%{{y:,.0f}}<extra></extra>"
+    name="Fair Value", customdata=m_dates_str,
+    hovertemplate=f"<b>Fair Value</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
 fig.add_trace(go.Scatter(
     x=plot_x_model, y=10 ** (st.session_state.A + st.session_state.B * m_log_d + p83_5),
     mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(234, 61, 47, 0.15)',
-    name=T['leg_bubble'], customdata=m_dates_str,
-    hovertemplate=f"<b>{T['leg_bubble']}</b>: $%{{y:,.0f}}<extra></extra>"
+    name="Bubble", customdata=m_dates_str,
+    hovertemplate=f"<b>Bubble</b>: $%{{y:,.0f}}<extra></extra>"
 ), 1, 1)
 
-btc_hover = f"📅 %{{customdata}}<br><b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>" if is_log_time else f"<b>{T['leg_price']}</b>: $%{{y:,.0f}}<extra></extra>"
+btc_hover = f"📅 %{{customdata}}<br><b>BTC Price</b>: $%{{y:,.0f}}<extra></extra>" if is_log_time else f"<b>BTC Price</b>: $%{{y:,.0f}}<extra></extra>"
 fig.add_trace(go.Scatter(
     x=plot_x_main, y=df_display['Close'],
-    mode='lines', name=T['leg_price'],
+    mode='lines', name="BTC Price",
     line=dict(color=pl_btc_color, width=1.5),
     customdata=df_display.index.strftime('%d.%m.%Y'),
     hovertemplate=btc_hover
@@ -482,10 +476,10 @@ fig.update_yaxes(
 
 fig.add_trace(go.Scatter(
     x=plot_x_osc, y=df_display['Res'],
-    mode='lines', name=T['leg_osc'],
+    mode='lines', name="Oscillator",
     line=dict(color='#0ecb81', width=1.2),
     customdata=df_display.index.strftime('%d.%m.%Y'),
-    hovertemplate=f"<b>{T['leg_osc']}</b>: %{{y:.3f}}<extra></extra>"
+    hovertemplate=f"<b>Oscillator</b>: %{{y:.3f}}<extra></extra>"
 ), 2, 1)
 
 # --- NEW: Add the red oscillator model line to the bottom chart ---
@@ -538,10 +532,10 @@ def kpi_card(col, label, value, delta=None, d_color=None):
         unsafe_allow_html=True)
 
 
-kpi_card(k1, T['kpi_price'], f"${l_p:,.0f}")
-kpi_card(k2, T['kpi_fair'], f"${l_f:,.0f}", f"{diff:+.1f}% {T['txt_from_model']}", "#0ecb81" if diff < 0 else "#ea3d2f")
+kpi_card(k1, "BTC PRICE", f"${l_p:,.0f}")
+kpi_card(k2, "FAIR VALUE", f"${l_f:,.0f}", f"{diff:+.1f}% from model", "#0ecb81" if diff < 0 else "#ea3d2f")
 
 # --- UPDATED: Show Combined R2 (Trend + Oscillator) and Trend R2 separately ---
-kpi_card(k3, T['kpi_fit'], f"{r2_combined:.4f}%", f"Trend: {current_r2:.2f}%", "#f0b90b")
+kpi_card(k3, "MODEL FIT (R²)", f"{r2_combined:.4f}%", f"Trend: {current_r2:.2f}%", "#f0b90b")
 
-kpi_card(k4, T['kpi_pot'], f"+{pot:,.0f}%", T['txt_to_top'], "#f0b90b")
+kpi_card(k4, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
