@@ -62,10 +62,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     if "A" not in st.session_state: st.session_state["A"] = float(round(opt_a, 3))
     if "B" not in st.session_state: st.session_state["B"] = float(round(opt_b, 3))
 
-    # Controls
-    c_v1, c_v2 = st.columns(2)
-    price_scale = c_v1.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
-    time_scale = c_v2.radio("Time", ["Log", "Lin"], index=0, horizontal=True)
+    # Controls - Time scale removed, Price scale kept
+    price_scale = st.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
 
     auto_fit = st.checkbox("Auto-Fit A & B", value=False, help="Automatically calculate best Slope (B) and Intercept (A) when Offset changes.")
 
@@ -97,4 +95,5 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         f"PowerLaw R² = {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True)
 
-    return price_scale, time_scale, display_r2
+    # Return only price_scale and r2
+    return price_scale, display_r2

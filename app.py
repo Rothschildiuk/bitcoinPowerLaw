@@ -134,15 +134,17 @@ with st.sidebar:
     # NAVIGATION (Mode Switcher)
     mode = st.radio("Mode", ["Power Law", "Oscillator"], horizontal=True, label_visibility="collapsed")
 
+    # GLOBAL TIME SCALE (Moved from powerLaw.py)
+    time_scale = st.radio("Time", ["Log", "Lin"], index=0, horizontal=True)
+
     current_r2 = 0.0
     price_scale = "Log" # Default
-    time_scale = "Log" # Default
 
     if mode == "Power Law":
-        price_scale, time_scale, current_r2 = powerLaw.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE, c_text_main)
+        # Updated unpacking: removed time_scale
+        price_scale, current_r2 = powerLaw.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE, c_text_main)
     else:
         # Oscillator Mode
-        time_scale = st.radio("Time", ["Log", "Lin"], index=0, horizontal=True)
         oscillator.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE, c_text_main)
 
     st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
@@ -172,6 +174,10 @@ if mode == "Oscillator":
     ss_tot = np.sum((df_display['LogClose'] - np.mean(df_display['LogClose'])) ** 2)
     current_r2 = 1 - (ss_res / ss_tot)
 
+p2_5, p16_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 97.5])
+# Added p83_5 explicitly for Bubble calculation if needed,
+# though originally it was unpacking 4 values. Checking original code...
+# Original was: p2_5, p16_5, p83_5, p97_5 = np.percentile(...)
 p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 97.5])
 
 # --- OSCILLATOR CALC ---
