@@ -92,6 +92,6 @@ def render_sidebar(all_abs_days, all_log_close):
 
     c_text_main = "#d1d4dc" if "Dark" in st.session_state.get('theme_mode', 'Dark') else "#000000"
     st.markdown(
-        f"<p style='color:{c_text_main}; text-align:center; font-size: 0.75rem; margin-top: 2px; opacity: 0.7;'>"
-        f"Oscillator R²: {osc_r2_display:.4f}%</p>",
+        f"<p style='color:{c_text_main}; margin-top: 2px;'>"
+        f"Oscillator R² = {osc_r2_display:.4f}%</p>",
         unsafe_allow_html=True)

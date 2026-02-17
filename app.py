@@ -56,7 +56,7 @@ st.markdown(f"""
     [data-testId="stSidebar"] {{ width: 290px !important; background-color: {c_sidebar_bg} !important; border-right: 1px solid {c_border}; }}
     [data-testId="stSidebarContent"] {{ overflow-x: hidden !important; }}
     [data-testId="stSidebar"] [data-testId="stVerticalBlock"] {{ gap: 0.4rem !important; padding-top: 0.5rem !important; }}
-    [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label {{ color: {c_text_main} !important; font-size: 13px !important; }}
+    [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label {{ color: {c_text_main} !important; font-size: 15px !important; }}
 
     .metric-card {{
         background: {c_card_bg}; border: 1px solid {c_border}; border-radius: 8px; padding: 10px 16px; text-align: center;
