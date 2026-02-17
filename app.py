@@ -214,6 +214,7 @@ p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 9
 try:
     lambda_log = np.log10(st.session_state.get("lambda_val", 1.94))
     t1_days_log = np.log10(st.session_state.get("t1_age", 2.53) * 365.25)
+    osc_damping = st.session_state.get("impulse_damping", 0.0)
     osc_omega = 2 * np.pi / lambda_log
     osc_phi = -osc_omega * t1_days_log
 
@@ -221,6 +222,8 @@ try:
 
     # NEW: USE OSCILLATOR (SINE/COSINE) WAVE
     unit_wave = oscillator.get_oscillator_wave(full_phase)
+    decay = oscillator.get_impulse_decay(df_display['LogD'].values, osc_damping, float(df_display['LogD'].min()))
+    unit_wave = unit_wave * decay
 
     numerator = np.dot(df_display['Res'], unit_wave)
     denominator = np.dot(unit_wave, unit_wave)
@@ -247,7 +250,8 @@ m_fair_usd = 10 ** (a_active + b_active * m_log_d)
 
 m_osc_y = oscillator.oscillator_func_manual(
     m_log_d, osc_amp, osc_omega, osc_phi,
-    st.session_state.get("amp_factor_top", 1.12), st.session_state.get("amp_factor_bottom", 0.84)
+    st.session_state.get("amp_factor_top", 1.12), st.session_state.get("amp_factor_bottom", 0.84),
+    st.session_state.get("impulse_damping", 0.0), float(df_display['LogD'].min())
 )
 
 is_log_time = (time_scale == "Log")

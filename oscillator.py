@@ -18,9 +18,17 @@ def get_oscillator_wave(phase_array):
     """
     return np.cos(phase_array)
 
-def oscillator_func_manual(x_log, amp, omega, phi, f_top, f_bot):
+def get_impulse_decay(log_x, damping, ref_log):
+    rel = np.maximum(0.0, log_x - ref_log)
+    return np.exp(-damping * rel)
+
+def oscillator_func_manual(x_log, amp, omega, phi, f_top, f_bot, damping=0.0, ref_log=None):
     phase = omega * x_log + phi
     base_wave = get_oscillator_wave(phase)
+    if ref_log is None:
+        ref_log = float(np.min(x_log))
+    decay = get_impulse_decay(x_log, damping, ref_log)
+    base_wave = base_wave * decay
 
     # Base wave amplitude scaling
     y = amp * base_wave
@@ -34,7 +42,13 @@ def oscillator_func_manual(x_log, amp, omega, phi, f_top, f_bot):
 # --- SIDEBAR RENDERER ---
 def render_sidebar(all_abs_days, all_log_close, text_color):
     # Defaults
-    defaults = {"t1_age": 2.48, "lambda_val": 2.01, "amp_factor_top": 1.18, "amp_factor_bottom": 0.88}
+    defaults = {
+        "t1_age": 2.49,
+        "lambda_val": 2.01,
+        "amp_factor_top": 1.16,
+        "amp_factor_bottom": 0.88,
+        "impulse_damping": 1.72,
+    }
     for k, v in defaults.items():
         if k not in st.session_state: st.session_state[k] = v
 
@@ -53,6 +67,9 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
 
     st.markdown("**Bottom Amplitude**")
     fancy_control("Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0)
+
+    st.markdown("**Impulse Damping**")
+    fancy_control("Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0)
 
     # --- R2 Calculation for Sidebar Display ---
     calc_days = all_abs_days - st.session_state.get("genesis_offset", 0)
@@ -81,6 +98,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
 
         # New Sinusoid Logic
         u_wave = get_oscillator_wave(calc_phase)
+        decay = get_impulse_decay(c_log_d, st.session_state.get("impulse_damping", 0.0), float(np.min(c_log_d)))
+        u_wave = u_wave * decay
         num = np.dot(c_res, u_wave)
         den = np.dot(u_wave, u_wave)
 
