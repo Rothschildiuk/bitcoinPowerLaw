@@ -38,6 +38,10 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     for k, v in defaults.items():
         if k not in st.session_state: st.session_state[k] = v
 
+    def reset_oscillator_params():
+        for k, v in defaults.items():
+            st.session_state[k] = v
+
     st.markdown("**1st Cycle Age**")
     fancy_control("1st Cycle Age", "t1_age", 0.01, 0.1, 5.0)
 
@@ -93,3 +97,5 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         f"<p style='color:{text_color}; margin-top: 2px;'>"
         f"Oscillator R² = {osc_r2_display:.4f}%</p>",
         unsafe_allow_html=True)
+
+    st.button("Reset parameters", use_container_width=True, on_click=reset_oscillator_params)
