@@ -1,0 +1,57 @@
+from pathlib import Path
+
+import streamlit as st
+
+
+THEMES = {
+    "dark": {
+        "c_main_bg": "#0e1117",
+        "c_sidebar_bg": "#161a25",
+        "c_card_bg": "#1e222d",
+        "c_border": "#2d323e",
+        "c_text_main": "#d1d4dc",
+        "c_text_val": "#ffffff",
+        "c_btn_bg": "#2d323e",
+        "c_btn_hover": "#3d4251",
+        "c_btn_text": "#d1d4dc",
+        "pl_template": "plotly_dark",
+        "pl_bg_color": "rgba(0,0,0,0)",
+        "pl_grid_color": "#1e222d",
+        "pl_btc_color": "#ffffff",
+        "pl_legend_color": "#848e9c",
+        "pl_text_color": "#848e9c",
+        "c_hover_bg": "#1e222d",
+        "c_hover_text": "#ffffff",
+    },
+    "light": {
+        "c_main_bg": "#f5f7fb",
+        "c_sidebar_bg": "#eef2f7",
+        "c_card_bg": "#ffffff",
+        "c_border": "#d7deea",
+        "c_text_main": "#2b3548",
+        "c_text_val": "#111827",
+        "c_btn_bg": "#ffffff",
+        "c_btn_hover": "#e9eef8",
+        "c_btn_text": "#223047",
+        "pl_template": "plotly_white",
+        "pl_bg_color": "rgba(245,247,251,1)",
+        "pl_grid_color": "#dfe6f3",
+        "pl_btc_color": "#1f2937",
+        "pl_legend_color": "#4b5b74",
+        "pl_text_color": "#334155",
+        "c_hover_bg": "#ffffff",
+        "c_hover_text": "#1f2937",
+    },
+}
+
+
+def get_theme(is_dark):
+    return THEMES["dark" if is_dark else "light"]
+
+
+def apply_theme_css(theme, css_path="styles.css"):
+    css_template = Path(css_path).read_text(encoding="utf-8")
+    css = css_template
+    for key, value in theme.items():
+        css = css.replace(f"__{key.upper()}__", str(value))
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)

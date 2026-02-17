@@ -62,6 +62,11 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     if "A" not in st.session_state: st.session_state["A"] = float(round(opt_a, 3))
     if "B" not in st.session_state: st.session_state["B"] = float(round(opt_b, 3))
 
+    def reset_powerlaw_params():
+        st.session_state["genesis_offset"] = int(opt_offset)
+        st.session_state["A"] = float(round(opt_a, 3))
+        st.session_state["B"] = float(round(opt_b, 3))
+
     # Controls - Time scale removed, Price scale kept
     price_scale = st.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
 
@@ -94,6 +99,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         f"<p style='color:{text_color}; margin-top: 2px;'>"
         f"PowerLaw R² = {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True)
+
+    st.button("Reset parameters", use_container_width=True, on_click=reset_powerlaw_params)
 
     # Return only price_scale and r2
     return price_scale, display_r2

@@ -8,6 +8,7 @@ import ssl
 # --- MODULE IMPORTS ---
 import powerLaw
 import oscillator
+from ui_theme import get_theme, apply_theme_css
 
 def safe_r2(y_true, y_pred):
     ss_res = np.sum((y_true - y_pred) ** 2)
@@ -55,61 +56,19 @@ if 'chart_revision' not in st.session_state:
 
 is_dark = "Dark" in st.session_state.theme_mode
 
-# --- DYNAMIC COLORS ---
-if is_dark:
-    c_main_bg, c_sidebar_bg, c_card_bg = "#0e1117", "#161a25", "#1e222d"
-    c_border, c_text_main, c_text_val = "#2d323e", "#d1d4dc", "#ffffff"
-    c_btn_bg, c_btn_hover, c_btn_text = "#2d323e", "#3d4251", "#d1d4dc"
-    pl_template, pl_bg_color, pl_grid_color = "plotly_dark", "rgba(0,0,0,0)", "#1e222d"
-    pl_btc_color, pl_legend_color, pl_text_color = "#ffffff", "#848e9c", "#848e9c"
-    c_hover_bg, c_hover_text = "#1e222d", "#ffffff"
-else:
-    c_main_bg, c_sidebar_bg, c_card_bg = "#ffffff", "#f4f4f4", "#f8f9fa"
-    c_border, c_text_main, c_text_val = "#d0d0d0", "#000000", "#000000"
-    c_btn_bg, c_btn_hover, c_btn_text = "#ffffff", "#e0e0e0", "#000000"
-    pl_template, pl_bg_color, pl_grid_color = "plotly_white", "rgba(255,255,255,1)", "#e6e6e6"
-    pl_btc_color, pl_legend_color, pl_text_color = "#000000", "#000000", "#000000"
-    c_hover_bg, c_hover_text = "#ffffff", "#000000"
+theme = get_theme(is_dark)
+apply_theme_css(theme)
 
-# --- CSS ---
-st.markdown(f"""
-    <style>
-    .stApp, [data-testId="stAppViewContainer"] {{ background-color: {c_main_bg} !important; }}
-    .block-container {{ padding-top: 1rem !important; padding-bottom: 0rem !important; padding-left: 1rem !important; padding-right: 1rem !important; }}
-    footer {{visibility: hidden; display: none;}}
-    [data-testId="stHeader"] {{ background-color: transparent; color: {c_text_main}; }}
-    [data-testId="stHeader"] button {{ color: {c_text_main} !important; }}
-    [data-testId="stAppDeployButton"] {{ display: none !important; }}
-    #MainMenu {{ visibility: hidden !important; }}
-    
-    [data-testId="stSidebar"] {{ width: 290px !important; background-color: {c_sidebar_bg} !important; border-right: 1px solid {c_border}; }}
-    [data-testId="stSidebarContent"] {{ overflow-x: hidden !important; }}
-    [data-testId="stSidebar"] [data-testId="stVerticalBlock"] {{ gap: 0.4rem !important; padding-top: 0.5rem !important; }}
-    [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label {{ color: {c_text_main} !important; font-size: 15px !important; }}
-
-    .metric-card {{
-        background: {c_card_bg}; border: 1px solid {c_border}; border-radius: 8px; padding: 10px 16px; text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 5px; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;
-    }}
-    .metric-label {{ color: {c_text_main}; font-size: 13px; font-weight: 600; margin-bottom: 4px; opacity: 0.8; }}
-    .metric-value {{ color: {c_text_val}; font-size: 20px; font-weight: 800; }}
-    .metric-delta {{ font-size: 12px; font-weight: 600; margin-top: 2px; }}
-
-    div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] {{ gap: 8px; }}
-    div[data-testId="stSidebar"] .stRadio label p {{ font-size: 13px !important; }}
-    
-    .stButton > button {{
-        width: 100% !important; background-color: {c_btn_bg} !important; color: {c_btn_text} !important;
-        border: 1px solid {c_border} !important; border-radius: 4px !important; height: 28px !important;
-        line-height: 26px !important; font-size: 13px !important; transition: 0.2s; font-weight: bold !important;
-    }}
-    .stSlider {{ margin-bottom: -10px !important; margin-top: 0px !important; }}
-    
-    .sidebar-title {{
-        text-align: center; color: #f0b90b; margin-bottom: 5px !important; font-size: 1.5rem; font-weight: bold;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+c_text_main = theme["c_text_main"]
+pl_template = theme["pl_template"]
+pl_bg_color = theme["pl_bg_color"]
+pl_grid_color = theme["pl_grid_color"]
+pl_btc_color = theme["pl_btc_color"]
+pl_legend_color = theme["pl_legend_color"]
+pl_text_color = theme["pl_text_color"]
+c_hover_bg = theme["c_hover_bg"]
+c_hover_text = theme["c_hover_text"]
+c_border = theme["c_border"]
 
 # --- DATA LOADING ---
 @st.cache_data

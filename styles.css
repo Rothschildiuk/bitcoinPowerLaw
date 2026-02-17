@@ -1,0 +1,37 @@
+.stApp, [data-testId="stAppViewContainer"] { background-color: __C_MAIN_BG__ !important; }
+.block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+footer {visibility: hidden; display: none;}
+[data-testId="stHeader"] { background-color: transparent; color: __C_TEXT_MAIN__; }
+[data-testId="stHeader"] button { color: __C_TEXT_MAIN__ !important; }
+[data-testId="stAppDeployButton"] { display: none !important; }
+#MainMenu { visibility: hidden !important; }
+
+[data-testId="stSidebar"] { width: 290px !important; background-color: __C_SIDEBAR_BG__ !important; border-right: 1px solid __C_BORDER__; }
+[data-testId="stSidebarContent"] { overflow-x: hidden !important; }
+[data-testId="stSidebar"] [data-testId="stVerticalBlock"] { gap: 0.4rem !important; padding-top: 0.5rem !important; }
+[data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label { color: __C_TEXT_MAIN__ !important; font-size: 15px !important; }
+
+.metric-card {
+    background: __C_CARD_BG__; border: 1px solid __C_BORDER__; border-radius: 8px; padding: 10px 16px; text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 5px; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
+.metric-label { color: __C_TEXT_MAIN__; font-size: 13px; font-weight: 600; margin-bottom: 4px; opacity: 0.8; }
+.metric-value { color: __C_TEXT_VAL__; font-size: 20px; font-weight: 800; }
+.metric-delta { font-size: 12px; font-weight: 600; margin-top: 2px; }
+
+div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] { gap: 8px; }
+div[data-testId="stSidebar"] .stRadio label p { font-size: 13px !important; }
+
+.stButton > button {
+    width: 100% !important; background-color: __C_BTN_BG__ !important; color: __C_BTN_TEXT__ !important;
+    border: 1px solid __C_BORDER__ !important; border-radius: 4px !important; height: 28px !important;
+    line-height: 26px !important; font-size: 13px !important; transition: 0.2s; font-weight: bold !important;
+}
+.stButton > button:hover {
+    background-color: __C_BTN_HOVER__ !important;
+}
+.stSlider { margin-bottom: -10px !important; margin-top: 0px !important; }
+
+.sidebar-title {
+    text-align: center; color: #f0b90b; margin-bottom: 5px !important; font-size: 1.5rem; font-weight: bold;
+}
