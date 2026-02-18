@@ -54,7 +54,9 @@ def find_global_best_fit_optimized(all_abs_days, all_log_close):
 
 
 # --- SIDEBAR RENDERER ---
-def render_sidebar(all_abs_days, all_log_close, text_color):
+def render_sidebar(
+    all_abs_days, all_log_close, text_color, show_price_scale=True, render_extra_controls=None
+):
     # Initialize defaults if needed
     if "genesis_offset" not in st.session_state:
         st.session_state["genesis_offset"] = 0
@@ -71,16 +73,23 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         st.session_state["A"] = float(round(opt_a, 3))
         st.session_state["B"] = float(round(opt_b, 3))
 
-    # Controls - Time scale removed, Price scale kept
-    price_scale = st.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
+    if "powerlaw_auto_fit" not in st.session_state:
+        st.session_state["powerlaw_auto_fit"] = True
+
+    # Controls - Time scale removed, Price scale optional
+    if show_price_scale:
+        price_scale = st.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
+    else:
+        price_scale = "Log"
 
     auto_fit = st.checkbox(
         "Auto-Fit A & B",
-        value=False,
+        key="powerlaw_auto_fit",
         help="Automatically calculate best Slope (B) and Intercept (A) when Offset changes.",
     )
 
-    display_r2 = 0.0
+    def disable_auto_fit():
+        st.session_state["powerlaw_auto_fit"] = False
 
     # Get current values safely
     current_intercept_a = st.session_state.get("A", opt_a)
@@ -102,10 +111,13 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         )
 
     st.markdown("**A (Intercept)**")
-    fancy_control("A (Intercept)", "A", 0.01, -25.0, 0.0, disabled=auto_fit)
+    fancy_control("A (Intercept)", "A", 0.01, -25.0, 0.0, on_manual_change=disable_auto_fit)
 
     st.markdown("**B (Slope)**")
-    fancy_control("B (Slope)", "B", 0.01, 1.0, 7.0, disabled=auto_fit)
+    fancy_control("B (Slope)", "B", 0.01, 1.0, 7.0, on_manual_change=disable_auto_fit)
+
+    if callable(render_extra_controls):
+        render_extra_controls()
 
     st.markdown(
         f"<p style='color:{text_color}; margin-top: 2px;'>"

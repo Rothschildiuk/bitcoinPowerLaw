@@ -25,17 +25,25 @@ def get_stable_trend_fit(log_days, log_prices, intercept_a, slope_b, residual_th
     return intercept_a, slope_b, trend_log_prices, residual_series
 
 
-def fancy_control(label, key, step, min_v, max_v, disabled=False):
+def fancy_control(label, key, step, min_v, max_v, disabled=False, on_manual_change=None):
     c1, c2, c3 = st.columns([1, 2.5, 1])
     st.session_state.setdefault(key, min_v)
 
     def on_minus():
         new_val = st.session_state[key] - step
         st.session_state[key] = round(max(min_v, new_val), 3)
+        if on_manual_change is not None:
+            on_manual_change()
 
     def on_plus():
         new_val = st.session_state[key] + step
         st.session_state[key] = round(min(max_v, new_val), 3)
+        if on_manual_change is not None:
+            on_manual_change()
+
+    def on_slider_change():
+        if on_manual_change is not None:
+            on_manual_change()
 
     if c1.button("➖", key=f"{key}_m", disabled=disabled, on_click=on_minus):
         pass
@@ -43,5 +51,12 @@ def fancy_control(label, key, step, min_v, max_v, disabled=False):
         pass
 
     return c2.slider(
-        key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled
+        key,
+        min_v,
+        max_v,
+        key=key,
+        step=step,
+        label_visibility="collapsed",
+        disabled=disabled,
+        on_change=on_slider_change,
     )

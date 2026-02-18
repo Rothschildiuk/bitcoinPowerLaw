@@ -222,11 +222,17 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         st.session_state.pop("osc_autofit_signature", None)
         st.session_state.pop("osc_autofit_best_params", None)
 
+    if "logperiodic_auto_fit" not in st.session_state:
+        st.session_state["logperiodic_auto_fit"] = True
+
     auto_fit = st.checkbox(
-        "Auto-Fit Oscillator",
-        value=False,
-        help="Automatically finds oscillator parameters with the highest Oscillator R².",
+        "Auto-Fit LogPeriodic",
+        key="logperiodic_auto_fit",
+        help="Automatically finds parameters with the highest LogPeriodic R².",
     )
+
+    def disable_auto_fit():
+        st.session_state["logperiodic_auto_fit"] = False
 
     days_since_genesis = all_abs_days - st.session_state.get("genesis_offset", 0)
     valid_days_mask = days_since_genesis > 0
@@ -275,19 +281,23 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
             st.session_state["impulse_damping"] = round(best_params["impulse_damping"], 3)
 
     st.markdown("**1st Cycle Age**")
-    fancy_control("1st Cycle Age", "t1_age", 0.01, 0.1, 5.0, disabled=auto_fit)
+    fancy_control("1st Cycle Age", "t1_age", 0.01, 0.1, 5.0, on_manual_change=disable_auto_fit)
 
     st.markdown("**Lambda**")
-    fancy_control("Lambda", "lambda_val", 0.01, 1.5, 3.0, disabled=auto_fit)
+    fancy_control("Lambda", "lambda_val", 0.01, 1.5, 3.0, on_manual_change=disable_auto_fit)
 
     st.markdown("**Top Amplitude**")
-    fancy_control("Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0, disabled=auto_fit)
+    fancy_control("Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0, on_manual_change=disable_auto_fit)
 
     st.markdown("**Bottom Amplitude**")
-    fancy_control("Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0, disabled=auto_fit)
+    fancy_control(
+        "Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0, on_manual_change=disable_auto_fit
+    )
 
     st.markdown("**Impulse Damping**")
-    fancy_control("Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0, disabled=auto_fit)
+    fancy_control(
+        "Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0, on_manual_change=disable_auto_fit
+    )
 
     # --- R2 Calculation for Sidebar Display ---
     if np.count_nonzero(valid_days_mask) > 100:
@@ -303,7 +313,7 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
 
     st.markdown(
         f"<p style='color:{text_color}; margin-top: 2px;'>"
-        f"Oscillator R² = {oscillator_r2_display:.4f}%</p>",
+        f"LogPeriodic R² = {oscillator_r2_display:.4f}%</p>",
         unsafe_allow_html=True,
     )
 

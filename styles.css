@@ -6,10 +6,12 @@ footer {visibility: hidden; display: none;}
 [data-testId="stAppDeployButton"] { display: none !important; }
 #MainMenu { visibility: hidden !important; }
 
-[data-testId="stSidebar"] { width: 290px !important; background-color: __C_SIDEBAR_BG__ !important; border-right: 1px solid __C_BORDER__; }
+[data-testId="stSidebar"] { width: 360px !important; background-color: __C_SIDEBAR_BG__ !important; border-right: 1px solid __C_BORDER__; }
 [data-testId="stSidebarContent"] { overflow-x: hidden !important; }
 [data-testId="stSidebar"] [data-testId="stVerticalBlock"] { gap: 0.4rem !important; padding-top: 0.5rem !important; }
 [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label { color: __C_TEXT_MAIN__ !important; font-size: 15px !important; }
+[data-testId="stSidebar"] [data-baseweb="button-group"] { flex-wrap: nowrap !important; }
+[data-testId="stSidebar"] [data-baseweb="button-group"] > button { white-space: nowrap !important; }
 
 .metric-card {
     background: __C_CARD_BG__; border: 1px solid __C_BORDER__; border-radius: 8px; padding: 10px 16px; text-align: center;
@@ -34,4 +36,47 @@ div[data-testId="stSidebar"] .stRadio label p { font-size: 13px !important; }
 
 .sidebar-title {
     text-align: center; color: #f0b90b; margin-bottom: 5px !important; font-size: 1.5rem; font-weight: bold;
+}
+
+.app-title {
+    text-align: center;
+    color: #f0b90b;
+    margin-bottom: 0.25rem !important;
+    font-size: 2.3rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+[data-testid="stMain"] .stRadio > div[role="radiogroup"] {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0 auto 0.8rem auto;
+    width: fit-content;
+    justify-content: center;
+}
+
+[data-testid="stMain"] .stRadio label[data-baseweb="radio"] {
+    border: 1px solid __C_BORDER__;
+    border-radius: 8px;
+    padding: 4px 12px;
+    background: __C_CARD_BG__;
+}
+
+[data-testid="stMain"] .stRadio label[data-baseweb="radio"] > div:first-child {
+    display: none;
+}
+
+[data-testid="stMain"] .stRadio label[data-baseweb="radio"] p {
+    font-size: 17px !important;
+    font-weight: 700;
+    color: __C_TEXT_MAIN__ !important;
+}
+
+[data-testid="stMain"] .stRadio label[data-baseweb="radio"][aria-checked="true"] {
+    background: #f0b90b;
+    border-color: #f0b90b;
+}
+
+[data-testid="stMain"] .stRadio label[data-baseweb="radio"][aria-checked="true"] p {
+    color: #111827 !important;
 }
