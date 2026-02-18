@@ -3,7 +3,6 @@ from functools import lru_cache
 
 import streamlit as st
 
-
 THEMES = {
     "dark": {
         "c_main_bg": "#0e1117",

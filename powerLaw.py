@@ -1,8 +1,10 @@
-import streamlit as st
 import numpy as np
+import streamlit as st
+
 from utils import fancy_control, calculate_r2_score
 
 # --- MATH CORE ---
+
 
 def fit_powerlaw_regression(absolute_days, log_prices, genesis_offset_days):
     """Calculates the optimal Slope(B) and Intercept(A) for a given offset."""
@@ -22,7 +24,10 @@ def fit_powerlaw_regression(absolute_days, log_prices, genesis_offset_days):
 
     return slope_b, intercept_a, r2_score
 
-def calculate_r2_for_manual_params(absolute_days, log_prices, genesis_offset_days, intercept_a, slope_b):
+
+def calculate_r2_for_manual_params(
+    absolute_days, log_prices, genesis_offset_days, intercept_a, slope_b
+):
     """Calculates R2 for specific manual A and B values."""
     days_since_offset = absolute_days - genesis_offset_days
     positive_mask = days_since_offset > 0
@@ -37,25 +42,29 @@ def calculate_r2_for_manual_params(absolute_days, log_prices, genesis_offset_day
 
     return calculate_r2_score(valid_log_prices, predicted_log_prices)
 
+
 def find_best_fit_params(absolute_days, log_prices):
     slope_b, intercept_a, r2_score = fit_powerlaw_regression(absolute_days, log_prices, 0)
     return 0, intercept_a, slope_b, r2_score
+
 
 # Backward-compatible alias used by existing code.
 def find_global_best_fit_optimized(all_abs_days, all_log_close):
     return find_best_fit_params(all_abs_days, all_log_close)
 
+
 # --- SIDEBAR RENDERER ---
 def render_sidebar(all_abs_days, all_log_close, text_color):
-
     # Initialize defaults if needed
     if "genesis_offset" not in st.session_state:
         st.session_state["genesis_offset"] = 0
 
     opt_offset, opt_a, opt_b, _ = find_best_fit_params(all_abs_days, all_log_close)
 
-    if "A" not in st.session_state: st.session_state["A"] = float(round(opt_a, 3))
-    if "B" not in st.session_state: st.session_state["B"] = float(round(opt_b, 3))
+    if "A" not in st.session_state:
+        st.session_state["A"] = float(round(opt_a, 3))
+    if "B" not in st.session_state:
+        st.session_state["B"] = float(round(opt_b, 3))
 
     def reset_powerlaw_params():
         st.session_state["genesis_offset"] = int(opt_offset)
@@ -65,7 +74,11 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     # Controls - Time scale removed, Price scale kept
     price_scale = st.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
 
-    auto_fit = st.checkbox("Auto-Fit A & B", value=False, help="Automatically calculate best Slope (B) and Intercept (A) when Offset changes.")
+    auto_fit = st.checkbox(
+        "Auto-Fit A & B",
+        value=False,
+        help="Automatically calculate best Slope (B) and Intercept (A) when Offset changes.",
+    )
 
     display_r2 = 0.0
 
@@ -97,7 +110,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     st.markdown(
         f"<p style='color:{text_color}; margin-top: 2px;'>"
         f"PowerLaw R² = {display_r2 * 100:.4f}%</p>",
-        unsafe_allow_html=True)
+        unsafe_allow_html=True,
+    )
 
     st.button("Reset parameters", use_container_width=True, on_click=reset_powerlaw_params)
 

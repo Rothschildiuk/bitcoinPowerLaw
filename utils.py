@@ -1,5 +1,5 @@
-import streamlit as st
 import numpy as np
+import streamlit as st
 
 
 def calculate_r2_score(actual_values, predicted_values):
@@ -24,6 +24,7 @@ def get_stable_trend_fit(log_days, log_prices, intercept_a, slope_b, residual_th
 
     return intercept_a, slope_b, trend_log_prices, residual_series
 
+
 def fancy_control(label, key, step, min_v, max_v, disabled=False):
     c1, c2, c3 = st.columns([1, 2.5, 1])
     st.session_state.setdefault(key, min_v)
@@ -36,7 +37,11 @@ def fancy_control(label, key, step, min_v, max_v, disabled=False):
         new_val = st.session_state[key] + step
         st.session_state[key] = round(min(max_v, new_val), 3)
 
-    if c1.button("➖", key=f"{key}_m", disabled=disabled, on_click=on_minus): pass
-    if c3.button("➕", key=f"{key}_p", disabled=disabled, on_click=on_plus): pass
+    if c1.button("➖", key=f"{key}_m", disabled=disabled, on_click=on_minus):
+        pass
+    if c3.button("➕", key=f"{key}_p", disabled=disabled, on_click=on_plus):
+        pass
 
-    return c2.slider(key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled)
+    return c2.slider(
+        key, min_v, max_v, key=key, step=step, label_visibility="collapsed", disabled=disabled
+    )
