@@ -224,7 +224,9 @@ except Exception as e:
 
 # --- VIZ SETUP ---
 view_max = df_display['Days'].max() + 365 * 10
-m_x = np.logspace(0, np.log10(view_max), 400) if time_scale == "Log" else np.linspace(1, view_max, 400)
+
+# Use daily grid so unified hover has matching x-values across all traces.
+m_x = np.arange(1.0, float(np.ceil(view_max)) + 1.0)
 m_dates = [current_gen_date + pd.Timedelta(days=float(d)) for d in m_x]
 m_log_d = np.log10(m_x)
 m_fair_usd = 10 ** (a_active + b_active * m_log_d)
