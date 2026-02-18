@@ -1,7 +1,8 @@
 import numpy as np
 import streamlit as st
 
-from utils import fancy_control, calculate_r2_score
+from constants import KEY_A, KEY_B, KEY_GENESIS_OFFSET, KEY_POWERLAW_AUTO_FIT
+from utils import fancy_control, calculate_r2_score, inline_radio_control
 
 # --- MATH CORE ---
 
@@ -58,51 +59,52 @@ def render_sidebar(
     all_abs_days, all_log_close, text_color, show_price_scale=True, render_extra_controls=None
 ):
     # Initialize defaults if needed
-    if "genesis_offset" not in st.session_state:
-        st.session_state["genesis_offset"] = 0
+    if KEY_GENESIS_OFFSET not in st.session_state:
+        st.session_state[KEY_GENESIS_OFFSET] = 0
 
     opt_offset, opt_a, opt_b, _ = find_best_fit_params(all_abs_days, all_log_close)
 
-    if "A" not in st.session_state:
-        st.session_state["A"] = float(round(opt_a, 3))
-    if "B" not in st.session_state:
-        st.session_state["B"] = float(round(opt_b, 3))
+    if KEY_A not in st.session_state:
+        st.session_state[KEY_A] = float(round(opt_a, 3))
+    if KEY_B not in st.session_state:
+        st.session_state[KEY_B] = float(round(opt_b, 3))
 
     def reset_powerlaw_params():
-        st.session_state["genesis_offset"] = int(opt_offset)
-        st.session_state["A"] = float(round(opt_a, 3))
-        st.session_state["B"] = float(round(opt_b, 3))
+        st.session_state[KEY_GENESIS_OFFSET] = int(opt_offset)
+        st.session_state[KEY_A] = float(round(opt_a, 3))
+        st.session_state[KEY_B] = float(round(opt_b, 3))
+        st.session_state[KEY_POWERLAW_AUTO_FIT] = False
 
-    if "powerlaw_auto_fit" not in st.session_state:
-        st.session_state["powerlaw_auto_fit"] = True
+    if KEY_POWERLAW_AUTO_FIT not in st.session_state:
+        st.session_state[KEY_POWERLAW_AUTO_FIT] = True
 
     # Controls - Time scale removed, Price scale optional
     if show_price_scale:
-        price_scale = st.radio("Price", ["Log", "Lin"], index=0, horizontal=True)
+        price_scale = inline_radio_control("Price", ["Log", "Lin"])
     else:
         price_scale = "Log"
 
     auto_fit = st.checkbox(
         "Auto-Fit A & B",
-        key="powerlaw_auto_fit",
+        key=KEY_POWERLAW_AUTO_FIT,
         help="Automatically calculate best Slope (B) and Intercept (A) when Offset changes.",
     )
 
     def disable_auto_fit():
-        st.session_state["powerlaw_auto_fit"] = False
+        st.session_state[KEY_POWERLAW_AUTO_FIT] = False
 
     # Get current values safely
-    current_intercept_a = st.session_state.get("A", opt_a)
-    current_slope_b = st.session_state.get("B", opt_b)
-    current_offset_days = st.session_state.get("genesis_offset", opt_offset)
+    current_intercept_a = st.session_state.get(KEY_A, opt_a)
+    current_slope_b = st.session_state.get(KEY_B, opt_b)
+    current_offset_days = st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)
 
     if auto_fit:
         # Calculate BEST fit parameters
         fitted_slope_b, fitted_intercept_a, fitted_r2_score = fit_powerlaw_regression(
             all_abs_days, all_log_close, current_offset_days
         )
-        st.session_state["A"] = float(round(fitted_intercept_a, 3))
-        st.session_state["B"] = float(round(fitted_slope_b, 3))
+        st.session_state[KEY_A] = float(round(fitted_intercept_a, 3))
+        st.session_state[KEY_B] = float(round(fitted_slope_b, 3))
         display_r2 = fitted_r2_score
     else:
         # Calculate R2 based on MANUAL sliders (The Fix)
@@ -111,10 +113,10 @@ def render_sidebar(
         )
 
     st.markdown("**A (Intercept)**")
-    fancy_control("A (Intercept)", "A", 0.01, -25.0, 0.0, on_manual_change=disable_auto_fit)
+    fancy_control("A (Intercept)", KEY_A, 0.01, -25.0, 0.0, on_manual_change=disable_auto_fit)
 
     st.markdown("**B (Slope)**")
-    fancy_control("B (Slope)", "B", 0.01, 1.0, 7.0, on_manual_change=disable_auto_fit)
+    fancy_control("B (Slope)", KEY_B, 0.01, 1.0, 7.0, on_manual_change=disable_auto_fit)
 
     if callable(render_extra_controls):
         render_extra_controls()

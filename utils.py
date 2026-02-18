@@ -25,6 +25,22 @@ def get_stable_trend_fit(log_days, log_prices, intercept_a, slope_b, residual_th
     return intercept_a, slope_b, trend_log_prices, residual_series
 
 
+def inline_radio_control(
+    label, options, *, key=None, index=0, horizontal=True, columns_ratio=(1, 2.2)
+):
+    label_col, control_col = st.columns(list(columns_ratio))
+    label_col.markdown(f"**{label}**")
+    with control_col:
+        return st.radio(
+            label,
+            options,
+            index=index,
+            key=key,
+            horizontal=horizontal,
+            label_visibility="collapsed",
+        )
+
+
 def fancy_control(label, key, step, min_v, max_v, disabled=False, on_manual_change=None):
     c1, c2, c3 = st.columns([1, 2.5, 1])
     st.session_state.setdefault(key, min_v)

@@ -1,6 +1,14 @@
 import numpy as np
 import streamlit as st
 
+from constants import (
+    KEY_A,
+    KEY_B,
+    KEY_GENESIS_OFFSET,
+    KEY_LOGPERIODIC_AUTO_FIT,
+    KEY_OSC_AUTOFIT_BEST_PARAMS,
+    KEY_OSC_AUTOFIT_SIGNATURE,
+)
 from utils import fancy_control, calculate_r2_score, get_stable_trend_fit
 
 AUTO_FIT_MAX_PASSES = 2
@@ -141,9 +149,9 @@ def build_autofit_signature(all_abs_days, all_log_close):
     if len(all_abs_days) == 0:
         return ("empty",)
     return (
-        int(st.session_state.get("genesis_offset", 0)),
-        round(float(st.session_state.get("A", 0.0)), 6),
-        round(float(st.session_state.get("B", 0.0)), 6),
+        int(st.session_state.get(KEY_GENESIS_OFFSET, 0)),
+        round(float(st.session_state.get(KEY_A, 0.0)), 6),
+        round(float(st.session_state.get(KEY_B, 0.0)), 6),
         len(all_abs_days),
         int(all_abs_days[0]),
         int(all_abs_days[-1]),
@@ -219,22 +227,23 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     def reset_oscillator_params():
         for k, v in defaults.items():
             st.session_state[k] = v
-        st.session_state.pop("osc_autofit_signature", None)
-        st.session_state.pop("osc_autofit_best_params", None)
+        st.session_state.pop(KEY_OSC_AUTOFIT_SIGNATURE, None)
+        st.session_state.pop(KEY_OSC_AUTOFIT_BEST_PARAMS, None)
+        st.session_state[KEY_LOGPERIODIC_AUTO_FIT] = False
 
-    if "logperiodic_auto_fit" not in st.session_state:
-        st.session_state["logperiodic_auto_fit"] = True
+    if KEY_LOGPERIODIC_AUTO_FIT not in st.session_state:
+        st.session_state[KEY_LOGPERIODIC_AUTO_FIT] = True
 
     auto_fit = st.checkbox(
         "Auto-Fit LogPeriodic",
-        key="logperiodic_auto_fit",
+        key=KEY_LOGPERIODIC_AUTO_FIT,
         help="Automatically finds parameters with the highest LogPeriodic R².",
     )
 
     def disable_auto_fit():
-        st.session_state["logperiodic_auto_fit"] = False
+        st.session_state[KEY_LOGPERIODIC_AUTO_FIT] = False
 
-    days_since_genesis = all_abs_days - st.session_state.get("genesis_offset", 0)
+    days_since_genesis = all_abs_days - st.session_state.get(KEY_GENESIS_OFFSET, 0)
     valid_days_mask = days_since_genesis > 0
     oscillator_r2_display = 0.0
 
@@ -249,8 +258,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
 
         if auto_fit:
             autofit_signature = build_autofit_signature(all_abs_days, all_log_close)
-            cached_signature = st.session_state.get("osc_autofit_signature")
-            cached_best_params = st.session_state.get("osc_autofit_best_params")
+            cached_signature = st.session_state.get(KEY_OSC_AUTOFIT_SIGNATURE)
+            cached_best_params = st.session_state.get(KEY_OSC_AUTOFIT_BEST_PARAMS)
 
             if cached_signature == autofit_signature and isinstance(cached_best_params, dict):
                 best_params = cached_best_params
@@ -271,8 +280,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
                 best_params = optimize_oscillator_parameters(
                     log_days, residual_series, start_params
                 )
-                st.session_state["osc_autofit_signature"] = autofit_signature
-                st.session_state["osc_autofit_best_params"] = best_params
+                st.session_state[KEY_OSC_AUTOFIT_SIGNATURE] = autofit_signature
+                st.session_state[KEY_OSC_AUTOFIT_BEST_PARAMS] = best_params
 
             st.session_state["t1_age"] = round(best_params["t1_age"], 3)
             st.session_state["lambda_val"] = round(best_params["lambda_val"], 3)
