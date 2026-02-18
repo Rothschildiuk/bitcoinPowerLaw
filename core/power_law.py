@@ -1,8 +1,8 @@
 import numpy as np
 import streamlit as st
 
-from constants import KEY_A, KEY_B, KEY_GENESIS_OFFSET, KEY_POWERLAW_AUTO_FIT
-from utils import fancy_control, calculate_r2_score, inline_radio_control
+from core.constants import KEY_A, KEY_B, KEY_GENESIS_OFFSET, KEY_POWERLAW_AUTO_FIT
+from core.utils import calculate_r2_score, fancy_control, inline_radio_control
 
 # --- MATH CORE ---
 

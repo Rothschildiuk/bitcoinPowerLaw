@@ -1,7 +1,7 @@
 import numpy as np
 import streamlit as st
 
-from constants import (
+from core.constants import (
     KEY_A,
     KEY_B,
     KEY_GENESIS_OFFSET,
@@ -9,7 +9,7 @@ from constants import (
     KEY_OSC_AUTOFIT_BEST_PARAMS,
     KEY_OSC_AUTOFIT_SIGNATURE,
 )
-from utils import fancy_control, calculate_r2_score, get_stable_trend_fit
+from core.utils import calculate_r2_score, fancy_control, get_stable_trend_fit
 
 AUTO_FIT_MAX_PASSES = 2
 AUTO_FIT_GRID_POINTS = 9
@@ -296,7 +296,9 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     fancy_control("Lambda", "lambda_val", 0.01, 1.5, 3.0, on_manual_change=disable_auto_fit)
 
     st.markdown("**Top Amplitude**")
-    fancy_control("Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0, on_manual_change=disable_auto_fit)
+    fancy_control(
+        "Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0, on_manual_change=disable_auto_fit
+    )
 
     st.markdown("**Bottom Amplitude**")
     fancy_control(

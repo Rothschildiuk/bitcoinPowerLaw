@@ -1,8 +1,7 @@
 import streamlit as st
 
-import oscillator
-import powerLaw
-from constants import (
+from core import oscillator, power_law
+from core.constants import (
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
     KEY_CHART_REVISION,
@@ -21,7 +20,7 @@ from constants import (
     TIME_LOG,
     TIME_LIN,
 )
-from utils import inline_radio_control
+from core.utils import inline_radio_control
 
 
 def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_max):
@@ -113,18 +112,20 @@ def render_sidebar_panel(
         current_r2 = 0.0
         price_scale = "Log"
 
-        if mode in ["PowerLaw", "Portfolio"]:
-            price_scale, current_r2 = powerLaw.render_sidebar(
+        if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
+            price_scale, current_r2 = power_law.render_sidebar(
                 all_absolute_days,
                 all_log_close_prices,
                 c_text_main,
                 show_price_scale=(mode != MODE_PORTFOLIO),
                 render_extra_controls=(
-                    lambda: _render_portfolio_sidebar_controls(
-                        forecast_horizon_min, forecast_horizon_max
+                    lambda: (
+                        _render_portfolio_sidebar_controls(
+                            forecast_horizon_min, forecast_horizon_max
+                        )
+                        if mode == MODE_PORTFOLIO
+                        else None
                     )
-                    if mode == MODE_PORTFOLIO
-                    else None
                 ),
             )
         else:

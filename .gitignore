@@ -1,24 +1,36 @@
-# Віртуальне середовище (найголовніше, щоб не грузити IDE та Git)
+# Virtual environments
 venv/
 env/
+.venv/
 
-# Кеш Python
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
 
-# Налаштування середовища розробки (IntelliJ IDEA)
+# IDE settings
 .idea/
+.vscode/
 
-# Кеш та налаштування Streamlit
+# Streamlit cache/settings
 .streamlit/
 
-# Локальні файли даних (на випадок, якщо ви почнете зберігати історію в файли)
+# Local environment and logs
+.env
+.env.*
+*.log
+
+# Local data files
 *.csv
 *.xlsx
 *.db
 *.json
 *.parquet
 
-# Системні файли macOS
+# macOS system files
 .DS_Store

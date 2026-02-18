@@ -4,12 +4,8 @@ import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 
-import oscillator
-
-# --- MODULE IMPORTS ---
-import powerLaw
-from charts import render_main_model_chart
-from constants import (
+from core import oscillator, power_law
+from core.constants import (
     APP_VERSION,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
@@ -32,9 +28,10 @@ from constants import (
     OSC_DEFAULTS,
     TIME_LOG,
 )
-from sidebar import render_sidebar_panel
-from ui_theme import get_theme, apply_theme_css
-from utils import calculate_r2_score, get_stable_trend_fit
+from core.utils import calculate_r2_score, get_stable_trend_fit
+from ui.charts import render_main_model_chart
+from ui.sidebar import render_sidebar_panel
+from ui.theme import apply_theme_css, get_theme
 
 
 def initialize_app_session_state(absolute_days=None, log_prices=None):
@@ -50,7 +47,7 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
     if KEY_A not in st.session_state or KEY_B not in st.session_state:
         if absolute_days is not None and log_prices is not None:
             try:
-                _, opt_a, opt_b, _ = powerLaw.find_best_fit_params(absolute_days, log_prices)
+                _, opt_a, opt_b, _ = power_law.find_best_fit_params(absolute_days, log_prices)
                 if KEY_A not in st.session_state:
                     st.session_state[KEY_A] = float(round(opt_a, 3))
                 if KEY_B not in st.session_state:
@@ -97,7 +94,9 @@ def prepare_model_grid(current_gen_date, a_active, b_active, view_max):
 
 
 @st.cache_data(ttl=3600)
-def build_portfolio_projection(_df_index, current_gen_date, a_active, b_active, btc_amount, forecast_unit, forecast_horizon):
+def build_portfolio_projection(
+    _df_index, current_gen_date, a_active, b_active, btc_amount, forecast_unit, forecast_horizon
+):
     if forecast_unit == "Year":
         latest_year = int(_df_index.max().year)
         start_period = pd.Timestamp(f"{latest_year - 1}-01-01")
@@ -134,20 +133,42 @@ def get_growth_change_labels(forecast_unit):
 
 
 def render_portfolio_view(
-    df_display, current_gen_date, a_active, b_active, pl_template, pl_text_color, pl_bg_color, pl_grid_color, c_hover_bg, c_border, c_hover_text
+    df_display,
+    current_gen_date,
+    a_active,
+    b_active,
+    pl_template,
+    pl_text_color,
+    pl_bg_color,
+    pl_grid_color,
+    c_hover_bg,
+    c_border,
+    c_hover_text,
 ):
     st.markdown("### Portfolio Growth (Fair Price / Power Law)")
     btc_amount = float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 1.0))
     forecast_unit = st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Month")
-    forecast_horizon = int(st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON))
-    portfolio_df, table_title, forecast_unit, change_usd_col, change_pct_col = build_portfolio_projection(
-        df_display.index, current_gen_date, a_active, b_active, btc_amount, forecast_unit, forecast_horizon
+    forecast_horizon = int(
+        st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
+    )
+    portfolio_df, table_title, forecast_unit, change_usd_col, change_pct_col = (
+        build_portfolio_projection(
+            df_display.index,
+            current_gen_date,
+            a_active,
+            b_active,
+            btc_amount,
+            forecast_unit,
+            forecast_horizon,
+        )
     )
     portfolio_display_df = portfolio_df.iloc[1:].copy()
 
-    first_value = portfolio_display_df["PortfolioUSD"].iloc[0]
+    baseline_value = portfolio_df["PortfolioUSD"].iloc[0]
     last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
-    total_growth_pct = ((last_value - first_value) / first_value) * 100 if first_value > 0 else 0.0
+    total_growth_pct = (
+        ((last_value - baseline_value) / baseline_value) * 100 if baseline_value > 0 else 0.0
+    )
 
     g1, g2, g3 = st.columns(3)
     g1.metric("Current Fair Price", f"${portfolio_display_df['FairPriceUSD'].iloc[0]:,.0f}")

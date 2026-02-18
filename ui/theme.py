@@ -54,7 +54,7 @@ def load_css_template(css_path):
     return Path(css_path).read_text(encoding="utf-8")
 
 
-def apply_theme_css(theme, css_path="styles.css"):
+def apply_theme_css(theme, css_path="assets/styles.css"):
     css_template = load_css_template(css_path)
     css = css_template
     for key, value in theme.items():

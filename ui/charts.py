@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
+from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
 
 
 def render_main_model_chart(
@@ -41,7 +41,9 @@ def render_main_model_chart(
 ):
     fig = go.Figure()
     tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
-    hover_label = dict(bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13))
+    hover_label = dict(
+        bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
+    )
     is_log_time = time_scale == TIME_LOG
 
     if mode == MODE_POWERLAW:
@@ -121,9 +123,11 @@ def render_main_model_chart(
         )
         fig.update_yaxes(
             type="log" if price_scale == TIME_LOG else "linear",
-            range=[np.log10(0.01), np.log10(df_display["Close"].max() * 8)]
-            if price_scale == TIME_LOG
-            else None,
+            range=(
+                [np.log10(0.01), np.log10(df_display["Close"].max() * 8)]
+                if price_scale == TIME_LOG
+                else None
+            ),
             gridcolor=pl_grid_color,
             tickfont=tick_font,
         )
@@ -154,22 +158,45 @@ def render_main_model_chart(
 
         for i in range(6):
             halving_days_val = osc_t1_age * (osc_lambda**i) * 365.25
-            hv_x = halving_days_val if is_log_time else current_gen_date + pd.Timedelta(days=halving_days_val)
-            fig.add_vline(x=hv_x, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8)
+            hv_x = (
+                halving_days_val
+                if is_log_time
+                else current_gen_date + pd.Timedelta(days=halving_days_val)
+            )
+            fig.add_vline(
+                x=hv_x, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8
+            )
 
     t_vals = [
         (pd.Timestamp(f"{y}-01-01") - current_gen_date).days
         for y in range(current_gen_date.year + 1, 2036)
         if (pd.Timestamp(f"{y}-01-01") - current_gen_date).days > 0
     ]
-    t_text = [str(y) for y in range(current_gen_date.year + 1, 2036) if (pd.Timestamp(f"{y}-01-01") - current_gen_date).days > 0]
+    t_text = [
+        str(y)
+        for y in range(current_gen_date.year + 1, 2036)
+        if (pd.Timestamp(f"{y}-01-01") - current_gen_date).days > 0
+    ]
     if is_log_time:
         x_range = [np.log10(max(1.0, view_max / 1000.0)), np.log10(view_max)]
         if t_vals:
             x_range = [np.log10(t_vals[0]), np.log10(view_max)]
-        fig.update_xaxes(type="log", tickvals=t_vals, ticktext=t_text, range=x_range, gridcolor=pl_grid_color, tickfont=tick_font)
+        fig.update_xaxes(
+            type="log",
+            tickvals=t_vals,
+            ticktext=t_text,
+            range=x_range,
+            gridcolor=pl_grid_color,
+            tickfont=tick_font,
+        )
     else:
-        fig.update_xaxes(type="date", gridcolor=pl_grid_color, tickfont=tick_font, range=[df_display.index.min(), m_dates[-1]], hoverformat="%d.%m.%Y")
+        fig.update_xaxes(
+            type="date",
+            gridcolor=pl_grid_color,
+            tickfont=tick_font,
+            range=[df_display.index.min(), m_dates[-1]],
+            hoverformat="%d.%m.%Y",
+        )
 
     fig.update_layout(
         height=600,
@@ -189,4 +216,6 @@ def render_main_model_chart(
         hovermode="x unified",
         hoverlabel=hover_label,
     )
-    st.plotly_chart(fig, width="stretch", theme=None, config={"displayModeBar": False}, key=chart_key)
+    st.plotly_chart(
+        fig, width="stretch", theme=None, config={"displayModeBar": False}, key=chart_key
+    )
