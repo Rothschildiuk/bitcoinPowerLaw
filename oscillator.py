@@ -13,10 +13,11 @@ def calculate_r2_score(actual_values, predicted_values):
         return 0.0
     return 1 - (residual_sum_squares / total_sum_squares)
 
-def compute_oscillator_fit_r2(log_days, residual_series, t1_cycle_age_years, cycle_lambda, top_amplitude_factor, bottom_amplitude_factor, impulse_damping):
+
+def fit_oscillator_component(log_days, residual_series, t1_cycle_age_years, cycle_lambda, top_amplitude_factor, bottom_amplitude_factor, impulse_damping):
     log_lambda = np.log10(cycle_lambda)
     if abs(log_lambda) <= 1e-9:
-        return -1e9
+        return None
 
     t1_log_days = np.log10(t1_cycle_age_years * 365.25)
     angular_frequency = 2 * np.pi / log_lambda
@@ -31,10 +32,22 @@ def compute_oscillator_fit_r2(log_days, residual_series, t1_cycle_age_years, cyc
     asymmetric_template = np.where(decayed_wave < 0, asymmetric_template * bottom_amplitude_factor, asymmetric_template)
     template_energy = np.dot(asymmetric_template, asymmetric_template)
     if template_energy <= 1e-12:
-        return -1e9
+        return None
 
     fitted_amplitude = abs(np.dot(residual_series, asymmetric_template) / template_energy)
     predicted_residuals = fitted_amplitude * asymmetric_template
+    return fitted_amplitude, angular_frequency, phase_shift, predicted_residuals
+
+
+def compute_oscillator_fit_r2(log_days, residual_series, t1_cycle_age_years, cycle_lambda, top_amplitude_factor, bottom_amplitude_factor, impulse_damping):
+    fit_result = fit_oscillator_component(
+        log_days, residual_series, t1_cycle_age_years, cycle_lambda,
+        top_amplitude_factor, bottom_amplitude_factor, impulse_damping
+    )
+    if fit_result is None:
+        return -1e9
+
+    _, _, _, predicted_residuals = fit_result
     return calculate_r2_score(residual_series, predicted_residuals) * 100.0
 
 def optimize_oscillator_parameters(log_days, residual_series, initial_params):

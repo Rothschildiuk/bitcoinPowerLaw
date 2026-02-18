@@ -3,7 +3,6 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import ssl
 
 # --- MODULE IMPORTS ---
 import powerLaw
@@ -51,14 +50,6 @@ def resolve_trend_parameters(absolute_days, log_prices, display_df, active_mode)
 
     return intercept_a, slope_b, trend_log_prices, residual_series
 
-# --- SSL Fix ---
-try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-
 # --- Page Configuration ---
 st.set_page_config(layout="wide", page_icon="🚀", page_title="BTC Power Law Pro", initial_sidebar_state="expanded")
 
@@ -82,7 +73,7 @@ c_hover_text = theme["c_hover_text"]
 c_border = theme["c_border"]
 
 # --- DATA LOADING ---
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_prepared_price_data():
     url = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
     early_df = pd.read_csv(url)
@@ -189,27 +180,20 @@ try:
     osc_amp_bottom = float(st.session_state.get("amp_factor_bottom", 0.84))
     osc_damping = float(st.session_state.get("impulse_damping", 0.0))
 
-    lambda_log = np.log10(osc_lambda)
-    t1_days_log = np.log10(osc_t1_age * 365.25)
-    osc_omega = 2 * np.pi / lambda_log
-    osc_phi = -osc_omega * t1_days_log
-
-    full_phase = osc_omega * df_display['LogD'] + osc_phi
-
-    # NEW: USE OSCILLATOR (SINE/COSINE) WAVE
-    unit_wave = oscillator.build_oscillator_wave(full_phase)
-    decay = oscillator.compute_impulse_decay(df_display['LogD'].values, osc_damping, float(df_display['LogD'].min()))
-    unit_wave = unit_wave * decay
-
-    numerator = np.dot(df_display['Res'], unit_wave)
-    denominator = np.dot(unit_wave, unit_wave)
-
-    # FORCE POSITIVE AMPLITUDE (Peaks always up)
-    osc_amp = abs(numerator / denominator) if denominator > 1e-9 else 0
-
-    osc_model_vals = osc_amp * unit_wave
-    osc_model_vals = np.where(unit_wave > 0, osc_model_vals * osc_amp_top, osc_model_vals)
-    osc_model_vals = np.where(unit_wave < 0, osc_model_vals * osc_amp_bottom, osc_model_vals)
+    fit_result = oscillator.fit_oscillator_component(
+        df_display['LogD'].values,
+        df_display['Res'].values,
+        osc_t1_age,
+        osc_lambda,
+        osc_amp_top,
+        osc_amp_bottom,
+        osc_damping
+    )
+    if fit_result is None:
+        osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
+        osc_model_vals = np.zeros_like(df_display['Res'].values, dtype=float)
+    else:
+        osc_amp, osc_omega, osc_phi, osc_model_vals = fit_result
 
     total_model_log = df_display['ModelLog'] + osc_model_vals
     r2_combined = calculate_r2_score(df_display['LogClose'].values, total_model_log) * 100
