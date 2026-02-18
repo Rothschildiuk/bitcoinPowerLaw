@@ -1,17 +1,9 @@
 import streamlit as st
 import numpy as np
-from utils import fancy_control
+from utils import fancy_control, calculate_r2_score, get_stable_trend_fit
 
 AUTO_FIT_MAX_PASSES = 2
 AUTO_FIT_GRID_POINTS = 9
-
-
-def calculate_r2_score(actual_values, predicted_values):
-    residual_sum_squares = np.sum((actual_values - predicted_values) ** 2)
-    total_sum_squares = np.sum((actual_values - np.mean(actual_values)) ** 2)
-    if total_sum_squares <= 1e-12:
-        return 0.0
-    return 1 - (residual_sum_squares / total_sum_squares)
 
 
 def fit_oscillator_component(log_days, residual_series, t1_cycle_age_years, cycle_lambda, top_amplitude_factor, bottom_amplitude_factor, impulse_damping):
@@ -192,15 +184,12 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
 
     if np.count_nonzero(valid_days_mask) > 100:
         log_days = np.log10(days_since_genesis[valid_days_mask])
-        trend_log_prices = st.session_state.A + st.session_state.B * log_days
-        residual_series = all_log_close[valid_days_mask] - trend_log_prices
-
-        # Fallback if session trend is clearly invalid.
-        median_abs_residual = float(np.median(np.abs(residual_series)))
-        if (not np.isfinite(median_abs_residual)) or median_abs_residual > 5.0:
-            fitted_slope_b, fitted_intercept_a = np.polyfit(log_days, all_log_close[valid_days_mask], 1)
-            trend_log_prices = fitted_intercept_a + fitted_slope_b * log_days
-            residual_series = all_log_close[valid_days_mask] - trend_log_prices
+        _, _, trend_log_prices, residual_series = get_stable_trend_fit(
+            log_days,
+            all_log_close[valid_days_mask],
+            float(st.session_state.A),
+            float(st.session_state.B),
+        )
 
         if auto_fit:
             autofit_signature = build_autofit_signature(all_abs_days, all_log_close)

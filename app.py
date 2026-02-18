@@ -8,13 +8,21 @@ import plotly.graph_objects as go
 import powerLaw
 import oscillator
 from ui_theme import get_theme, apply_theme_css
+from utils import calculate_r2_score, get_stable_trend_fit
 
 GENESIS_DATE = pd.to_datetime('2009-01-03')
 DEFAULT_A = -17.0
 DEFAULT_B = 5.8
+OSC_DEFAULTS = {
+    "lambda_val": 1.94,
+    "t1_age": 2.53,
+    "amp_factor_top": 1.12,
+    "amp_factor_bottom": 0.84,
+    "impulse_damping": 0.0,
+}
 
 
-def initialize_app_session_state():
+def initialize_app_session_state(absolute_days=None, log_prices=None):
     defaults = {
         "theme_mode": "Dark 🌑",
         "last_mode": "Power Law",
@@ -24,13 +32,25 @@ def initialize_app_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+    if "A" not in st.session_state or "B" not in st.session_state:
+        if absolute_days is not None and log_prices is not None:
+            try:
+                _, opt_a, opt_b, _ = powerLaw.find_best_fit_params(absolute_days, log_prices)
+                if "A" not in st.session_state:
+                    st.session_state["A"] = float(round(opt_a, 3))
+                if "B" not in st.session_state:
+                    st.session_state["B"] = float(round(opt_b, 3))
+            except Exception:
+                if "A" not in st.session_state:
+                    st.session_state["A"] = DEFAULT_A
+                if "B" not in st.session_state:
+                    st.session_state["B"] = DEFAULT_B
+        else:
+            if "A" not in st.session_state:
+                st.session_state["A"] = DEFAULT_A
+            if "B" not in st.session_state:
+                st.session_state["B"] = DEFAULT_B
 
-def calculate_r2_score(actual_values, predicted_values):
-    residual_sum_squares = np.sum((actual_values - predicted_values) ** 2)
-    total_sum_squares = np.sum((actual_values - np.mean(actual_values)) ** 2)
-    if total_sum_squares <= 1e-12:
-        return 0.0
-    return 1 - (residual_sum_squares / total_sum_squares)
 
 def resolve_trend_parameters(absolute_days, log_prices, display_df, active_mode):
     intercept_a = float(st.session_state.get("A", DEFAULT_A))
@@ -41,36 +61,17 @@ def resolve_trend_parameters(absolute_days, log_prices, display_df, active_mode)
     # In oscillator mode, fallback to best-fit trend when session A/B is clearly invalid.
     # This prevents "price-like" residuals after mode toggles or stale widget state.
     if active_mode == "Oscillator":
-        median_abs_residual = float(np.median(np.abs(residual_series)))
-        if (not np.isfinite(median_abs_residual)) or median_abs_residual > 5.0:
-            _, fitted_intercept_a, fitted_slope_b, _ = powerLaw.find_best_fit_params(absolute_days, log_prices)
-            intercept_a, slope_b = float(fitted_intercept_a), float(fitted_slope_b)
-            trend_log_prices = intercept_a + slope_b * display_df['LogD'].values
-            residual_series = display_df['LogClose'].values - trend_log_prices
+        intercept_a, slope_b, trend_log_prices, residual_series = get_stable_trend_fit(
+            display_df['LogD'].values,
+            display_df['LogClose'].values,
+            intercept_a,
+            slope_b,
+        )
 
     return intercept_a, slope_b, trend_log_prices, residual_series
 
 # --- Page Configuration ---
 st.set_page_config(layout="wide", page_icon="🚀", page_title="BTC Power Law Pro", initial_sidebar_state="expanded")
-
-# --- THEME STATE ---
-initialize_app_session_state()
-
-is_dark = "Dark" in st.session_state.theme_mode
-
-theme = get_theme(is_dark)
-apply_theme_css(theme)
-
-c_text_main = theme["c_text_main"]
-pl_template = theme["pl_template"]
-pl_bg_color = theme["pl_bg_color"]
-pl_grid_color = theme["pl_grid_color"]
-pl_btc_color = theme["pl_btc_color"]
-pl_legend_color = theme["pl_legend_color"]
-pl_text_color = theme["pl_text_color"]
-c_hover_bg = theme["c_hover_bg"]
-c_hover_text = theme["c_hover_text"]
-c_border = theme["c_border"]
 
 # --- DATA LOADING ---
 @st.cache_data(ttl=3600)
@@ -104,17 +105,24 @@ try:
 except Exception as e:
     st.error(f"Error loading data: {e}"); st.stop()
 
-# --- INITIALIZATION ---
-# Ensure A and B are initialized before Sidebar Assembly because Oscillator mode needs them
-if "A" not in st.session_state or "B" not in st.session_state:
-    try:
-        _, opt_a, opt_b, _ = powerLaw.find_best_fit_params(all_absolute_days, all_log_close_prices)
-        if "A" not in st.session_state: st.session_state["A"] = float(round(opt_a, 3))
-        if "B" not in st.session_state: st.session_state["B"] = float(round(opt_b, 3))
-    except Exception:
-        # Fallback defaults if calculation fails
-        if "A" not in st.session_state: st.session_state["A"] = DEFAULT_A
-        if "B" not in st.session_state: st.session_state["B"] = DEFAULT_B
+# --- THEME + STATE ---
+initialize_app_session_state(all_absolute_days, all_log_close_prices)
+
+is_dark = "Dark" in st.session_state.theme_mode
+
+theme = get_theme(is_dark)
+apply_theme_css(theme)
+
+c_text_main = theme["c_text_main"]
+pl_template = theme["pl_template"]
+pl_bg_color = theme["pl_bg_color"]
+pl_grid_color = theme["pl_grid_color"]
+pl_btc_color = theme["pl_btc_color"]
+pl_legend_color = theme["pl_legend_color"]
+pl_text_color = theme["pl_text_color"]
+c_hover_bg = theme["c_hover_bg"]
+c_hover_text = theme["c_hover_text"]
+c_border = theme["c_border"]
 
 # --- SIDEBAR ASSEMBLY ---
 with st.sidebar:
@@ -174,11 +182,11 @@ p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 9
 
 # --- OSCILLATOR CALC ---
 try:
-    osc_lambda = float(st.session_state.get("lambda_val", 1.94))
-    osc_t1_age = float(st.session_state.get("t1_age", 2.53))
-    osc_amp_top = float(st.session_state.get("amp_factor_top", 1.12))
-    osc_amp_bottom = float(st.session_state.get("amp_factor_bottom", 0.84))
-    osc_damping = float(st.session_state.get("impulse_damping", 0.0))
+    osc_lambda = float(st.session_state.get("lambda_val", OSC_DEFAULTS["lambda_val"]))
+    osc_t1_age = float(st.session_state.get("t1_age", OSC_DEFAULTS["t1_age"]))
+    osc_amp_top = float(st.session_state.get("amp_factor_top", OSC_DEFAULTS["amp_factor_top"]))
+    osc_amp_bottom = float(st.session_state.get("amp_factor_bottom", OSC_DEFAULTS["amp_factor_bottom"]))
+    osc_damping = float(st.session_state.get("impulse_damping", OSC_DEFAULTS["impulse_damping"]))
 
     fit_result = oscillator.fit_oscillator_component(
         df_display['LogD'].values,
@@ -199,11 +207,11 @@ try:
     r2_combined = calculate_r2_score(df_display['LogClose'].values, total_model_log) * 100
 except Exception as e:
     st.error(f"Oscillator Error: {e}")
-    osc_t1_age = float(st.session_state.get("t1_age", 2.53))
-    osc_lambda = float(st.session_state.get("lambda_val", 1.94))
-    osc_amp_top = float(st.session_state.get("amp_factor_top", 1.12))
-    osc_amp_bottom = float(st.session_state.get("amp_factor_bottom", 0.84))
-    osc_damping = float(st.session_state.get("impulse_damping", 0.0))
+    osc_t1_age = OSC_DEFAULTS["t1_age"]
+    osc_lambda = OSC_DEFAULTS["lambda_val"]
+    osc_amp_top = OSC_DEFAULTS["amp_factor_top"]
+    osc_amp_bottom = OSC_DEFAULTS["amp_factor_bottom"]
+    osc_damping = OSC_DEFAULTS["impulse_damping"]
     osc_amp, osc_omega, osc_phi, r2_combined = 0, 0, 0, current_r2
 
 # --- VIZ SETUP ---

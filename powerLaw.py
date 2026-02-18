@@ -1,14 +1,8 @@
 import streamlit as st
 import numpy as np
-from utils import fancy_control
+from utils import fancy_control, calculate_r2_score
 
 # --- MATH CORE ---
-def calculate_r2_score(actual_values, predicted_values):
-    residual_sum_squares = np.sum((actual_values - predicted_values) ** 2)
-    total_sum_squares = np.sum((actual_values - np.mean(actual_values)) ** 2)
-    if total_sum_squares <= 1e-12:
-        return 0.0
-    return 1 - (residual_sum_squares / total_sum_squares)
 
 def fit_powerlaw_regression(absolute_days, log_prices, genesis_offset_days):
     """Calculates the optimal Slope(B) and Intercept(A) for a given offset."""
