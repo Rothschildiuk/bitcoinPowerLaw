@@ -2,39 +2,43 @@ import streamlit as st
 import numpy as np
 from utils import fancy_control
 
-def safe_r2(y_true, y_pred):
-    ss_res = np.sum((y_true - y_pred) ** 2)
-    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-    if ss_tot <= 1e-12:
+AUTO_FIT_MAX_PASSES = 2
+AUTO_FIT_GRID_POINTS = 9
+
+
+def calculate_r2_score(actual_values, predicted_values):
+    residual_sum_squares = np.sum((actual_values - predicted_values) ** 2)
+    total_sum_squares = np.sum((actual_values - np.mean(actual_values)) ** 2)
+    if total_sum_squares <= 1e-12:
         return 0.0
-    return 1 - (ss_res / ss_tot)
+    return 1 - (residual_sum_squares / total_sum_squares)
 
-def _oscillator_r2(c_log_d, c_res, t1_age, lambda_val, amp_top, amp_bottom, damping):
-    l_log = np.log10(lambda_val)
-    if abs(l_log) <= 1e-9:
+def compute_oscillator_fit_r2(log_days, residual_series, t1_cycle_age_years, cycle_lambda, top_amplitude_factor, bottom_amplitude_factor, impulse_damping):
+    log_lambda = np.log10(cycle_lambda)
+    if abs(log_lambda) <= 1e-9:
         return -1e9
 
-    t1_log = np.log10(t1_age * 365.25)
-    osc_omega = 2 * np.pi / l_log
-    osc_phi = -osc_omega * t1_log
-    phase = osc_omega * c_log_d + osc_phi
+    t1_log_days = np.log10(t1_cycle_age_years * 365.25)
+    angular_frequency = 2 * np.pi / log_lambda
+    phase_shift = -angular_frequency * t1_log_days
+    phase_values = angular_frequency * log_days + phase_shift
 
-    u_wave = get_oscillator_wave(phase)
-    decay = get_impulse_decay(c_log_d, damping, float(np.min(c_log_d)))
-    base = u_wave * decay
+    base_wave = build_oscillator_wave(phase_values)
+    decay_factor = compute_impulse_decay(log_days, impulse_damping, float(np.min(log_days)))
+    decayed_wave = base_wave * decay_factor
 
-    template = np.where(base > 0, base * amp_top, base)
-    template = np.where(base < 0, template * amp_bottom, template)
-    den = np.dot(template, template)
-    if den <= 1e-12:
+    asymmetric_template = np.where(decayed_wave > 0, decayed_wave * top_amplitude_factor, decayed_wave)
+    asymmetric_template = np.where(decayed_wave < 0, asymmetric_template * bottom_amplitude_factor, asymmetric_template)
+    template_energy = np.dot(asymmetric_template, asymmetric_template)
+    if template_energy <= 1e-12:
         return -1e9
 
-    amp = abs(np.dot(c_res, template) / den)
-    pred = amp * template
-    return safe_r2(c_res, pred) * 100.0
+    fitted_amplitude = abs(np.dot(residual_series, asymmetric_template) / template_energy)
+    predicted_residuals = fitted_amplitude * asymmetric_template
+    return calculate_r2_score(residual_series, predicted_residuals) * 100.0
 
-def _auto_fit_oscillator(c_log_d, c_res, initial_params):
-    params = dict(initial_params)
+def optimize_oscillator_parameters(log_days, residual_series, initial_params):
+    optimized_params = dict(initial_params)
     bounds = {
         "t1_age": (0.1, 5.0),
         "lambda_val": (1.5, 3.0),
@@ -51,28 +55,28 @@ def _auto_fit_oscillator(c_log_d, c_res, initial_params):
     }
     order = ["t1_age", "lambda_val", "amp_factor_top", "amp_factor_bottom", "impulse_damping"]
 
-    best_r2 = _oscillator_r2(
-        c_log_d, c_res,
-        params["t1_age"], params["lambda_val"],
-        params["amp_factor_top"], params["amp_factor_bottom"], params["impulse_damping"]
+    best_r2 = compute_oscillator_fit_r2(
+        log_days, residual_series,
+        optimized_params["t1_age"], optimized_params["lambda_val"],
+        optimized_params["amp_factor_top"], optimized_params["amp_factor_bottom"], optimized_params["impulse_damping"]
     )
 
-    for _ in range(3):
+    for _ in range(AUTO_FIT_MAX_PASSES):
         improved = False
         for key in order:
             lo_b, hi_b = bounds[key]
-            center = params[key]
+            center = optimized_params[key]
             lo = max(lo_b, center - spans[key])
             hi = min(hi_b, center + spans[key])
-            candidates = np.linspace(lo, hi, 11)
+            candidates = np.linspace(lo, hi, AUTO_FIT_GRID_POINTS)
 
             local_best_val = center
             local_best_r2 = best_r2
             for cand in candidates:
-                trial = dict(params)
+                trial = dict(optimized_params)
                 trial[key] = float(cand)
-                score = _oscillator_r2(
-                    c_log_d, c_res,
+                score = compute_oscillator_fit_r2(
+                    log_days, residual_series,
                     trial["t1_age"], trial["lambda_val"],
                     trial["amp_factor_top"], trial["amp_factor_bottom"], trial["impulse_damping"]
                 )
@@ -81,7 +85,7 @@ def _auto_fit_oscillator(c_log_d, c_res, initial_params):
                     local_best_val = float(cand)
 
             if local_best_val != center:
-                params[key] = local_best_val
+                optimized_params[key] = local_best_val
                 best_r2 = local_best_r2
                 improved = True
 
@@ -90,37 +94,59 @@ def _auto_fit_oscillator(c_log_d, c_res, initial_params):
         if not improved:
             break
 
-    return params
+    return optimized_params
+
+
+def build_autofit_signature(all_abs_days, all_log_close):
+    if len(all_abs_days) == 0:
+        return ("empty",)
+    return (
+        int(st.session_state.get("genesis_offset", 0)),
+        round(float(st.session_state.get("A", 0.0)), 6),
+        round(float(st.session_state.get("B", 0.0)), 6),
+        len(all_abs_days),
+        int(all_abs_days[0]),
+        int(all_abs_days[-1]),
+        round(float(all_log_close[0]), 6),
+        round(float(all_log_close[-1]), 6),
+    )
 
 # --- OSCILLATOR MATH (SINUSOID) ---
-def get_oscillator_wave(phase_array):
+def build_oscillator_wave(phase_values):
     """
     Calculates a Cosine wave (Sinusoid) instead of Inverted Cycloid.
     Using Cosine ensures the peak corresponds to phase=0 (consistent with t1_age).
     Range: [-1, 1]
     """
-    return np.cos(phase_array)
+    return np.cos(phase_values)
 
-def get_impulse_decay(log_x, damping, ref_log):
-    rel = np.maximum(0.0, log_x - ref_log)
-    return np.exp(-damping * rel)
+def compute_impulse_decay(log_days, damping_factor, reference_log_day):
+    relative_position = np.maximum(0.0, log_days - reference_log_day)
+    return np.exp(-damping_factor * relative_position)
 
-def oscillator_func_manual(x_log, amp, omega, phi, f_top, f_bot, damping=0.0, ref_log=None):
-    phase = omega * x_log + phi
-    base_wave = get_oscillator_wave(phase)
-    if ref_log is None:
-        ref_log = float(np.min(x_log))
-    decay = get_impulse_decay(x_log, damping, ref_log)
-    base_wave = base_wave * decay
+def build_oscillator_curve(log_days, amplitude, angular_frequency, phase_shift, top_amplitude_factor, bottom_amplitude_factor, damping_factor=0.0, reference_log_day=None):
+    phase_values = angular_frequency * log_days + phase_shift
+    base_wave = build_oscillator_wave(phase_values)
+    if reference_log_day is None:
+        reference_log_day = float(np.min(log_days))
+    decay_factor = compute_impulse_decay(log_days, damping_factor, reference_log_day)
+    base_wave = base_wave * decay_factor
 
     # Base wave amplitude scaling
-    y = amp * base_wave
+    y_values = amplitude * base_wave
+    positive_mask = base_wave > 0
+    negative_mask = base_wave < 0
+    y_values[positive_mask] *= top_amplitude_factor
+    y_values[negative_mask] *= bottom_amplitude_factor
+    return y_values
 
-    # Asymmetric amplitude (Top vs Bottom)
-    # Since cosine goes [-1, 1], positive values are "tops", negative are "bottoms"
-    y = np.where(base_wave > 0, y * f_top, y)
-    y = np.where(base_wave < 0, y * f_bot, y)
-    return y
+# Backward-compatible aliases for existing call sites.
+safe_r2 = calculate_r2_score
+_oscillator_r2 = compute_oscillator_fit_r2
+_auto_fit_oscillator = optimize_oscillator_parameters
+get_oscillator_wave = build_oscillator_wave
+get_impulse_decay = compute_impulse_decay
+oscillator_func_manual = build_oscillator_curve
 
 # --- SIDEBAR RENDERER ---
 def render_sidebar(all_abs_days, all_log_close, text_color):
@@ -138,6 +164,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     def reset_oscillator_params():
         for k, v in defaults.items():
             st.session_state[k] = v
+        st.session_state.pop("osc_autofit_signature", None)
+        st.session_state.pop("osc_autofit_best_params", None)
 
     auto_fit = st.checkbox(
         "Auto-Fit Oscillator",
@@ -145,31 +173,41 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         help="Automatically finds oscillator parameters with the highest Oscillator R²."
     )
 
-    calc_days = all_abs_days - st.session_state.get("genesis_offset", 0)
-    mask_calc = calc_days > 0
-    osc_r2_display = 0.0
+    days_since_genesis = all_abs_days - st.session_state.get("genesis_offset", 0)
+    valid_days_mask = days_since_genesis > 0
+    oscillator_r2_display = 0.0
 
-    if np.sum(mask_calc) > 100:
-        c_log_d = np.log10(calc_days[mask_calc])
-        c_model_log = st.session_state.A + st.session_state.B * c_log_d
-        c_res = all_log_close[mask_calc] - c_model_log
+    if np.count_nonzero(valid_days_mask) > 100:
+        log_days = np.log10(days_since_genesis[valid_days_mask])
+        trend_log_prices = st.session_state.A + st.session_state.B * log_days
+        residual_series = all_log_close[valid_days_mask] - trend_log_prices
 
         # Fallback if session trend is clearly invalid.
-        median_abs_res = float(np.median(np.abs(c_res)))
-        if (not np.isfinite(median_abs_res)) or median_abs_res > 5.0:
-            fit_b, fit_a = np.polyfit(c_log_d, all_log_close[mask_calc], 1)
-            c_model_log = fit_a + fit_b * c_log_d
-            c_res = all_log_close[mask_calc] - c_model_log
+        median_abs_residual = float(np.median(np.abs(residual_series)))
+        if (not np.isfinite(median_abs_residual)) or median_abs_residual > 5.0:
+            fitted_slope_b, fitted_intercept_a = np.polyfit(log_days, all_log_close[valid_days_mask], 1)
+            trend_log_prices = fitted_intercept_a + fitted_slope_b * log_days
+            residual_series = all_log_close[valid_days_mask] - trend_log_prices
 
         if auto_fit:
-            start_params = {
-                "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
-                "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
-                "amp_factor_top": float(st.session_state.get("amp_factor_top", defaults["amp_factor_top"])),
-                "amp_factor_bottom": float(st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])),
-                "impulse_damping": float(st.session_state.get("impulse_damping", defaults["impulse_damping"])),
-            }
-            best_params = _auto_fit_oscillator(c_log_d, c_res, start_params)
+            autofit_signature = build_autofit_signature(all_abs_days, all_log_close)
+            cached_signature = st.session_state.get("osc_autofit_signature")
+            cached_best_params = st.session_state.get("osc_autofit_best_params")
+
+            if cached_signature == autofit_signature and isinstance(cached_best_params, dict):
+                best_params = cached_best_params
+            else:
+                start_params = {
+                    "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
+                    "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
+                    "amp_factor_top": float(st.session_state.get("amp_factor_top", defaults["amp_factor_top"])),
+                    "amp_factor_bottom": float(st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])),
+                    "impulse_damping": float(st.session_state.get("impulse_damping", defaults["impulse_damping"])),
+                }
+                best_params = optimize_oscillator_parameters(log_days, residual_series, start_params)
+                st.session_state["osc_autofit_signature"] = autofit_signature
+                st.session_state["osc_autofit_best_params"] = best_params
+
             st.session_state["t1_age"] = round(best_params["t1_age"], 3)
             st.session_state["lambda_val"] = round(best_params["lambda_val"], 3)
             st.session_state["amp_factor_top"] = round(best_params["amp_factor_top"], 3)
@@ -192,9 +230,9 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     fancy_control("Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0, disabled=auto_fit)
 
     # --- R2 Calculation for Sidebar Display ---
-    if np.sum(mask_calc) > 100:
-        osc_r2_display = _oscillator_r2(
-            c_log_d, c_res,
+    if np.count_nonzero(valid_days_mask) > 100:
+        oscillator_r2_display = compute_oscillator_fit_r2(
+            log_days, residual_series,
             st.session_state.get("t1_age", defaults["t1_age"]),
             st.session_state.get("lambda_val", defaults["lambda_val"]),
             st.session_state.get("amp_factor_top", defaults["amp_factor_top"]),
@@ -204,7 +242,7 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
 
     st.markdown(
         f"<p style='color:{text_color}; margin-top: 2px;'>"
-        f"Oscillator R² = {osc_r2_display:.4f}%</p>",
+        f"Oscillator R² = {oscillator_r2_display:.4f}%</p>",
         unsafe_allow_html=True)
 
     st.button("Reset parameters", use_container_width=True, on_click=reset_oscillator_params)

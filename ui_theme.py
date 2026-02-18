@@ -1,4 +1,5 @@
 from pathlib import Path
+from functools import lru_cache
 
 import streamlit as st
 
@@ -49,8 +50,13 @@ def get_theme(is_dark):
     return THEMES["dark" if is_dark else "light"]
 
 
+@lru_cache(maxsize=1)
+def load_css_template(css_path):
+    return Path(css_path).read_text(encoding="utf-8")
+
+
 def apply_theme_css(theme, css_path="styles.css"):
-    css_template = Path(css_path).read_text(encoding="utf-8")
+    css_template = load_css_template(css_path)
     css = css_template
     for key, value in theme.items():
         css = css.replace(f"__{key.upper()}__", str(value))

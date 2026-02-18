@@ -10,30 +10,46 @@ import powerLaw
 import oscillator
 from ui_theme import get_theme, apply_theme_css
 
-def safe_r2(y_true, y_pred):
-    ss_res = np.sum((y_true - y_pred) ** 2)
-    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-    if ss_tot <= 1e-12:
-        return 0.0
-    return 1 - (ss_res / ss_tot)
+GENESIS_DATE = pd.to_datetime('2009-01-03')
+DEFAULT_A = -17.0
+DEFAULT_B = 5.8
 
-def get_stable_trend_params(all_abs_days, all_log_close, df_view, mode_name):
-    a = float(st.session_state.get("A", -17.0))
-    b = float(st.session_state.get("B", 5.8))
-    model_log = a + b * df_view['LogD'].values
-    residuals = df_view['LogClose'].values - model_log
+
+def initialize_app_session_state():
+    defaults = {
+        "theme_mode": "Dark 🌑",
+        "last_mode": "Power Law",
+        "chart_revision": 0,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def calculate_r2_score(actual_values, predicted_values):
+    residual_sum_squares = np.sum((actual_values - predicted_values) ** 2)
+    total_sum_squares = np.sum((actual_values - np.mean(actual_values)) ** 2)
+    if total_sum_squares <= 1e-12:
+        return 0.0
+    return 1 - (residual_sum_squares / total_sum_squares)
+
+def resolve_trend_parameters(absolute_days, log_prices, display_df, active_mode):
+    intercept_a = float(st.session_state.get("A", DEFAULT_A))
+    slope_b = float(st.session_state.get("B", DEFAULT_B))
+    trend_log_prices = intercept_a + slope_b * display_df['LogD'].values
+    residual_series = display_df['LogClose'].values - trend_log_prices
 
     # In oscillator mode, fallback to best-fit trend when session A/B is clearly invalid.
     # This prevents "price-like" residuals after mode toggles or stale widget state.
-    if mode_name == "Oscillator":
-        median_abs_res = float(np.median(np.abs(residuals)))
-        if (not np.isfinite(median_abs_res)) or median_abs_res > 5.0:
-            _, fit_a, fit_b, _ = powerLaw.find_global_best_fit_optimized(all_abs_days, all_log_close)
-            a, b = float(fit_a), float(fit_b)
-            model_log = a + b * df_view['LogD'].values
-            residuals = df_view['LogClose'].values - model_log
+    if active_mode == "Oscillator":
+        median_abs_residual = float(np.median(np.abs(residual_series)))
+        if (not np.isfinite(median_abs_residual)) or median_abs_residual > 5.0:
+            _, fitted_intercept_a, fitted_slope_b, _ = powerLaw.find_best_fit_params(absolute_days, log_prices)
+            intercept_a, slope_b = float(fitted_intercept_a), float(fitted_slope_b)
+            trend_log_prices = intercept_a + slope_b * display_df['LogD'].values
+            residual_series = display_df['LogClose'].values - trend_log_prices
 
-    return a, b, model_log, residuals
+    return intercept_a, slope_b, trend_log_prices, residual_series
 
 # --- SSL Fix ---
 try:
@@ -47,12 +63,7 @@ else:
 st.set_page_config(layout="wide", page_icon="🚀", page_title="BTC Power Law Pro", initial_sidebar_state="expanded")
 
 # --- THEME STATE ---
-if 'theme_mode' not in st.session_state:
-    st.session_state.theme_mode = "Dark 🌑"
-if 'last_mode' not in st.session_state:
-    st.session_state.last_mode = "Power Law"
-if 'chart_revision' not in st.session_state:
-    st.session_state.chart_revision = 0
+initialize_app_session_state()
 
 is_dark = "Dark" in st.session_state.theme_mode
 
@@ -72,7 +83,7 @@ c_border = theme["c_border"]
 
 # --- DATA LOADING ---
 @st.cache_data
-def load_and_prep_data():
+def load_prepared_price_data():
     url = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
     early_df = pd.read_csv(url)
     early_df['Date'] = pd.to_datetime(early_df['Date'])
@@ -91,15 +102,14 @@ def load_and_prep_data():
     # FILTER INVALID PRICES TO PREVENT LOG ERRORS
     full_df = full_df[full_df['Close'] > 0]
 
-    genesis_static = pd.to_datetime('2009-01-03')
-    full_df['AbsDays'] = (full_df.index - genesis_static).days
+    full_df['AbsDays'] = (full_df.index - GENESIS_DATE).days
     full_df['LogClose'] = np.log10(full_df['Close'])
     return full_df
 
 try:
-    raw_df = load_and_prep_data()
-    ALL_ABS_DAYS = raw_df['AbsDays'].values
-    ALL_LOG_CLOSE = raw_df['LogClose'].values
+    raw_df = load_prepared_price_data()
+    all_absolute_days = raw_df['AbsDays'].values
+    all_log_close_prices = raw_df['LogClose'].values
 except Exception as e:
     st.error(f"Error loading data: {e}"); st.stop()
 
@@ -107,13 +117,13 @@ except Exception as e:
 # Ensure A and B are initialized before Sidebar Assembly because Oscillator mode needs them
 if "A" not in st.session_state or "B" not in st.session_state:
     try:
-        _, opt_a, opt_b, _ = powerLaw.find_global_best_fit_optimized(ALL_ABS_DAYS, ALL_LOG_CLOSE)
+        _, opt_a, opt_b, _ = powerLaw.find_best_fit_params(all_absolute_days, all_log_close_prices)
         if "A" not in st.session_state: st.session_state["A"] = float(round(opt_a, 3))
         if "B" not in st.session_state: st.session_state["B"] = float(round(opt_b, 3))
     except Exception:
         # Fallback defaults if calculation fails
-        if "A" not in st.session_state: st.session_state["A"] = -17.0
-        if "B" not in st.session_state: st.session_state["B"] = 5.8
+        if "A" not in st.session_state: st.session_state["A"] = DEFAULT_A
+        if "B" not in st.session_state: st.session_state["B"] = DEFAULT_B
 
 # --- SIDEBAR ASSEMBLY ---
 with st.sidebar:
@@ -133,10 +143,10 @@ with st.sidebar:
 
     if mode == "Power Law":
         # Updated unpacking: removed time_scale
-        price_scale, current_r2 = powerLaw.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE, c_text_main)
+        price_scale, current_r2 = powerLaw.render_sidebar(all_absolute_days, all_log_close_prices, c_text_main)
     else:
         # Oscillator Mode
-        oscillator.render_sidebar(ALL_ABS_DAYS, ALL_LOG_CLOSE, c_text_main)
+        oscillator.render_sidebar(all_absolute_days, all_log_close_prices, c_text_main)
 
     st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
 
@@ -147,41 +157,48 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN CALCULATIONS ---
-gen_date_static = pd.to_datetime('2009-01-03')
-current_gen_date = gen_date_static + pd.Timedelta(days=st.session_state.get("genesis_offset", 0))
+genesis_offset = int(st.session_state.get("genesis_offset", 0))
+current_gen_date = GENESIS_DATE + pd.Timedelta(days=genesis_offset)
 
-valid_idx = ALL_ABS_DAYS > st.session_state.get("genesis_offset", 0)
+valid_idx = all_absolute_days > genesis_offset
 df_display = raw_df.iloc[valid_idx].copy()
 if df_display.empty:
     st.error("No data available for the selected parameters.")
     st.stop()
 
-df_display['Days'] = df_display['AbsDays'] - st.session_state.get("genesis_offset", 0)
+df_display['Days'] = df_display['AbsDays'] - genesis_offset
 df_display['LogD'] = np.log10(df_display['Days'])
-a_active, b_active, model_log_vals, residual_vals = get_stable_trend_params(ALL_ABS_DAYS, ALL_LOG_CLOSE, df_display, mode)
+a_active, b_active, model_log_vals, residual_vals = resolve_trend_parameters(
+    all_absolute_days, all_log_close_prices, df_display, mode
+)
 df_display['ModelLog'] = model_log_vals
 df_display['Res'] = residual_vals
 df_display['Fair'] = 10 ** df_display['ModelLog']
 
 # Calculate R2 for Trend if not returned by sidebar (Oscillator mode)
 if mode == "Oscillator":
-    current_r2 = safe_r2(df_display['LogClose'].values, df_display['ModelLog'].values)
+    current_r2 = calculate_r2_score(df_display['LogClose'].values, df_display['ModelLog'].values)
 
 p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display['Res'], [2.5, 16.5, 83.5, 97.5])
 
 # --- OSCILLATOR CALC ---
 try:
-    lambda_log = np.log10(st.session_state.get("lambda_val", 1.94))
-    t1_days_log = np.log10(st.session_state.get("t1_age", 2.53) * 365.25)
-    osc_damping = st.session_state.get("impulse_damping", 0.0)
+    osc_lambda = float(st.session_state.get("lambda_val", 1.94))
+    osc_t1_age = float(st.session_state.get("t1_age", 2.53))
+    osc_amp_top = float(st.session_state.get("amp_factor_top", 1.12))
+    osc_amp_bottom = float(st.session_state.get("amp_factor_bottom", 0.84))
+    osc_damping = float(st.session_state.get("impulse_damping", 0.0))
+
+    lambda_log = np.log10(osc_lambda)
+    t1_days_log = np.log10(osc_t1_age * 365.25)
     osc_omega = 2 * np.pi / lambda_log
     osc_phi = -osc_omega * t1_days_log
 
     full_phase = osc_omega * df_display['LogD'] + osc_phi
 
     # NEW: USE OSCILLATOR (SINE/COSINE) WAVE
-    unit_wave = oscillator.get_oscillator_wave(full_phase)
-    decay = oscillator.get_impulse_decay(df_display['LogD'].values, osc_damping, float(df_display['LogD'].min()))
+    unit_wave = oscillator.build_oscillator_wave(full_phase)
+    decay = oscillator.compute_impulse_decay(df_display['LogD'].values, osc_damping, float(df_display['LogD'].min()))
     unit_wave = unit_wave * decay
 
     numerator = np.dot(df_display['Res'], unit_wave)
@@ -191,13 +208,18 @@ try:
     osc_amp = abs(numerator / denominator) if denominator > 1e-9 else 0
 
     osc_model_vals = osc_amp * unit_wave
-    osc_model_vals = np.where(unit_wave > 0, osc_model_vals * st.session_state.get("amp_factor_top", 1.12), osc_model_vals)
-    osc_model_vals = np.where(unit_wave < 0, osc_model_vals * st.session_state.get("amp_factor_bottom", 0.84), osc_model_vals)
+    osc_model_vals = np.where(unit_wave > 0, osc_model_vals * osc_amp_top, osc_model_vals)
+    osc_model_vals = np.where(unit_wave < 0, osc_model_vals * osc_amp_bottom, osc_model_vals)
 
     total_model_log = df_display['ModelLog'] + osc_model_vals
-    r2_combined = safe_r2(df_display['LogClose'].values, total_model_log) * 100
+    r2_combined = calculate_r2_score(df_display['LogClose'].values, total_model_log) * 100
 except Exception as e:
     st.error(f"Oscillator Error: {e}")
+    osc_t1_age = float(st.session_state.get("t1_age", 2.53))
+    osc_lambda = float(st.session_state.get("lambda_val", 1.94))
+    osc_amp_top = float(st.session_state.get("amp_factor_top", 1.12))
+    osc_amp_bottom = float(st.session_state.get("amp_factor_bottom", 0.84))
+    osc_damping = float(st.session_state.get("impulse_damping", 0.0))
     osc_amp, osc_omega, osc_phi, r2_combined = 0, 0, 0, current_r2
 
 # --- VIZ SETUP ---
@@ -207,10 +229,9 @@ m_dates = [current_gen_date + pd.Timedelta(days=float(d)) for d in m_x]
 m_log_d = np.log10(m_x)
 m_fair_usd = 10 ** (a_active + b_active * m_log_d)
 
-m_osc_y = oscillator.oscillator_func_manual(
+m_osc_y = oscillator.build_oscillator_curve(
     m_log_d, osc_amp, osc_omega, osc_phi,
-    st.session_state.get("amp_factor_top", 1.12), st.session_state.get("amp_factor_bottom", 0.84),
-    st.session_state.get("impulse_damping", 0.0), float(df_display['LogD'].min())
+    osc_amp_top, osc_amp_bottom, osc_damping, float(df_display['LogD'].min())
 )
 
 is_log_time = (time_scale == "Log")
@@ -279,7 +300,7 @@ elif mode == "Oscillator":
 
     # Halving lines (useful context)
     for i in range(6):
-        halving_days_val = st.session_state.get("t1_age", 2.53) * (st.session_state.get("lambda_val", 1.94) ** i) * 365.25
+        halving_days_val = osc_t1_age * (osc_lambda ** i) * 365.25
         if is_log_time:
             hv_x = halving_days_val
         else:

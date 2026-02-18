@@ -3,52 +3,53 @@ import numpy as np
 from utils import fancy_control
 
 # --- MATH CORE ---
-def safe_r2(y_true, y_pred):
-    ss_res = np.sum((y_true - y_pred) ** 2)
-    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-    if ss_tot <= 1e-12:
+def calculate_r2_score(actual_values, predicted_values):
+    residual_sum_squares = np.sum((actual_values - predicted_values) ** 2)
+    total_sum_squares = np.sum((actual_values - np.mean(actual_values)) ** 2)
+    if total_sum_squares <= 1e-12:
         return 0.0
-    return 1 - (ss_res / ss_tot)
+    return 1 - (residual_sum_squares / total_sum_squares)
 
-def calculate_regression_numpy(abs_days_array, log_price_array, offset_value):
+def fit_powerlaw_regression(absolute_days, log_prices, genesis_offset_days):
     """Calculates the optimal Slope(B) and Intercept(A) for a given offset."""
-    x_days = abs_days_array - offset_value
-    mask = x_days > 0
+    days_since_offset = absolute_days - genesis_offset_days
+    positive_mask = days_since_offset > 0
 
-    if np.sum(mask) < 100:
+    if np.sum(positive_mask) < 100:
         return 0.0, 0.0, 0.0
 
-    x_valid = x_days[mask]
-    y_valid = log_price_array[mask]
-    log_x = np.log10(x_valid)
+    valid_days = days_since_offset[positive_mask]
+    valid_log_prices = log_prices[positive_mask]
+    log_days = np.log10(valid_days)
 
-    slope, intercept = np.polyfit(log_x, y_valid, 1)
+    slope_b, intercept_a = np.polyfit(log_days, valid_log_prices, 1)
+    predicted_log_prices = slope_b * log_days + intercept_a
+    r2_score = calculate_r2_score(valid_log_prices, predicted_log_prices)
 
-    y_pred = slope * log_x + intercept
-    r2 = safe_r2(y_valid, y_pred)
+    return slope_b, intercept_a, r2_score
 
-    return slope, intercept, r2
-
-def calculate_manual_r2(abs_days_array, log_price_array, offset_value, A, B):
+def calculate_r2_for_manual_params(absolute_days, log_prices, genesis_offset_days, intercept_a, slope_b):
     """Calculates R2 for specific manual A and B values."""
-    x_days = abs_days_array - offset_value
-    mask = x_days > 0
+    days_since_offset = absolute_days - genesis_offset_days
+    positive_mask = days_since_offset > 0
 
-    if np.sum(mask) < 100:
+    if np.sum(positive_mask) < 100:
         return 0.0
 
-    x_valid = x_days[mask]
-    y_valid = log_price_array[mask]
-    log_x = np.log10(x_valid)
+    valid_days = days_since_offset[positive_mask]
+    valid_log_prices = log_prices[positive_mask]
+    log_days = np.log10(valid_days)
+    predicted_log_prices = intercept_a + slope_b * log_days
 
-    # Prediction based on manual A and B
-    y_pred = A + B * log_x
+    return calculate_r2_score(valid_log_prices, predicted_log_prices)
 
-    return safe_r2(y_valid, y_pred)
+def find_best_fit_params(absolute_days, log_prices):
+    slope_b, intercept_a, r2_score = fit_powerlaw_regression(absolute_days, log_prices, 0)
+    return 0, intercept_a, slope_b, r2_score
 
+# Backward-compatible alias used by existing code.
 def find_global_best_fit_optimized(all_abs_days, all_log_close):
-    b, a, r2 = calculate_regression_numpy(all_abs_days, all_log_close, 0)
-    return 0, a, b, r2
+    return find_best_fit_params(all_abs_days, all_log_close)
 
 # --- SIDEBAR RENDERER ---
 def render_sidebar(all_abs_days, all_log_close, text_color):
@@ -57,7 +58,7 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     if "genesis_offset" not in st.session_state:
         st.session_state["genesis_offset"] = 0
 
-    opt_offset, opt_a, opt_b, _ = find_global_best_fit_optimized(all_abs_days, all_log_close)
+    opt_offset, opt_a, opt_b, _ = find_best_fit_params(all_abs_days, all_log_close)
 
     if "A" not in st.session_state: st.session_state["A"] = float(round(opt_a, 3))
     if "B" not in st.session_state: st.session_state["B"] = float(round(opt_b, 3))
@@ -75,19 +76,23 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     display_r2 = 0.0
 
     # Get current values safely
-    current_a = st.session_state.get("A", opt_a)
-    current_b = st.session_state.get("B", opt_b)
-    curr_off = st.session_state.get("genesis_offset", opt_offset)
+    current_intercept_a = st.session_state.get("A", opt_a)
+    current_slope_b = st.session_state.get("B", opt_b)
+    current_offset_days = st.session_state.get("genesis_offset", opt_offset)
 
     if auto_fit:
         # Calculate BEST fit parameters
-        calc_b, calc_a, calc_r2 = calculate_regression_numpy(all_abs_days, all_log_close, curr_off)
-        st.session_state["A"] = float(round(calc_a, 3))
-        st.session_state["B"] = float(round(calc_b, 3))
-        display_r2 = calc_r2
+        fitted_slope_b, fitted_intercept_a, fitted_r2_score = fit_powerlaw_regression(
+            all_abs_days, all_log_close, current_offset_days
+        )
+        st.session_state["A"] = float(round(fitted_intercept_a, 3))
+        st.session_state["B"] = float(round(fitted_slope_b, 3))
+        display_r2 = fitted_r2_score
     else:
         # Calculate R2 based on MANUAL sliders (The Fix)
-        display_r2 = calculate_manual_r2(all_abs_days, all_log_close, curr_off, current_a, current_b)
+        display_r2 = calculate_r2_for_manual_params(
+            all_abs_days, all_log_close, current_offset_days, current_intercept_a, current_slope_b
+        )
 
     st.markdown("**A (Intercept)**")
     fancy_control("A (Intercept)", "A", 0.01, -25.0, 0.0, disabled=auto_fit)
