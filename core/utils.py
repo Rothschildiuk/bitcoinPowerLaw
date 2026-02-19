@@ -43,7 +43,12 @@ def inline_radio_control(
 
 def fancy_control(label, key, step, min_v, max_v, disabled=False, on_manual_change=None):
     c1, c2, c3 = st.columns([1, 2.5, 1])
-    st.session_state.setdefault(key, min_v)
+    current_value = st.session_state.get(key, min_v)
+    try:
+        current_value = float(current_value)
+    except (TypeError, ValueError):
+        current_value = min_v
+    st.session_state[key] = round(min(max_v, max(min_v, current_value)), 3)
 
     def on_minus():
         new_val = st.session_state[key] - step
