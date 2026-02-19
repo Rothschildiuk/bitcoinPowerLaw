@@ -8,11 +8,11 @@ GENESIS_DATE = pd.to_datetime("2009-01-03")
 DEFAULT_A = -17.0
 DEFAULT_B = 5.8
 OSC_DEFAULTS = {
-    "lambda_val": 1.94,
-    "t1_age": 2.53,
-    "amp_factor_top": 1.12,
-    "amp_factor_bottom": 0.84,
-    "impulse_damping": 0.0,
+    "lambda_val": 2.01,
+    "t1_age": 2.49,
+    "amp_factor_top": 1.13,
+    "amp_factor_bottom": 0.88,
+    "impulse_damping": 1.71,
 }
 
 # Forecast limits

@@ -5,9 +5,7 @@ from core.constants import (
     KEY_A,
     KEY_B,
     KEY_GENESIS_OFFSET,
-    KEY_LOGPERIODIC_AUTO_FIT,
-    KEY_OSC_AUTOFIT_BEST_PARAMS,
-    KEY_OSC_AUTOFIT_SIGNATURE,
+    OSC_DEFAULTS,
 )
 from core.utils import calculate_r2_score, fancy_control, get_stable_trend_fit
 
@@ -212,14 +210,7 @@ oscillator_func_manual = build_oscillator_curve
 
 # --- SIDEBAR RENDERER ---
 def render_sidebar(all_abs_days, all_log_close, text_color):
-    # Defaults
-    defaults = {
-        "t1_age": 2.49,
-        "lambda_val": 2.01,
-        "amp_factor_top": 1.16,
-        "amp_factor_bottom": 0.88,
-        "impulse_damping": 1.72,
-    }
+    defaults = dict(OSC_DEFAULTS)
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
@@ -227,21 +218,6 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     def reset_oscillator_params():
         for k, v in defaults.items():
             st.session_state[k] = v
-        st.session_state.pop(KEY_OSC_AUTOFIT_SIGNATURE, None)
-        st.session_state.pop(KEY_OSC_AUTOFIT_BEST_PARAMS, None)
-        st.session_state[KEY_LOGPERIODIC_AUTO_FIT] = False
-
-    if KEY_LOGPERIODIC_AUTO_FIT not in st.session_state:
-        st.session_state[KEY_LOGPERIODIC_AUTO_FIT] = True
-
-    auto_fit = st.checkbox(
-        "Auto-Fit LogPeriodic",
-        key=KEY_LOGPERIODIC_AUTO_FIT,
-        help="Automatically finds parameters with the highest LogPeriodic R².",
-    )
-
-    def disable_auto_fit():
-        st.session_state[KEY_LOGPERIODIC_AUTO_FIT] = False
 
     days_since_genesis = all_abs_days - st.session_state.get(KEY_GENESIS_OFFSET, 0)
     valid_days_mask = days_since_genesis > 0
@@ -256,59 +232,20 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
             float(st.session_state.B),
         )
 
-        if auto_fit:
-            autofit_signature = build_autofit_signature(all_abs_days, all_log_close)
-            cached_signature = st.session_state.get(KEY_OSC_AUTOFIT_SIGNATURE)
-            cached_best_params = st.session_state.get(KEY_OSC_AUTOFIT_BEST_PARAMS)
-
-            if cached_signature == autofit_signature and isinstance(cached_best_params, dict):
-                best_params = cached_best_params
-            else:
-                start_params = {
-                    "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
-                    "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
-                    "amp_factor_top": float(
-                        st.session_state.get("amp_factor_top", defaults["amp_factor_top"])
-                    ),
-                    "amp_factor_bottom": float(
-                        st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])
-                    ),
-                    "impulse_damping": float(
-                        st.session_state.get("impulse_damping", defaults["impulse_damping"])
-                    ),
-                }
-                best_params = optimize_oscillator_parameters(
-                    log_days, residual_series, start_params
-                )
-                st.session_state[KEY_OSC_AUTOFIT_SIGNATURE] = autofit_signature
-                st.session_state[KEY_OSC_AUTOFIT_BEST_PARAMS] = best_params
-
-            st.session_state["t1_age"] = round(best_params["t1_age"], 3)
-            st.session_state["lambda_val"] = round(best_params["lambda_val"], 3)
-            st.session_state["amp_factor_top"] = round(best_params["amp_factor_top"], 3)
-            st.session_state["amp_factor_bottom"] = round(best_params["amp_factor_bottom"], 3)
-            st.session_state["impulse_damping"] = round(best_params["impulse_damping"], 3)
-
     st.markdown("**1st Cycle Age**")
-    fancy_control("1st Cycle Age", "t1_age", 0.01, 0.1, 5.0, on_manual_change=disable_auto_fit)
+    fancy_control("1st Cycle Age", "t1_age", 0.01, 0.1, 5.0)
 
     st.markdown("**Lambda**")
-    fancy_control("Lambda", "lambda_val", 0.01, 1.5, 3.0, on_manual_change=disable_auto_fit)
+    fancy_control("Lambda", "lambda_val", 0.01, 1.5, 3.0)
 
     st.markdown("**Top Amplitude**")
-    fancy_control(
-        "Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0, on_manual_change=disable_auto_fit
-    )
+    fancy_control("Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0)
 
     st.markdown("**Bottom Amplitude**")
-    fancy_control(
-        "Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0, on_manual_change=disable_auto_fit
-    )
+    fancy_control("Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0)
 
     st.markdown("**Impulse Damping**")
-    fancy_control(
-        "Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0, on_manual_change=disable_auto_fit
-    )
+    fancy_control("Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0)
 
     # --- R2 Calculation for Sidebar Display ---
     if np.count_nonzero(valid_days_mask) > 100:
