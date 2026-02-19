@@ -445,8 +445,8 @@ l_p, l_f = df_display["Close"].iloc[-1], df_display["Fair"].iloc[-1]
 diff = ((l_p - l_f) / l_f) * 100
 pot_target = 10 ** (a_active + b_active * np.log10(df_display["Days"].max()) + p97_5)
 pot = ((pot_target - l_p) / l_p) * 100
-
-k1, k2, k3 = st.columns(3)
+below_fair_pct = float((df_display["Close"] < df_display["Fair"]).mean() * 100.0)
+above_fair_pct = float((df_display["Close"] > df_display["Fair"]).mean() * 100.0)
 
 
 def kpi_card(col, label, value, delta=None, d_color=None):
@@ -461,12 +461,26 @@ def kpi_card(col, label, value, delta=None, d_color=None):
     )
 
 
-kpi_card(k1, "BTC PRICE", f"${l_p:,.0f}")
-kpi_card(
-    k2,
-    "FAIR VALUE",
-    f"${l_f:,.0f}",
-    f"{diff:+.1f}% from model",
-    "#0ecb81" if diff < 0 else "#ea3d2f",
-)
-kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
+if mode == MODE_POWERLAW:
+    k1, k2, k3, k4 = st.columns(4)
+    kpi_card(k1, "BTC PRICE", f"${l_p:,.0f}")
+    kpi_card(
+        k2,
+        "FAIR VALUE",
+        f"${l_f:,.0f}",
+        f"{diff:+.1f}% from model",
+        "#0ecb81" if diff < 0 else "#ea3d2f",
+    )
+    kpi_card(k3, "TIME BELOW FAIR", f"{below_fair_pct:.1f}%", "history share", "#0ecb81")
+    kpi_card(k4, "TIME ABOVE FAIR", f"{above_fair_pct:.1f}%", "history share", "#ea3d2f")
+else:
+    k1, k2, k3 = st.columns(3)
+    kpi_card(k1, "BTC PRICE", f"${l_p:,.0f}")
+    kpi_card(
+        k2,
+        "FAIR VALUE",
+        f"${l_f:,.0f}",
+        f"{diff:+.1f}% from model",
+        "#0ecb81" if diff < 0 else "#ea3d2f",
+    )
+    kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
