@@ -403,7 +403,6 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         plot_x_model=plot_x_model,
         plot_x_main=plot_x_main,
         plot_x_osc=plot_x_osc,
-        m_log_d=m_log_d,
         m_dates=m_dates,
         m_dates_str=m_dates_str,
         m_fair_usd=m_fair_usd,
