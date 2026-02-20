@@ -7,6 +7,9 @@ import yfinance as yf
 from core import oscillator, power_law
 from core.constants import (
     APP_VERSION,
+    CURRENCY_DOLLAR,
+    CURRENCY_EURO,
+    CURRENCY_GOLD,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
     DEFAULT_A,
@@ -17,6 +20,7 @@ from core.constants import (
     KEY_A,
     KEY_B,
     KEY_CHART_REVISION,
+    KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
     KEY_LAST_MODE,
     KEY_PORTFOLIO_BTC_AMOUNT,
@@ -39,6 +43,7 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
     defaults = {
         KEY_THEME_MODE: DEFAULT_THEME,
         KEY_LAST_MODE: MODE_POWERLAW,
+        KEY_CURRENCY_SELECTOR: CURRENCY_DOLLAR,
         KEY_CHART_REVISION: 0,
     }
     for key, value in defaults.items():
@@ -63,6 +68,59 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
                 st.session_state[KEY_A] = DEFAULT_A
             if KEY_B not in st.session_state:
                 st.session_state[KEY_B] = DEFAULT_B
+
+
+def _extract_close_series(download_df):
+    if download_df is None or download_df.empty:
+        return pd.Series(dtype=float)
+    close_series = download_df["Close"]
+    if isinstance(close_series, pd.DataFrame):
+        close_series = close_series.iloc[:, 0]
+    close_series = pd.to_numeric(close_series, errors="coerce").dropna()
+    if close_series.empty:
+        return pd.Series(dtype=float)
+    close_series.index = pd.to_datetime(close_series.index).tz_localize(None)
+    return close_series.astype(float)
+
+
+@st.cache_data(ttl=3600)
+def load_reference_series(start_date):
+    eur_usd = _extract_close_series(yf.download("EURUSD=X", start=start_date, progress=False))
+    xau_usd = _extract_close_series(yf.download("XAUUSD=X", start=start_date, progress=False))
+    if xau_usd.empty:
+        xau_usd = _extract_close_series(yf.download("GC=F", start=start_date, progress=False))
+    return eur_usd, xau_usd
+
+
+def build_currency_close_series(raw_df, selected_currency):
+    close_usd = raw_df["Close"].astype(float)
+    if selected_currency == CURRENCY_DOLLAR:
+        return close_usd
+
+    start_date = str(raw_df.index.min().date())
+    eur_usd, xau_usd = load_reference_series(start_date)
+
+    if selected_currency == CURRENCY_EURO and not eur_usd.empty:
+        eur_usd_aligned = eur_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        return close_usd / eur_usd_aligned
+
+    if selected_currency == CURRENCY_GOLD and not xau_usd.empty:
+        xau_usd_aligned = xau_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        return close_usd / xau_usd_aligned
+
+    return close_usd
+
+
+def resolve_currency_format(selected_currency):
+    if selected_currency == CURRENCY_EURO:
+        return {"prefix": "€", "suffix": "", "decimals": 2, "unit": "EUR"}
+    if selected_currency == CURRENCY_GOLD:
+        return {"prefix": "", "suffix": " oz", "decimals": 2, "unit": "XAU"}
+    return {"prefix": "$", "suffix": "", "decimals": 2, "unit": "USD"}
+
+
+def format_currency_value(value, prefix, suffix, decimals):
+    return f"{prefix}{value:,.{decimals}f}{suffix}"
 
 
 def resolve_trend_parameters(display_df, active_mode):
@@ -128,9 +186,9 @@ def build_portfolio_projection(
     return portfolio_df, table_title, forecast_unit, change_usd_col, change_pct_col
 
 
-def get_growth_change_labels(forecast_unit):
+def get_growth_change_labels(forecast_unit, currency_unit):
     prefix = "YoY" if forecast_unit == "Year" else "MoM"
-    return f"{prefix} Change ($)", f"{prefix} Change (%)"
+    return f"{prefix} Change ({currency_unit})", f"{prefix} Change (%)"
 
 
 def render_portfolio_view(
@@ -138,6 +196,10 @@ def render_portfolio_view(
     current_gen_date,
     a_active,
     b_active,
+    currency_prefix,
+    currency_suffix,
+    currency_decimals,
+    currency_unit,
     pl_template,
     pl_text_color,
     pl_bg_color,
@@ -164,6 +226,9 @@ def render_portfolio_view(
         )
     )
     portfolio_display_df = portfolio_df.iloc[1:].copy()
+    portfolio_display_df["FairPriceDisplay"] = portfolio_display_df["FairPriceUSD"]
+    portfolio_display_df["PortfolioDisplay"] = portfolio_display_df["PortfolioUSD"]
+    portfolio_display_df["ChangeDisplay"] = portfolio_display_df[change_usd_col]
 
     baseline_value = portfolio_df["PortfolioUSD"].iloc[0]
     last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
@@ -172,19 +237,38 @@ def render_portfolio_view(
     )
 
     g1, g2, g3 = st.columns(3)
-    g1.metric("Current Fair Price", f"${portfolio_display_df['FairPriceUSD'].iloc[0]:,.0f}")
-    g2.metric("Portfolio (end of horizon)", f"${last_value:,.0f}")
+    g1.metric(
+        "Current Fair Price",
+        format_currency_value(
+            portfolio_display_df["FairPriceDisplay"].iloc[0],
+            currency_prefix,
+            currency_suffix,
+            currency_decimals,
+        ),
+    )
+    g2.metric(
+        "Portfolio (end of horizon)",
+        format_currency_value(
+            portfolio_display_df["PortfolioDisplay"].iloc[-1],
+            currency_prefix,
+            currency_suffix,
+            currency_decimals,
+        ),
+    )
     g3.metric("Total Growth", f"{total_growth_pct:+.1f}%")
 
     portfolio_fig = go.Figure()
     portfolio_fig.add_trace(
         go.Scatter(
             x=portfolio_display_df["Date"],
-            y=portfolio_display_df["PortfolioUSD"],
+            y=portfolio_display_df["PortfolioDisplay"],
             mode="lines+markers",
             name="Portfolio by fair price",
             line=dict(color="#f0b90b", width=2),
-            hovertemplate="<b>%{x|%d.%m.%Y}</b><br>Portfolio: $%{y:,.0f}<extra></extra>",
+            hovertemplate=(
+                "<b>%{x|%d.%m.%Y}</b><br>Portfolio: "
+                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+            ),
         )
     )
     portfolio_fig.update_layout(
@@ -215,21 +299,32 @@ def render_portfolio_view(
         if forecast_unit == "Year"
         else table_df["Date"].dt.strftime("%Y-%m")
     )
-    period_change_usd_label, period_change_pct_label = get_growth_change_labels(forecast_unit)
+    period_change_usd_label, period_change_pct_label = get_growth_change_labels(
+        forecast_unit, currency_unit
+    )
     table_df = table_df.rename(
         columns={
-            "FairPriceUSD": "Fair Price ($)",
-            "PortfolioUSD": "Portfolio ($)",
-            change_usd_col: period_change_usd_label,
+            "FairPriceDisplay": f"Fair Price ({currency_unit})",
+            "PortfolioDisplay": f"Portfolio ({currency_unit})",
+            "ChangeDisplay": period_change_usd_label,
             change_pct_col: period_change_pct_label,
         }
     )
+    display_columns = [
+        "Date",
+        f"Fair Price ({currency_unit})",
+        f"Portfolio ({currency_unit})",
+        period_change_usd_label,
+        period_change_pct_label,
+    ]
+    table_df = table_df[display_columns]
+    money_fmt = f"{currency_prefix}{{:,.{currency_decimals}f}}{currency_suffix}"
     st.dataframe(
         table_df.style.format(
             {
-                "Fair Price ($)": "${:,.0f}",
-                "Portfolio ($)": "${:,.0f}",
-                period_change_usd_label: "${:,.0f}",
+                f"Fair Price ({currency_unit})": money_fmt,
+                f"Portfolio ({currency_unit})": money_fmt,
+                period_change_usd_label: money_fmt,
                 period_change_pct_label: "{:+.2f}%",
             }
         ),
@@ -273,12 +368,21 @@ def load_prepared_price_data():
 
 
 try:
-    raw_df = load_prepared_price_data()
-    all_absolute_days = raw_df["AbsDays"].values
-    all_log_close_prices = raw_df["LogClose"].values
+    raw_df_usd = load_prepared_price_data()
 except Exception as e:
     st.error(f"Error loading data: {e}")
     st.stop()
+
+if KEY_CURRENCY_SELECTOR not in st.session_state:
+    st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
+
+currency_for_fit = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
+raw_df = raw_df_usd.copy()
+raw_df["Close"] = build_currency_close_series(raw_df_usd, currency_for_fit)
+raw_df = raw_df[raw_df["Close"] > 0]
+raw_df["LogClose"] = np.log10(raw_df["Close"])
+all_absolute_days = raw_df["AbsDays"].values
+all_log_close_prices = raw_df["LogClose"].values
 
 # --- THEME + STATE ---
 initialize_app_session_state(all_absolute_days, all_log_close_prices)
@@ -300,7 +404,7 @@ c_hover_text = theme["c_hover_text"]
 c_border = theme["c_border"]
 
 # --- SIDEBAR ASSEMBLY ---
-mode, time_scale, price_scale, current_r2 = render_sidebar_panel(
+mode, currency, time_scale, price_scale, current_r2 = render_sidebar_panel(
     all_absolute_days,
     all_log_close_prices,
     c_text_main,
@@ -308,6 +412,8 @@ mode, time_scale, price_scale, current_r2 = render_sidebar_panel(
     FORECAST_HORIZON_MIN,
     FORECAST_HORIZON_MAX,
 )
+if currency != currency_for_fit:
+    st.rerun()
 
 # --- MAIN CALCULATIONS ---
 genesis_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, 0))
@@ -325,6 +431,14 @@ a_active, b_active, model_log_vals, residual_vals = resolve_trend_parameters(df_
 df_display["ModelLog"] = model_log_vals
 df_display["Res"] = residual_vals
 df_display["Fair"] = 10 ** df_display["ModelLog"]
+
+currency_context = resolve_currency_format(currency)
+currency_prefix = currency_context["prefix"]
+currency_suffix = currency_context["suffix"]
+currency_decimals = int(currency_context["decimals"])
+currency_unit = currency_context["unit"]
+df_display["CloseDisplay"] = df_display["Close"]
+df_display["FairDisplay"] = df_display["Fair"]
 
 # Calculate R2 for Trend if not returned by sidebar (LogPeriodic mode)
 if mode == MODE_LOGPERIODIC:
@@ -376,6 +490,7 @@ view_max = df_display["Days"].max() + 365 * 10
 m_x, m_dates, m_log_d, m_fair_usd, m_dates_str = prepare_model_grid(
     current_gen_date, a_active, b_active, view_max
 )
+m_fair_display = m_fair_usd
 
 m_osc_y = oscillator.build_oscillator_curve(
     m_log_d,
@@ -407,7 +522,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         m_log_d=m_log_d,
         m_dates=m_dates,
         m_dates_str=m_dates_str,
-        m_fair_usd=m_fair_usd,
+        m_fair_display=m_fair_display,
         m_osc_y=m_osc_y,
         p2_5=p2_5,
         p16_5=p16_5,
@@ -424,6 +539,9 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         c_hover_bg=c_hover_bg,
         c_hover_text=c_hover_text,
         c_border=c_border,
+        currency_prefix=currency_prefix,
+        currency_suffix=currency_suffix,
+        currency_decimals=currency_decimals,
         chart_key=f"chart_{mode}_{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}",
     )
 else:
@@ -432,6 +550,10 @@ else:
         current_gen_date,
         a_active,
         b_active,
+        currency_prefix,
+        currency_suffix,
+        currency_decimals,
+        currency_unit,
         pl_template,
         pl_text_color,
         pl_bg_color,
@@ -442,4 +564,12 @@ else:
     )
 
 # --- KPI ---
-render_model_kpis(df_display, a_active, b_active, p97_5)
+render_model_kpis(
+    df_display,
+    a_active,
+    b_active,
+    p97_5,
+    currency_prefix,
+    currency_suffix,
+    currency_decimals,
+)

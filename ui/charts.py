@@ -20,7 +20,7 @@ def render_main_model_chart(
     m_log_d,
     m_dates,
     m_dates_str,
-    m_fair_usd,
+    m_fair_display,
     m_osc_y,
     p2_5,
     p16_5,
@@ -37,6 +37,9 @@ def render_main_model_chart(
     c_hover_bg,
     c_hover_text,
     c_border,
+    currency_prefix,
+    currency_suffix,
+    currency_decimals,
     chart_key,
 ):
     fig = go.Figure()
@@ -50,7 +53,7 @@ def render_main_model_chart(
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
-                y=10 ** (np.log10(m_fair_usd) + p97_5),
+                y=10 ** (np.log10(m_fair_display) + p97_5),
                 mode="lines",
                 line=dict(width=0),
                 showlegend=False,
@@ -60,7 +63,7 @@ def render_main_model_chart(
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
-                y=10 ** (np.log10(m_fair_usd) + p16_5),
+                y=10 ** (np.log10(m_fair_display) + p16_5),
                 mode="lines",
                 line=dict(width=0),
                 showlegend=False,
@@ -70,50 +73,65 @@ def render_main_model_chart(
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
-                y=10 ** (np.log10(m_fair_usd) + p2_5),
+                y=10 ** (np.log10(m_fair_display) + p2_5),
                 mode="lines",
                 line=dict(width=0),
                 fill="tonexty",
                 fillcolor="rgba(14, 203, 129, 0.15)",
                 name="Accumulation",
                 customdata=m_dates_str,
-                hovertemplate="<b>Accumulation</b>: $%{y:,.0f}<extra></extra>",
+                hovertemplate=(
+                    "<b>Accumulation</b>: "
+                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
             )
         )
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
-                y=m_fair_usd,
+                y=m_fair_display,
                 mode="lines",
                 line=dict(color="#f0b90b", width=1.5, dash="dash"),
                 name="Fair Value",
                 customdata=m_dates_str,
-                hovertemplate="<b>Fair Value</b>: $%{y:,.0f}<extra></extra>",
+                hovertemplate=(
+                    "<b>Fair Value</b>: "
+                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
             )
         )
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
-                y=10 ** (np.log10(m_fair_usd) + p83_5),
+                y=10 ** (np.log10(m_fair_display) + p83_5),
                 mode="lines",
                 line=dict(width=0),
                 fill="tonexty",
                 fillcolor="rgba(234, 61, 47, 0.15)",
                 name="Bubble",
                 customdata=m_dates_str,
-                hovertemplate="<b>Bubble</b>: $%{y:,.0f}<extra></extra>",
+                hovertemplate=(
+                    "<b>Bubble</b>: "
+                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
             )
         )
 
         btc_hover = (
-            "📅 %{customdata}<br><b>BTC Price</b>: $%{y:,.0f}<extra></extra>"
+            (
+                "📅 %{customdata}<br><b>BTC Price</b>: "
+                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+            )
             if is_log_time
-            else "<b>BTC Price</b>: $%{y:,.0f}<extra></extra>"
+            else (
+                "<b>BTC Price</b>: "
+                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+            )
         )
         fig.add_trace(
             go.Scatter(
                 x=plot_x_main,
-                y=df_display["Close"],
+                y=df_display["CloseDisplay"],
                 mode="lines",
                 name="BTC Price",
                 line=dict(color=pl_btc_color, width=1.5),
@@ -124,7 +142,7 @@ def render_main_model_chart(
         fig.update_yaxes(
             type="log" if price_scale == TIME_LOG else "linear",
             range=(
-                [np.log10(0.01), np.log10(df_display["Close"].max() * 8)]
+                [np.log10(0.01), np.log10(df_display["CloseDisplay"].max() * 8)]
                 if price_scale == TIME_LOG
                 else None
             ),

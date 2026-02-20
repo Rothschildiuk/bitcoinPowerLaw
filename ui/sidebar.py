@@ -2,9 +2,12 @@ import streamlit as st
 
 from core import oscillator, power_law
 from core.constants import (
+    CURRENCY_DOLLAR,
+    CURRENCY_OPTIONS,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
     KEY_CHART_REVISION,
+    KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
     KEY_MODE_SELECTOR,
     KEY_PORTFOLIO_BTC_AMOUNT,
@@ -104,6 +107,18 @@ def render_sidebar_panel(
             st.session_state[KEY_CHART_REVISION] += 1
             st.session_state[KEY_LAST_MODE] = mode
 
+        currency = st.segmented_control(
+            "Currency",
+            CURRENCY_OPTIONS,
+            selection_mode="single",
+            default=st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR),
+        )
+        if currency is None:
+            currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
+            st.rerun()
+        else:
+            st.session_state[KEY_CURRENCY_SELECTOR] = currency
+
         if mode != MODE_PORTFOLIO:
             time_scale = inline_radio_control("Time", [TIME_LOG, TIME_LIN], key=KEY_TIME_SCALE)
         else:
@@ -142,4 +157,4 @@ def render_sidebar_panel(
             st.session_state[KEY_THEME_MODE] = new_theme
             st.rerun()
 
-    return mode, time_scale, price_scale, current_r2
+    return mode, currency, time_scale, price_scale, current_r2
