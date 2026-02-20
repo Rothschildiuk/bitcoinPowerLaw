@@ -6,6 +6,62 @@ import streamlit as st
 from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
 
 
+def _resolve_powerlaw_y_range(
+    df_display,
+    m_fair_display,
+    p2_5,
+    p97_5,
+    use_log_scale,
+    model_x=None,
+    visible_start_day=None,
+):
+    btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
+    fair_vals = np.asarray(m_fair_display, dtype=float)
+    if use_log_scale and model_x is not None and visible_start_day is not None:
+        model_x_arr = np.asarray(model_x, dtype=float)
+        visible_mask = model_x_arr >= float(visible_start_day)
+        if np.any(visible_mask):
+            fair_vals = fair_vals[visible_mask]
+
+    lower_band = 10 ** (np.log10(fair_vals) + p2_5)
+    upper_band = 10 ** (np.log10(fair_vals) + p97_5)
+
+    candidate = np.concatenate([btc_vals, lower_band, upper_band])
+    candidate = candidate[np.isfinite(candidate)]
+    if use_log_scale:
+        candidate = candidate[candidate > 0]
+    if candidate.size == 0:
+        return None
+
+    y_min = float(np.min(candidate))
+    y_max = float(np.max(candidate))
+    if y_max <= y_min:
+        y_max = y_min * (10.0 if use_log_scale else 1.1)
+
+    if use_log_scale:
+        return [np.log10(max(y_min * 0.95, 1e-12)), np.log10(y_max * 1.05)]
+
+    pad = (y_max - y_min) * 0.02
+    return [max(0.0, y_min - pad), y_max + pad]
+
+
+def _resolve_log_time_axis(df_display, current_gen_date, view_max, m_dates):
+    range_start_day = max(1.0, float(df_display["Days"].min()))
+    range_end_day = max(float(view_max), range_start_day + 1.0)
+
+    start_year = int(df_display.index.min().year)
+    end_year = int(max(df_display.index.max().year, m_dates[-1].year))
+    tick_days = []
+    tick_labels = []
+    for year in range(start_year, end_year + 1):
+        delta_days = (pd.Timestamp(f"{year}-01-01") - current_gen_date).days
+        if range_start_day <= delta_days <= range_end_day:
+            tick_days.append(delta_days)
+            tick_labels.append(str(year))
+
+    return [np.log10(range_start_day), np.log10(range_end_day)], tick_days, tick_labels
+
+
 def render_main_model_chart(
     *,
     mode,
@@ -139,13 +195,18 @@ def render_main_model_chart(
                 hovertemplate=btc_hover,
             )
         )
+        powerlaw_y_range = _resolve_powerlaw_y_range(
+            df_display,
+            m_fair_display,
+            p2_5,
+            p97_5,
+            use_log_scale=(price_scale == TIME_LOG),
+            model_x=plot_x_model if is_log_time else None,
+            visible_start_day=max(1.0, float(df_display["Days"].min())) if is_log_time else None,
+        )
         fig.update_yaxes(
             type="log" if price_scale == TIME_LOG else "linear",
-            range=(
-                [np.log10(0.01), np.log10(df_display["CloseDisplay"].max() * 8)]
-                if price_scale == TIME_LOG
-                else None
-            ),
+            range=powerlaw_y_range,
             gridcolor=pl_grid_color,
             tickfont=tick_font,
         )
@@ -185,20 +246,10 @@ def render_main_model_chart(
                 x=hv_x, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8
             )
 
-    t_vals = [
-        (pd.Timestamp(f"{y}-01-01") - current_gen_date).days
-        for y in range(current_gen_date.year + 1, 2036)
-        if (pd.Timestamp(f"{y}-01-01") - current_gen_date).days > 0
-    ]
-    t_text = [
-        str(y)
-        for y in range(current_gen_date.year + 1, 2036)
-        if (pd.Timestamp(f"{y}-01-01") - current_gen_date).days > 0
-    ]
     if is_log_time:
-        x_range = [np.log10(max(1.0, view_max / 1000.0)), np.log10(view_max)]
-        if t_vals:
-            x_range = [np.log10(t_vals[0]), np.log10(view_max)]
+        x_range, t_vals, t_text = _resolve_log_time_axis(
+            df_display, current_gen_date, view_max, m_dates
+        )
         fig.update_xaxes(
             type="log",
             tickvals=t_vals,

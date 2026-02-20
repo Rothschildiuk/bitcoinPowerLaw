@@ -1,3 +1,6 @@
+import contextlib
+import io
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -83,12 +86,22 @@ def _extract_close_series(download_df):
     return close_series.astype(float)
 
 
+def _safe_download_close_series(symbol, start_date):
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            downloaded_df = yf.download(symbol, start=start_date, progress=False, threads=False)
+    except Exception:
+        return pd.Series(dtype=float)
+    return _extract_close_series(downloaded_df)
+
+
 @st.cache_data(ttl=3600)
 def load_reference_series(start_date):
-    eur_usd = _extract_close_series(yf.download("EURUSD=X", start=start_date, progress=False))
-    xau_usd = _extract_close_series(yf.download("XAUUSD=X", start=start_date, progress=False))
+    eur_usd = _safe_download_close_series("EURUSD=X", start_date)
+    # GC=F is usually more stable than XAUUSD=X on hosted environments.
+    xau_usd = _safe_download_close_series("GC=F", start_date)
     if xau_usd.empty:
-        xau_usd = _extract_close_series(yf.download("GC=F", start=start_date, progress=False))
+        xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
     return eur_usd, xau_usd
 
 

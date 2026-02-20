@@ -5,7 +5,7 @@ STREAMLIT := $(VENV)/bin/streamlit
 BLACK := $(VENV)/bin/black
 BLACK_CONFIG := --config config/pyproject.toml
 
-.PHONY: help install run format check clean
+.PHONY: help install run format check test clean
 
 help:
 	@echo "Targets:"
@@ -13,6 +13,7 @@ help:
 	@echo "  make run      - run Streamlit app"
 	@echo "  make format   - run black formatter"
 	@echo "  make check    - run black --check"
+	@echo "  make test     - run pytest test suite"
 	@echo "  make clean    - remove Python cache folders"
 
 install:
@@ -27,6 +28,9 @@ format:
 
 check:
 	$(BLACK) $(BLACK_CONFIG) --check .
+
+test:
+	$(PY) -m pytest -q
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

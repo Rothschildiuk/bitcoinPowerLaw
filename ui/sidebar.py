@@ -108,17 +108,18 @@ def render_sidebar_panel(
             st.session_state[KEY_CHART_REVISION] += 1
             st.session_state[KEY_LAST_MODE] = mode
 
-        currency = st.segmented_control(
+        selected_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
+        if selected_currency not in CURRENCY_OPTIONS:
+            selected_currency = CURRENCY_DOLLAR
+            st.session_state[KEY_CURRENCY_SELECTOR] = selected_currency
+
+        currency = st.radio(
             "Currency",
             CURRENCY_OPTIONS,
-            selection_mode="single",
-            default=st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR),
+            horizontal=True,
+            index=CURRENCY_OPTIONS.index(selected_currency),
+            key=KEY_CURRENCY_SELECTOR,
         )
-        if currency is None:
-            currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
-            st.rerun()
-        else:
-            st.session_state[KEY_CURRENCY_SELECTOR] = currency
 
         if mode != MODE_PORTFOLIO:
             time_scale = inline_radio_control("Time", [TIME_LOG, TIME_LIN], key=KEY_TIME_SCALE)
