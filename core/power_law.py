@@ -116,7 +116,7 @@ def render_sidebar(
     fancy_control("A (Intercept)", KEY_A, 0.01, -25.0, 0.0, on_manual_change=disable_auto_fit)
 
     st.markdown("**B (Slope)**")
-    fancy_control("B (Slope)", KEY_B, 0.01, 1.0, 7.0, on_manual_change=disable_auto_fit)
+    fancy_control("B (Slope)", KEY_B, 0.01, 1.0, 9.0, on_manual_change=disable_auto_fit)
 
     if callable(render_extra_controls):
         render_extra_controls()

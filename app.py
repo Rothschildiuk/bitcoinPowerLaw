@@ -162,6 +162,12 @@ def build_portfolio_projection(
         date_index = pd.date_range(start=start_period, periods=forecast_horizon + 1, freq="YS")
         change_usd_col, change_pct_col = "YoY_USD", "YoY_pct"
         table_title = "Yearly growth table"
+    elif forecast_unit == "Day":
+        latest_day = _df_index.max().normalize()
+        start_period = latest_day - pd.Timedelta(days=1)
+        date_index = pd.date_range(start=start_period, periods=forecast_horizon + 1, freq="D")
+        change_usd_col, change_pct_col = "DoD_USD", "DoD_pct"
+        table_title = "Daily growth table"
     else:
         latest_month_start = _df_index.max().to_period("M").to_timestamp()
         start_period = latest_month_start - pd.offsets.MonthBegin(1)
@@ -187,7 +193,7 @@ def build_portfolio_projection(
 
 
 def get_growth_change_labels(forecast_unit, currency_unit):
-    prefix = "YoY" if forecast_unit == "Year" else "MoM"
+    prefix = "YoY" if forecast_unit == "Year" else ("DoD" if forecast_unit == "Day" else "MoM")
     return f"{prefix} Change ({currency_unit})", f"{prefix} Change (%)"
 
 
@@ -294,11 +300,12 @@ def render_portfolio_view(
 
     st.markdown(f"#### {table_title}")
     table_df = portfolio_display_df.copy()
-    table_df["Date"] = (
-        table_df["Date"].dt.strftime("%Y")
-        if forecast_unit == "Year"
-        else table_df["Date"].dt.strftime("%Y-%m")
-    )
+    if forecast_unit == "Year":
+        table_df["Date"] = table_df["Date"].dt.strftime("%Y")
+    elif forecast_unit == "Day":
+        table_df["Date"] = table_df["Date"].dt.strftime("%Y-%m-%d")
+    else:
+        table_df["Date"] = table_df["Date"].dt.strftime("%Y-%m")
     period_change_usd_label, period_change_pct_label = get_growth_change_labels(
         forecast_unit, currency_unit
     )
@@ -343,21 +350,12 @@ st.set_page_config(
 @st.cache_data(ttl=3600)
 def load_prepared_price_data():
     url = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
-    early_df = pd.read_csv(url)
-    early_df["Date"] = pd.to_datetime(early_df["Date"])
-    early_df.set_index("Date", inplace=True)
-    early_df.rename(columns={"Price": "Close"}, inplace=True)
-
-    recent_df = yf.download("BTC-USD", start="2014-09-17", progress=False)
-    recent_df = (
-        recent_df["Close"] if isinstance(recent_df.columns, pd.MultiIndex) else recent_df[["Close"]]
-    )
-    recent_df.columns = ["Close"]
-    recent_df = recent_df.dropna()
-    recent_df.index = pd.to_datetime(recent_df.index).tz_localize(None)
-
-    early_df = early_df[early_df.index < "2014-09-17"]
-    full_df = pd.concat([early_df, recent_df])
+    full_df = pd.read_csv(url)
+    full_df["Date"] = pd.to_datetime(full_df["Date"])
+    full_df.set_index("Date", inplace=True)
+    full_df.rename(columns={"Price": "Close"}, inplace=True)
+    full_df["Close"] = pd.to_numeric(full_df["Close"], errors="coerce")
+    full_df = full_df.dropna(subset=["Close"]).sort_index()
 
     # FILTER INVALID PRICES TO PREVENT LOG ERRORS
     full_df = full_df[full_df["Close"] > 0]

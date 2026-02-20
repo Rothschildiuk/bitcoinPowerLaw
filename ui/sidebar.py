@@ -40,7 +40,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     st.markdown("**Forecast unit**")
     forecast_unit = st.radio(
         "Forecast unit",
-        ["Month", "Year"],
+        ["Day", "Month", "Year"],
         horizontal=True,
         key=KEY_PORTFOLIO_FORECAST_UNIT,
         label_visibility="collapsed",
@@ -55,7 +55,8 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         forecast_horizon_min, min(forecast_horizon_max, default_horizon)
     )
 
-    horizon_label = "months" if forecast_unit == "Month" else "years"
+    horizon_label_map = {"Day": "days", "Month": "months", "Year": "years"}
+    horizon_label = horizon_label_map.get(forecast_unit, "months")
     st.markdown(f"**Forecast horizon ({horizon_label})**")
 
     def on_horizon_minus():
