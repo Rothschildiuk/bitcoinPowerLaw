@@ -370,6 +370,20 @@ def load_prepared_price_data():
     full_df["Close"] = pd.to_numeric(full_df["Close"], errors="coerce")
     full_df = full_df.dropna(subset=["Close"]).sort_index()
 
+    # Add a recent tail from Yahoo if CSV is stale.
+    latest_csv_date = full_df.index.max()
+    today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    if (today - latest_csv_date.normalize()).days > 3:
+        btc_tail = _safe_download_close_series(
+            "BTC-USD",
+            (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+        )
+        if not btc_tail.empty:
+            tail_df = btc_tail.to_frame(name="Close")
+            tail_df.index.name = "Date"
+            full_df = pd.concat([full_df[["Close"]], tail_df], axis=0)
+            full_df = full_df[~full_df.index.duplicated(keep="last")].sort_index()
+
     # FILTER INVALID PRICES TO PREVENT LOG ERRORS
     full_df = full_df[full_df["Close"] > 0]
 
