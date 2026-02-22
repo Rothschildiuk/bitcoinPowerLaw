@@ -1,11 +1,7 @@
-import contextlib
-import io
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import yfinance as yf
 
 from core import oscillator, power_law
 from core.constants import (
@@ -36,6 +32,7 @@ from core.constants import (
     TIME_LOG,
 )
 from core.utils import calculate_r2_score, get_stable_trend_fit
+from services.price_service import build_currency_close_series, load_prepared_price_data
 from ui.charts import render_main_model_chart
 from ui.kpi import render_model_kpis
 from ui.sidebar import render_sidebar_panel
@@ -73,57 +70,6 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
                 st.session_state[KEY_A] = DEFAULT_A
             if KEY_B not in st.session_state:
                 st.session_state[KEY_B] = DEFAULT_B
-
-
-def _extract_close_series(download_df):
-    if download_df is None or download_df.empty:
-        return pd.Series(dtype=float)
-    close_series = download_df["Close"]
-    if isinstance(close_series, pd.DataFrame):
-        close_series = close_series.iloc[:, 0]
-    close_series = pd.to_numeric(close_series, errors="coerce").dropna()
-    if close_series.empty:
-        return pd.Series(dtype=float)
-    close_series.index = pd.to_datetime(close_series.index).tz_localize(None)
-    return close_series.astype(float)
-
-
-def _safe_download_close_series(symbol, start_date):
-    try:
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            downloaded_df = yf.download(symbol, start=start_date, progress=False, threads=False)
-    except Exception:
-        return pd.Series(dtype=float)
-    return _extract_close_series(downloaded_df)
-
-
-@st.cache_data(ttl=3600)
-def load_reference_series(start_date):
-    eur_usd = _safe_download_close_series("EURUSD=X", start_date)
-    # GC=F is usually more stable than XAUUSD=X on hosted environments.
-    xau_usd = _safe_download_close_series("GC=F", start_date)
-    if xau_usd.empty:
-        xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
-    return eur_usd, xau_usd
-
-
-def build_currency_close_series(raw_df, selected_currency):
-    close_usd = raw_df["Close"].astype(float)
-    if selected_currency == CURRENCY_DOLLAR:
-        return close_usd
-
-    start_date = str(raw_df.index.min().date())
-    eur_usd, xau_usd = load_reference_series(start_date)
-
-    if selected_currency == CURRENCY_EURO and not eur_usd.empty:
-        eur_usd_aligned = eur_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
-        return close_usd / eur_usd_aligned
-
-    if selected_currency == CURRENCY_GOLD and not xau_usd.empty:
-        xau_usd_aligned = xau_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
-        return close_usd / xau_usd_aligned
-
-    return close_usd
 
 
 def resolve_currency_format(selected_currency):
@@ -379,39 +325,6 @@ def render_portfolio_view(
 st.set_page_config(
     layout="wide", page_icon="🚀", page_title="BTC Power Law Pro", initial_sidebar_state="expanded"
 )
-
-
-# --- DATA LOADING ---
-@st.cache_data(ttl=3600)
-def load_prepared_price_data():
-    url = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
-    full_df = pd.read_csv(url)
-    full_df["Date"] = pd.to_datetime(full_df["Date"])
-    full_df.set_index("Date", inplace=True)
-    full_df.rename(columns={"Price": "Close"}, inplace=True)
-    full_df["Close"] = pd.to_numeric(full_df["Close"], errors="coerce")
-    full_df = full_df.dropna(subset=["Close"]).sort_index()
-
-    # Add a recent tail from Yahoo if CSV is stale.
-    latest_csv_date = full_df.index.max()
-    today = pd.Timestamp.utcnow().tz_localize(None).normalize()
-    if (today - latest_csv_date.normalize()).days > 3:
-        btc_tail = _safe_download_close_series(
-            "BTC-USD",
-            (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
-        )
-        if not btc_tail.empty:
-            tail_df = btc_tail.to_frame(name="Close")
-            tail_df.index.name = "Date"
-            full_df = pd.concat([full_df[["Close"]], tail_df], axis=0)
-            full_df = full_df[~full_df.index.duplicated(keep="last")].sort_index()
-
-    # FILTER INVALID PRICES TO PREVENT LOG ERRORS
-    full_df = full_df[full_df["Close"] > 0]
-
-    full_df["AbsDays"] = (full_df.index - GENESIS_DATE).days
-    full_df["LogClose"] = np.log10(full_df["Close"])
-    return full_df
 
 
 try:
