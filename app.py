@@ -195,8 +195,13 @@ def render_portfolio_view(
     c_border,
     c_hover_text,
 ):
+    display_currency_decimals = 0
+
+    def format_portfolio_money(value):
+        return f"{currency_prefix}{value:,.{display_currency_decimals}f}{currency_suffix}"
+
     st.markdown("### Portfolio Growth (Fair Price / Power Law)")
-    btc_amount = float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 1.0))
+    btc_amount = float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0))
     forecast_unit = st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Month")
     forecast_horizon = int(
         st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
@@ -226,21 +231,11 @@ def render_portfolio_view(
     g1, g2, g3 = st.columns(3)
     g1.metric(
         "Current Fair Price",
-        format_currency_value(
-            portfolio_display_df["FairPriceDisplay"].iloc[0],
-            currency_prefix,
-            currency_suffix,
-            currency_decimals,
-        ),
+        format_portfolio_money(portfolio_display_df["FairPriceDisplay"].iloc[0]),
     )
     g2.metric(
         "Portfolio (end of horizon)",
-        format_currency_value(
-            portfolio_display_df["PortfolioDisplay"].iloc[-1],
-            currency_prefix,
-            currency_suffix,
-            currency_decimals,
-        ),
+        format_portfolio_money(portfolio_display_df["PortfolioDisplay"].iloc[-1]),
     )
     g3.metric("Total Growth", f"{total_growth_pct:+.1f}%")
 
@@ -254,7 +249,7 @@ def render_portfolio_view(
             line=dict(color="#f0b90b", width=2),
             hovertemplate=(
                 "<b>%{x|%d.%m.%Y}</b><br>Portfolio: "
-                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
             ),
         )
     )
@@ -306,7 +301,7 @@ def render_portfolio_view(
         period_change_pct_label,
     ]
     table_df = table_df[display_columns]
-    money_fmt = f"{currency_prefix}{{:,.{currency_decimals}f}}{currency_suffix}"
+    money_fmt = f"{currency_prefix}{{:,.{display_currency_decimals}f}}{currency_suffix}"
     st.dataframe(
         table_df.style.format(
             {
