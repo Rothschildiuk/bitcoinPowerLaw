@@ -106,38 +106,37 @@ def render_main_model_chart(
     is_log_time = time_scale == TIME_LOG
 
     if mode == MODE_POWERLAW:
+        p2_5_series = 10 ** (np.log10(m_fair_display) + p2_5)
+        p16_5_series = 10 ** (np.log10(m_fair_display) + p16_5)
+        p83_5_series = 10 ** (np.log10(m_fair_display) + p83_5)
+        p97_5_series = 10 ** (np.log10(m_fair_display) + p97_5)
+
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
-                y=10 ** (np.log10(m_fair_display) + p97_5),
+                y=p97_5_series,
                 mode="lines",
-                line=dict(width=0),
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=10 ** (np.log10(m_fair_display) + p16_5),
-                mode="lines",
-                line=dict(width=0),
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=10 ** (np.log10(m_fair_display) + p2_5),
-                mode="lines",
-                line=dict(width=0),
-                fill="tonexty",
-                fillcolor="rgba(14, 203, 129, 0.15)",
-                name="Accumulation",
+                line=dict(color="#ea3d2f", width=1.2, dash="dot"),
+                name="97.5th percentile",
+                legendrank=20,
                 customdata=m_dates_str,
                 hovertemplate=(
-                    "<b>Accumulation</b>: "
+                    "<b>97.5th percentile</b>: "
+                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_x_model,
+                y=p83_5_series,
+                mode="lines",
+                line=dict(color="#1199d6", width=1.2, dash="dot"),
+                name="83.5th percentile",
+                legendrank=30,
+                customdata=m_dates_str,
+                hovertemplate=(
+                    "<b>83.5th percentile</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -147,11 +146,12 @@ def render_main_model_chart(
                 x=plot_x_model,
                 y=m_fair_display,
                 mode="lines",
-                line=dict(color="#f0b90b", width=1.5, dash="dash"),
-                name="Fair Value",
+                line=dict(color="#f0b90b", width=1.8),
+                name="Power regression",
+                legendrank=40,
                 customdata=m_dates_str,
                 hovertemplate=(
-                    "<b>Fair Value</b>: "
+                    "<b>Power regression</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -159,15 +159,29 @@ def render_main_model_chart(
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
-                y=10 ** (np.log10(m_fair_display) + p83_5),
+                y=p16_5_series,
                 mode="lines",
-                line=dict(width=0),
-                fill="tonexty",
-                fillcolor="rgba(234, 61, 47, 0.15)",
-                name="Bubble",
+                line=dict(color="#1199d6", width=1.2, dash="dot"),
+                name="16.5th percentile",
+                legendrank=50,
                 customdata=m_dates_str,
                 hovertemplate=(
-                    "<b>Bubble</b>: "
+                    "<b>16.5th percentile</b>: "
+                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_x_model,
+                y=p2_5_series,
+                mode="lines",
+                line=dict(color="#ea3d2f", width=1.2, dash="dot"),
+                name="2.5th percentile",
+                legendrank=60,
+                customdata=m_dates_str,
+                hovertemplate=(
+                    "<b>2.5th percentile</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -175,12 +189,12 @@ def render_main_model_chart(
 
         btc_hover = (
             (
-                "📅 %{customdata}<br><b>BTC Price</b>: "
+                "📅 %{customdata}<br><b>Bitcoin price</b>: "
                 f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
             )
             if is_log_time
             else (
-                "<b>BTC Price</b>: "
+                "<b>Bitcoin price</b>: "
                 f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
             )
         )
@@ -189,7 +203,8 @@ def render_main_model_chart(
                 x=plot_x_main,
                 y=df_display["CloseDisplay"],
                 mode="lines",
-                name="BTC Price",
+                name="Bitcoin price",
+                legendrank=10,
                 line=dict(color=pl_btc_color, width=1.5),
                 customdata=df_display.index.strftime("%d.%m.%Y"),
                 hovertemplate=btc_hover,
