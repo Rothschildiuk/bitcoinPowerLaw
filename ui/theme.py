@@ -9,6 +9,9 @@ THEMES = {
         "c_sidebar_bg": "#161a25",
         "c_card_bg": "#1e222d",
         "c_border": "#2d323e",
+        "c_accent": "#f0b90b",
+        "c_accent_text": "#111827",
+        "c_control_bg": "#1b2130",
         "c_text_main": "#d1d4dc",
         "c_text_val": "#ffffff",
         "c_btn_bg": "#2d323e",
@@ -23,30 +26,11 @@ THEMES = {
         "c_hover_bg": "#1e222d",
         "c_hover_text": "#ffffff",
     },
-    "light": {
-        "c_main_bg": "#f5f7fb",
-        "c_sidebar_bg": "#eef2f7",
-        "c_card_bg": "#ffffff",
-        "c_border": "#d7deea",
-        "c_text_main": "#2b3548",
-        "c_text_val": "#111827",
-        "c_btn_bg": "#ffffff",
-        "c_btn_hover": "#e9eef8",
-        "c_btn_text": "#223047",
-        "pl_template": "plotly_white",
-        "pl_bg_color": "rgba(245,247,251,1)",
-        "pl_grid_color": "#dfe6f3",
-        "pl_btc_color": "#1f2937",
-        "pl_legend_color": "#4b5b74",
-        "pl_text_color": "#334155",
-        "c_hover_bg": "#ffffff",
-        "c_hover_text": "#1f2937",
-    },
 }
 
 
-def get_theme(is_dark):
-    return THEMES["dark" if is_dark else "light"]
+def get_theme(_is_dark=True):
+    return THEMES["dark"]
 
 
 @lru_cache(maxsize=1)

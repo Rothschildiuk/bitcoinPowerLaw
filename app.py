@@ -52,6 +52,8 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    # Light theme is disabled by product decision; always force dark theme.
+    st.session_state[KEY_THEME_MODE] = DEFAULT_THEME
 
     if KEY_A not in st.session_state or KEY_B not in st.session_state:
         if absolute_days is not None and log_prices is not None:
@@ -153,6 +155,26 @@ def resolve_trend_parameters(display_df, active_mode):
         )
 
     return intercept_a, slope_b, trend_log_prices, residual_series
+
+
+def calculate_percentile_offsets(display_df, genesis_offset_days):
+    """
+    Compute stable percentile offsets from a baseline best-fit trend for the current offset.
+    This keeps percentile bands moving together with manual A/B adjustments.
+    """
+    fitted_b, fitted_a, _ = power_law.fit_powerlaw_regression(
+        display_df["AbsDays"].values,
+        display_df["LogClose"].values,
+        genesis_offset_days,
+    )
+    if fitted_a == 0.0 and fitted_b == 0.0:
+        baseline_residuals = display_df["Res"].values
+    else:
+        base_days = np.maximum(display_df["AbsDays"].values - genesis_offset_days, 1.0)
+        baseline_log = fitted_a + fitted_b * np.log10(base_days)
+        baseline_residuals = display_df["LogClose"].values - baseline_log
+
+    return np.percentile(baseline_residuals, [2.5, 16.5, 83.5, 97.5])
 
 
 @st.cache_data(ttl=3600)
@@ -412,9 +434,7 @@ all_log_close_prices = raw_df["LogClose"].values
 # --- THEME + STATE ---
 initialize_app_session_state(all_absolute_days, all_log_close_prices)
 
-is_dark = "Dark" in st.session_state[KEY_THEME_MODE]
-
-theme = get_theme(is_dark)
+theme = get_theme(True)
 apply_theme_css(theme)
 
 c_text_main = theme["c_text_main"]
@@ -469,7 +489,7 @@ df_display["FairDisplay"] = df_display["Fair"]
 if mode == MODE_LOGPERIODIC:
     current_r2 = calculate_r2_score(df_display["LogClose"].values, df_display["ModelLog"].values)
 
-p2_5, p16_5, p83_5, p97_5 = np.percentile(df_display["Res"], [2.5, 16.5, 83.5, 97.5])
+p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
 
 # --- OSCILLATOR CALC ---
 osc_lambda = float(st.session_state.get("lambda_val", OSC_DEFAULTS["lambda_val"]))

@@ -5,7 +5,6 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_OPTIONS,
     DEFAULT_FORECAST_HORIZON,
-    DEFAULT_THEME,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
@@ -14,12 +13,10 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY,
     KEY_PORTFOLIO_FORECAST_UNIT,
-    KEY_THEME_MODE,
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
-    THEME_OPTIONS,
     TIME_LOG,
     TIME_LIN,
 )
@@ -95,15 +92,27 @@ def render_sidebar_panel(
         st.caption(f"Version {app_version}")
 
         mode_options = [MODE_POWERLAW, MODE_LOGPERIODIC, MODE_PORTFOLIO]
+        if st.session_state.get(KEY_MODE_SELECTOR) not in mode_options:
+            st.session_state[KEY_MODE_SELECTOR] = st.session_state.get(KEY_LAST_MODE, MODE_POWERLAW)
         mode = st.segmented_control(
             "Mode",
             mode_options,
             selection_mode="single",
-            default=st.session_state.get(KEY_LAST_MODE, MODE_POWERLAW),
             key=KEY_MODE_SELECTOR,
+            width="stretch",
         )
         if mode is None:
+            fallback_mode = st.session_state.get(KEY_LAST_MODE, MODE_POWERLAW)
+            if fallback_mode not in mode_options:
+                fallback_mode = MODE_POWERLAW
+            st.session_state[KEY_MODE_SELECTOR] = fallback_mode
+            st.rerun()
+        if mode not in mode_options:
             mode = st.session_state.get(KEY_LAST_MODE, MODE_POWERLAW)
+            if mode not in mode_options:
+                mode = MODE_POWERLAW
+            st.session_state[KEY_MODE_SELECTOR] = mode
+            st.rerun()
         if mode != st.session_state[KEY_LAST_MODE]:
             st.session_state[KEY_CHART_REVISION] += 1
             st.session_state[KEY_LAST_MODE] = mode
@@ -147,16 +156,5 @@ def render_sidebar_panel(
             )
         else:
             oscillator.render_sidebar(all_absolute_days, all_log_close_prices, c_text_main)
-
-        st.markdown("<hr style='margin: 10px 0 5px 0; opacity:0.1;'>", unsafe_allow_html=True)
-        new_theme = st.radio(
-            "Theme",
-            THEME_OPTIONS,
-            index=0 if st.session_state[KEY_THEME_MODE] == DEFAULT_THEME else 1,
-            horizontal=True,
-        )
-        if new_theme != st.session_state[KEY_THEME_MODE]:
-            st.session_state[KEY_THEME_MODE] = new_theme
-            st.rerun()
 
     return mode, currency, time_scale, price_scale, current_r2

@@ -21,8 +21,50 @@ footer {visibility: hidden; display: none;}
 .metric-value { color: __C_TEXT_VAL__; font-size: 20px; font-weight: 800; }
 .metric-delta { font-size: 12px; font-weight: 600; margin-top: 2px; }
 
-div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] { gap: 8px; }
-div[data-testId="stSidebar"] .stRadio label p { font-size: 13px !important; }
+div[data-testid="stSidebar"] .stRadio div[role="radiogroup"],
+div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] {
+    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+}
+div[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"],
+div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label,
+div[data-testId="stSidebar"] .stRadio label[data-baseweb="radio"],
+div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label {
+    border: 1px solid __C_BORDER__;
+    border-radius: 10px;
+    padding: 4px 10px;
+    background: __C_CARD_BG__ !important;
+    min-height: 36px;
+}
+div[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] > div:first-child,
+div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child,
+div[data-testId="stSidebar"] .stRadio label[data-baseweb="radio"] > div:first-child,
+div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child {
+    background: __C_CARD_BG__ !important;
+    border-radius: 999px !important;
+}
+div[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] p,
+div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label p,
+div[data-testId="stSidebar"] .stRadio label[data-baseweb="radio"] p,
+div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label p {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    color: __C_TEXT_MAIN__ !important;
+}
+div[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"][aria-checked="true"],
+div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checked="true"],
+div[data-testId="stSidebar"] .stRadio label[data-baseweb="radio"][aria-checked="true"],
+div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checked="true"] {
+    background: __C_ACCENT__;
+    border-color: __C_ACCENT__;
+}
+div[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"][aria-checked="true"] p,
+div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checked="true"] p,
+div[data-testId="stSidebar"] .stRadio label[data-baseweb="radio"][aria-checked="true"] p,
+div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checked="true"] p {
+    color: __C_ACCENT_TEXT__ !important;
+}
 
 .stButton > button {
     width: 100% !important; background-color: __C_BTN_BG__ !important; color: __C_BTN_TEXT__ !important;
