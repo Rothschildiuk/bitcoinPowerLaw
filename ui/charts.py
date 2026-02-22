@@ -17,9 +17,14 @@ def _resolve_powerlaw_y_range(
 ):
     btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
     fair_vals = np.asarray(m_fair_display, dtype=float)
-    if use_log_scale and model_x is not None and visible_start_day is not None:
-        model_x_arr = np.asarray(model_x, dtype=float)
-        visible_mask = model_x_arr >= float(visible_start_day)
+    if model_x is not None and visible_start_day is not None:
+        model_x_arr = np.asarray(model_x)
+        if np.issubdtype(model_x_arr.dtype, np.number):
+            visible_mask = model_x_arr.astype(float) >= float(visible_start_day)
+        else:
+            model_x_ts = pd.to_datetime(model_x_arr)
+            visible_start_ts = pd.Timestamp(visible_start_day)
+            visible_mask = model_x_ts >= visible_start_ts
         if np.any(visible_mask):
             fair_vals = fair_vals[visible_mask]
 
@@ -210,14 +215,18 @@ def render_main_model_chart(
                 hovertemplate=btc_hover,
             )
         )
+        y_range_model_x = plot_x_model if is_log_time else m_dates
+        y_range_visible_start = (
+            max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
+        )
         powerlaw_y_range = _resolve_powerlaw_y_range(
             df_display,
             m_fair_display,
             p2_5,
             p97_5,
             use_log_scale=(price_scale == TIME_LOG),
-            model_x=plot_x_model if is_log_time else None,
-            visible_start_day=max(1.0, float(df_display["Days"].min())) if is_log_time else None,
+            model_x=y_range_model_x,
+            visible_start_day=y_range_visible_start,
         )
         fig.update_yaxes(
             type="log" if price_scale == TIME_LOG else "linear",
