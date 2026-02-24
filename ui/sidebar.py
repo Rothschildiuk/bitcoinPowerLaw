@@ -16,15 +16,18 @@ from core.constants import (
     DEFAULT_HASHRATE_B,
     DEFAULT_DIFFICULTY_A,
     DEFAULT_DIFFICULTY_B,
+    OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
     DEFAULT_FORECAST_HORIZON,
+    KEY_A,
     KEY_A_PRICE,
     KEY_A_EURO,
     KEY_A_GOLD,
     KEY_A_HASHRATE,
     KEY_A_DIFFICULTY,
     KEY_A_REVENUE,
+    KEY_B,
     KEY_B_PRICE,
     KEY_B_EURO,
     KEY_B_GOLD,
@@ -34,16 +37,22 @@ from core.constants import (
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
+    KEY_LOGPERIODIC_LAST_SERIES,
     KEY_MODE_SELECTOR,
+    KEY_LOGPERIODIC_SERIES,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY,
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_TIME_SCALE,
+    LOGPERIODIC_SERIES_OPTIONS,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
+    OSC_DEFAULTS,
+    OSC_DEFAULTS_DIFFICULTY,
+    OSC_DEFAULTS_HASHRATE,
     POWERLAW_SERIES_OPTIONS,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_HASHRATE,
@@ -175,8 +184,26 @@ def render_sidebar_panel(
                 powerlaw_series = st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE)
                 st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
                 st.rerun()
+        logperiodic_series = st.session_state.get(KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE)
+        if logperiodic_series not in LOGPERIODIC_SERIES_OPTIONS:
+            logperiodic_series = POWERLAW_SERIES_PRICE
+            st.session_state[KEY_LOGPERIODIC_SERIES] = logperiodic_series
+        if mode == MODE_LOGPERIODIC:
+            logperiodic_series = st.radio(
+                "LogPeriodic series",
+                LOGPERIODIC_SERIES_OPTIONS,
+                horizontal=True,
+                key=KEY_LOGPERIODIC_SERIES,
+            )
+            if logperiodic_series is None:
+                logperiodic_series = st.session_state.get(KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE)
+                st.session_state[KEY_LOGPERIODIC_SERIES] = logperiodic_series
+                st.rerun()
 
-        is_non_price_series = mode == MODE_POWERLAW and powerlaw_series != POWERLAW_SERIES_PRICE
+        is_non_price_series = (
+            (mode == MODE_POWERLAW and powerlaw_series != POWERLAW_SERIES_PRICE)
+            or (mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE)
+        )
 
         if is_non_price_series:
             currency = CURRENCY_DOLLAR
@@ -246,6 +273,20 @@ def render_sidebar_panel(
             b_key = KEY_B_HASHRATE
             default_a = DEFAULT_HASHRATE_A
             default_b = DEFAULT_HASHRATE_B
+        if mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
+            model_abs_days = difficulty_absolute_days
+            model_log_close = difficulty_log_close
+            a_key = KEY_A_DIFFICULTY
+            b_key = KEY_B_DIFFICULTY
+            default_a = DEFAULT_DIFFICULTY_A
+            default_b = DEFAULT_DIFFICULTY_B
+        if mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_HASHRATE:
+            model_abs_days = hashrate_absolute_days
+            model_log_close = hashrate_log_close
+            a_key = KEY_A_HASHRATE
+            b_key = KEY_B_HASHRATE
+            default_a = DEFAULT_HASHRATE_A
+            default_b = DEFAULT_HASHRATE_B
 
         if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
             hide_price_scale = (
@@ -272,6 +313,35 @@ def render_sidebar_panel(
                 default_b=default_b,
             )
         else:
-            oscillator.render_sidebar(price_absolute_days, price_log_close, c_text_main)
+            # Keep legacy A/B keys aligned before rendering LogPeriodic controls,
+            # so sidebar R² is computed for the newly selected series immediately.
+            st.session_state[KEY_A] = float(st.session_state.get(a_key, default_a))
+            st.session_state[KEY_B] = float(st.session_state.get(b_key, default_b))
+            active_osc_defaults = (
+                OSC_DEFAULTS_HASHRATE
+                if logperiodic_series == POWERLAW_SERIES_HASHRATE
+                else (
+                    OSC_DEFAULTS_DIFFICULTY
+                    if logperiodic_series == POWERLAW_SERIES_DIFFICULTY
+                    else OSC_DEFAULTS
+                )
+            )
+            last_lp_series = st.session_state.get(KEY_LOGPERIODIC_LAST_SERIES)
+            if last_lp_series != logperiodic_series:
+                for k, v in active_osc_defaults.items():
+                    st.session_state[k] = v
+                st.session_state[KEY_LOGPERIODIC_LAST_SERIES] = logperiodic_series
 
-    return mode, currency, time_scale, price_scale, current_r2, powerlaw_series
+            oscillator.render_sidebar(
+                model_abs_days,
+                model_log_close,
+                c_text_main,
+                defaults_override=active_osc_defaults,
+                min_abs_day_for_fit=(
+                    OSCILLATOR_DIFF_HASH_START_ABS_DAYS
+                    if logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+                    else None
+                ),
+            )
+
+    return mode, currency, time_scale, price_scale, current_r2, powerlaw_series, logperiodic_series

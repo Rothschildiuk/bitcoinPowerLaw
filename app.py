@@ -26,6 +26,7 @@ from core.constants import (
     FORECAST_HORIZON_MAX,
     FORECAST_HORIZON_MIN,
     GENESIS_DATE,
+    OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     KEY_A_PRICE,
     KEY_B_PRICE,
     KEY_A_EURO,
@@ -44,11 +45,13 @@ from core.constants import (
     KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
     KEY_LAST_MODE,
+    KEY_LOGPERIODIC_SERIES,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_THEME_MODE,
+    LOGPERIODIC_SERIES_OPTIONS,
     MODE_LOGPERIODIC,
     MODE_POWERLAW,
     OSC_DEFAULTS,
@@ -79,6 +82,7 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
         KEY_CURRENCY_SELECTOR: CURRENCY_DOLLAR,
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
+        KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -443,23 +447,30 @@ c_hover_text = theme["c_hover_text"]
 c_border = theme["c_border"]
 
 # --- SIDEBAR ASSEMBLY ---
-mode, currency, time_scale, price_scale, current_r2, powerlaw_series = render_sidebar_panel(
-    price_absolute_days,
-    price_log_close,
-    revenue_absolute_days,
-    revenue_log_close,
-    difficulty_absolute_days,
-    difficulty_log_close,
-    hashrate_absolute_days,
-    hashrate_log_close,
-    c_text_main,
-    APP_VERSION,
-    FORECAST_HORIZON_MIN,
-    FORECAST_HORIZON_MAX,
+mode, currency, time_scale, price_scale, current_r2, powerlaw_series, logperiodic_series = (
+    render_sidebar_panel(
+        price_absolute_days,
+        price_log_close,
+        revenue_absolute_days,
+        revenue_log_close,
+        difficulty_absolute_days,
+        difficulty_log_close,
+        hashrate_absolute_days,
+        hashrate_log_close,
+        c_text_main,
+        APP_VERSION,
+        FORECAST_HORIZON_MIN,
+        FORECAST_HORIZON_MAX,
+    )
 )
-
 # Keep backward-compatible keys in sync for oscillator mode code paths.
-if sidebar_currency == CURRENCY_GOLD:
+if mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
+    st.session_state[KEY_A] = float(st.session_state.get(KEY_A_DIFFICULTY, DEFAULT_DIFFICULTY_A))
+    st.session_state[KEY_B] = float(st.session_state.get(KEY_B_DIFFICULTY, DEFAULT_DIFFICULTY_B))
+elif mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_HASHRATE:
+    st.session_state[KEY_A] = float(st.session_state.get(KEY_A_HASHRATE, DEFAULT_HASHRATE_A))
+    st.session_state[KEY_B] = float(st.session_state.get(KEY_B_HASHRATE, DEFAULT_HASHRATE_B))
+elif sidebar_currency == CURRENCY_GOLD:
     st.session_state[KEY_A] = float(st.session_state.get(KEY_A_GOLD, DEFAULT_GOLD_A))
     st.session_state[KEY_B] = float(st.session_state.get(KEY_B_GOLD, DEFAULT_GOLD_B))
 elif sidebar_currency == CURRENCY_EURO:
@@ -485,6 +496,13 @@ if (
     )
     and currency != st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
 ):
+    st.rerun()
+if (
+    mode == MODE_LOGPERIODIC
+    and logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+    and currency != CURRENCY_DOLLAR
+):
+    st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
     st.rerun()
 
 # --- MAIN CALCULATIONS ---
@@ -512,6 +530,26 @@ elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_DIFFICULTY:
     target_series_unit = "Difficulty"
     currency = CURRENCY_DOLLAR
 elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_HASHRATE:
+    raw_df = raw_hashrate_df.copy()
+    active_abs_days = hashrate_absolute_days
+    active_a_key = KEY_A_HASHRATE
+    active_b_key = KEY_B_HASHRATE
+    active_default_a = DEFAULT_HASHRATE_A
+    active_default_b = DEFAULT_HASHRATE_B
+    target_series_name = "Network hashrate"
+    target_series_unit = "Hashrate"
+    currency = CURRENCY_DOLLAR
+elif mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
+    raw_df = raw_difficulty_df.copy()
+    active_abs_days = difficulty_absolute_days
+    active_a_key = KEY_A_DIFFICULTY
+    active_b_key = KEY_B_DIFFICULTY
+    active_default_a = DEFAULT_DIFFICULTY_A
+    active_default_b = DEFAULT_DIFFICULTY_B
+    target_series_name = "Mining difficulty"
+    target_series_unit = "Difficulty"
+    currency = CURRENCY_DOLLAR
+elif mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_HASHRATE:
     raw_df = raw_hashrate_df.copy()
     active_abs_days = hashrate_absolute_days
     active_a_key = KEY_A_HASHRATE
@@ -566,7 +604,11 @@ df_display["Res"] = residual_vals
 df_display["Fair"] = 10 ** df_display["ModelLog"]
 
 currency_context = resolve_currency_format(currency)
-if mode == MODE_POWERLAW and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]:
+if (
+    mode == MODE_POWERLAW and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+) or (
+    mode == MODE_LOGPERIODIC and logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+):
     currency_context = {"prefix": "", "suffix": "", "decimals": 0, "unit": "RAW"}
 currency_prefix = currency_context["prefix"]
 currency_suffix = currency_context["suffix"]
@@ -575,9 +617,19 @@ currency_unit = currency_context["unit"]
 df_display["CloseDisplay"] = df_display["Close"]
 df_display["FairDisplay"] = df_display["Fair"]
 
+# Use a shared LogPeriodic R² mask so scoring follows the same visible segment.
+lp_r2_mask = np.ones(len(df_display), dtype=bool)
+if mode == MODE_LOGPERIODIC and logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]:
+    lp_r2_mask = df_display["AbsDays"].values >= OSCILLATOR_DIFF_HASH_START_ABS_DAYS
+
 # Calculate R2 for Trend if not returned by sidebar (LogPeriodic mode)
 if mode == MODE_LOGPERIODIC:
-    current_r2 = calculate_r2_score(df_display["LogClose"].values, df_display["ModelLog"].values)
+    if np.count_nonzero(lp_r2_mask) > 1:
+        current_r2 = calculate_r2_score(
+            df_display["LogClose"].values[lp_r2_mask], df_display["ModelLog"].values[lp_r2_mask]
+        )
+    else:
+        current_r2 = 0.0
 
 p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
 
@@ -589,26 +641,45 @@ osc_amp_bottom = float(st.session_state.get("amp_factor_bottom", OSC_DEFAULTS["a
 osc_damping = float(st.session_state.get("impulse_damping", OSC_DEFAULTS["impulse_damping"]))
 osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
 r2_combined = current_r2
+osc_reference_log_day = float(df_display["LogD"].min())
 
 if mode == MODE_LOGPERIODIC:
     try:
-        fit_result = oscillator.fit_oscillator_component(
-            df_display["LogD"].values,
-            df_display["Res"].values,
-            osc_t1_age,
-            osc_lambda,
-            osc_amp_top,
-            osc_amp_bottom,
-            osc_damping,
-        )
+        osc_fit_mask = lp_r2_mask.copy()
+        osc_fit_log_d = df_display["LogD"].values[osc_fit_mask]
+        osc_fit_residuals = df_display["Res"].values[osc_fit_mask]
+        if osc_fit_log_d.size > 0:
+            osc_reference_log_day = float(np.min(osc_fit_log_d))
+
+        fit_result = None
+        if osc_fit_log_d.size > 1:
+            fit_result = oscillator.fit_oscillator_component(
+                osc_fit_log_d,
+                osc_fit_residuals,
+                osc_t1_age,
+                osc_lambda,
+                osc_amp_top,
+                osc_amp_bottom,
+                osc_damping,
+            )
         if fit_result is None:
             osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
             osc_model_vals = np.zeros_like(df_display["Res"].values, dtype=float)
         else:
-            osc_amp, osc_omega, osc_phi, osc_model_vals = fit_result
+            osc_amp, osc_omega, osc_phi, osc_model_fit = fit_result
+            osc_model_vals = np.zeros_like(df_display["Res"].values, dtype=float)
+            osc_model_vals[osc_fit_mask] = osc_model_fit
 
-        total_model_log = df_display["ModelLog"] + osc_model_vals
-        r2_combined = calculate_r2_score(df_display["LogClose"].values, total_model_log) * 100
+        total_model_log = df_display["ModelLog"].values + osc_model_vals
+        if np.count_nonzero(osc_fit_mask) > 1:
+            r2_combined = (
+                calculate_r2_score(
+                    df_display["LogClose"].values[osc_fit_mask], total_model_log[osc_fit_mask]
+                )
+                * 100
+            )
+        else:
+            r2_combined = current_r2
     except Exception as e:
         st.error(f"LogPeriodic Error: {e}")
         osc_t1_age = OSC_DEFAULTS["t1_age"]
@@ -635,7 +706,7 @@ m_osc_y = oscillator.build_oscillator_curve(
     osc_amp_top,
     osc_amp_bottom,
     osc_damping,
-    float(df_display["LogD"].min()),
+    osc_reference_log_day,
 )
 
 is_log_time = time_scale == TIME_LOG
@@ -683,6 +754,14 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
             mode == MODE_POWERLAW
             and powerlaw_series
             in [POWERLAW_SERIES_REVENUE, POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+        ),
+        osc_visible_start_abs_day=(
+            OSCILLATOR_DIFF_HASH_START_ABS_DAYS
+            if (
+                mode == MODE_LOGPERIODIC
+                and logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+            )
+            else None
         ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"

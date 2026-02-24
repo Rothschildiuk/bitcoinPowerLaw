@@ -18,6 +18,11 @@ def fit_oscillator_component(
     bottom_amplitude_factor,
     impulse_damping,
 ):
+    if (not np.isfinite(t1_cycle_age_years)) or t1_cycle_age_years <= 0:
+        return None
+    if (not np.isfinite(cycle_lambda)) or cycle_lambda <= 0:
+        return None
+
     log_lambda = np.log10(cycle_lambda)
     if abs(log_lambda) <= 1e-9:
         return None
@@ -74,8 +79,8 @@ def compute_oscillator_fit_r2(
 def optimize_oscillator_parameters(log_days, residual_series, initial_params):
     optimized_params = dict(initial_params)
     bounds = {
-        "t1_age": (2.0, 3.0),
-        "lambda_val": (1.5, 3.0),
+        "t1_age": (0.5, 3.0),
+        "lambda_val": (1.5, 5.0),
         "amp_factor_top": (0.1, 10.0),
         "amp_factor_bottom": (0.1, 10.0),
         "impulse_damping": (0.0, 2.0),
@@ -250,8 +255,10 @@ oscillator_func_manual = build_oscillator_curve
 
 
 # --- SIDEBAR RENDERER ---
-def render_sidebar(all_abs_days, all_log_close, text_color):
-    defaults = dict(OSC_DEFAULTS)
+def render_sidebar(
+    all_abs_days, all_log_close, text_color, defaults_override=None, min_abs_day_for_fit=None
+):
+    defaults = dict(defaults_override or OSC_DEFAULTS)
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
@@ -262,6 +269,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
 
     days_since_genesis = all_abs_days - st.session_state.get(KEY_GENESIS_OFFSET, 0)
     valid_days_mask = days_since_genesis > 0
+    if min_abs_day_for_fit is not None:
+        valid_days_mask = valid_days_mask & (all_abs_days >= float(min_abs_day_for_fit))
     oscillator_r2_display = 0.0
     log_days = None
     residual_series = None
@@ -319,11 +328,12 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
             auto_fit_label="AF",
         )
 
-    render_oscillator_control("1st Cycle Age", "t1_age", 0.001, 2.0, 3.0)
-    render_oscillator_control("Lambda", "lambda_val", 0.01, 1.5, 3.0)
-    render_oscillator_control("Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0)
-    render_oscillator_control("Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0)
-    render_oscillator_control("Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0)
+    render_oscillator_control("1st Cycle Age", "t1_age", 0.01, 0.5, 3.0)
+    render_oscillator_control("Lambda", "lambda_val", 0.01, 1.5, 5.0)
+    # Keep advanced amplitude/damping parameters fixed to defaults in LogPeriodic sidebar.
+    st.session_state["amp_factor_top"] = float(defaults["amp_factor_top"])
+    st.session_state["amp_factor_bottom"] = float(defaults["amp_factor_bottom"])
+    st.session_state["impulse_damping"] = float(defaults["impulse_damping"])
 
     # --- R2 Calculation for Sidebar Display ---
     if has_fit_data:

@@ -111,6 +111,7 @@ def render_main_model_chart(
     target_series_name,
     target_series_unit,
     show_halving_lines,
+    osc_visible_start_abs_day=None,
     chart_key,
 ):
     fig = go.Figure()
@@ -270,14 +271,22 @@ def render_main_model_chart(
             tickfont=tick_font,
         )
     else:
+        osc_mask = np.ones(len(df_display), dtype=bool)
+        if osc_visible_start_abs_day is not None:
+            osc_mask = df_display["AbsDays"].to_numpy(dtype=float) >= float(osc_visible_start_abs_day)
+
+        osc_x_vals = np.asarray(plot_x_osc)[osc_mask]
+        osc_y_vals = df_display["Res"].to_numpy(dtype=float)[osc_mask]
+        osc_dates = df_display.index.strftime("%d.%m.%Y").to_numpy()[osc_mask]
+
         fig.add_trace(
             go.Scatter(
-                x=plot_x_osc,
-                y=df_display["Res"],
+                x=osc_x_vals,
+                y=osc_y_vals,
                 mode="lines",
                 name="LogPeriodic",
                 line=dict(color="#0ecb81", width=1.2),
-                customdata=df_display.index.strftime("%d.%m.%Y"),
+                customdata=osc_dates,
                 hovertemplate="<b>LogPeriodic</b>: %{y:.3f}<extra></extra>",
             )
         )
@@ -296,6 +305,9 @@ def render_main_model_chart(
 
         for i in range(6):
             halving_days_val = osc_t1_age * (osc_lambda**i) * 365.25
+            # Skip far-future synthetic halvings outside the rendered model horizon.
+            if halving_days_val > float(view_max):
+                continue
             hv_x = (
                 halving_days_val
                 if is_log_time
