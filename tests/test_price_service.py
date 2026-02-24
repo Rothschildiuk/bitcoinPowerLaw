@@ -65,9 +65,10 @@ class TestPriceService(unittest.TestCase):
 
     @patch("services.price_service._safe_download_close_series")
     @patch("services.price_service._safe_download_btc_tail_from_coingecko")
+    @patch("services.price_service._safe_download_btc_tail_from_coincap")
     @patch("services.price_service.pd.read_csv")
     def test_load_prepared_price_data_uses_coingecko_fallback_when_yfinance_empty(
-        self, mock_read_csv, mock_cg_tail, mock_safe_download
+        self, mock_read_csv, mock_cc_tail, mock_cg_tail, mock_safe_download
     ):
         price_service.load_prepared_price_data.clear()
         csv_df = pd.DataFrame(
@@ -82,6 +83,7 @@ class TestPriceService(unittest.TestCase):
             [7300.0],
             index=pd.to_datetime(["2020-01-03"]),
         )
+        mock_cc_tail.return_value = pd.Series(dtype=float)
 
         result = price_service.load_prepared_price_data(
             price_history_url="unused.csv",
@@ -90,6 +92,36 @@ class TestPriceService(unittest.TestCase):
 
         self.assertIn(pd.Timestamp("2020-01-03"), result.index)
         self.assertEqual(float(result.loc[pd.Timestamp("2020-01-03"), "Close"]), 7300.0)
+
+    @patch("services.price_service._safe_download_close_series")
+    @patch("services.price_service._safe_download_btc_tail_from_coingecko")
+    @patch("services.price_service._safe_download_btc_tail_from_coincap")
+    @patch("services.price_service.pd.read_csv")
+    def test_load_prepared_price_data_uses_coincap_fallback_when_others_empty(
+        self, mock_read_csv, mock_cc_tail, mock_cg_tail, mock_safe_download
+    ):
+        price_service.load_prepared_price_data.clear()
+        csv_df = pd.DataFrame(
+            {
+                "Date": ["2020-01-01", "2020-01-02"],
+                "Price": [7000.0, 7100.0],
+            }
+        )
+        mock_read_csv.return_value = csv_df
+        mock_safe_download.return_value = pd.Series(dtype=float)
+        mock_cg_tail.return_value = pd.Series(dtype=float)
+        mock_cc_tail.return_value = pd.Series(
+            [7350.0],
+            index=pd.to_datetime(["2020-01-03"]),
+        )
+
+        result = price_service.load_prepared_price_data(
+            price_history_url="unused.csv",
+            stale_after_days=0,
+        )
+
+        self.assertIn(pd.Timestamp("2020-01-03"), result.index)
+        self.assertEqual(float(result.loc[pd.Timestamp("2020-01-03"), "Close"]), 7350.0)
 
     @patch("services.price_service.pd.read_csv")
     def test_load_prepared_miner_revenue_data_parses_timestamp_value(self, mock_read_csv):

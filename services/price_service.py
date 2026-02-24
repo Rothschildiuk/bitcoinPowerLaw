@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import time
 import urllib.request
 
 import numpy as np
@@ -75,16 +76,22 @@ def _safe_download_close_series(symbol, start_date):
 
 
 def _safe_download_btc_tail_from_coingecko(start_date):
-    try:
-        start_ts = int(pd.Timestamp(start_date).timestamp())
-        end_ts = int(pd.Timestamp.utcnow().timestamp())
-        url = (
-            "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range"
-            f"?vs_currency=usd&from={start_ts}&to={end_ts}"
-        )
-        with urllib.request.urlopen(url, timeout=10) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception:
+    start_ts = int(pd.Timestamp(start_date).timestamp())
+    end_ts = int(pd.Timestamp.utcnow().timestamp())
+    url = (
+        "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range"
+        f"?vs_currency=usd&from={start_ts}&to={end_ts}"
+    )
+    payload = None
+    for _ in range(3):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "PowerLaw/1.0"})
+            with urllib.request.urlopen(request, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            break
+        except Exception:
+            time.sleep(0.4)
+    if payload is None:
         return pd.Series(dtype=float)
 
     prices = payload.get("prices", [])
@@ -99,6 +106,37 @@ def _safe_download_btc_tail_from_coingecko(start_date):
     daily_tail = tail_df.groupby("Day", as_index=True)["Close"].last()
     daily_tail.index = pd.to_datetime(daily_tail.index)
     daily_tail = pd.to_numeric(daily_tail, errors="coerce").dropna()
+    return daily_tail.astype(float)
+
+
+def _safe_download_btc_tail_from_coincap(start_date):
+    try:
+        start_ms = int(pd.Timestamp(start_date).timestamp() * 1000)
+        end_ms = int(pd.Timestamp.utcnow().timestamp() * 1000)
+        url = (
+            "https://api.coincap.io/v2/assets/bitcoin/history"
+            f"?interval=d1&start={start_ms}&end={end_ms}"
+        )
+        request = urllib.request.Request(url, headers={"User-Agent": "PowerLaw/1.0"})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return pd.Series(dtype=float)
+
+    rows = payload.get("data", [])
+    if not rows:
+        return pd.Series(dtype=float)
+
+    history_df = pd.DataFrame(rows)
+    if "time" not in history_df.columns or "priceUsd" not in history_df.columns:
+        return pd.Series(dtype=float)
+
+    history_df["Date"] = pd.to_datetime(history_df["time"], unit="ms", utc=True).dt.tz_localize(None)
+    history_df["Close"] = pd.to_numeric(history_df["priceUsd"], errors="coerce")
+    history_df = history_df.dropna(subset=["Date", "Close"]).sort_values("Date")
+    history_df["Day"] = history_df["Date"].dt.normalize()
+    daily_tail = history_df.groupby("Day", as_index=True)["Close"].last()
+    daily_tail.index = pd.to_datetime(daily_tail.index)
     return daily_tail.astype(float)
 
 
@@ -149,6 +187,10 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
         )
         if btc_tail.empty:
             btc_tail = _safe_download_btc_tail_from_coingecko(
+                (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+            )
+        if btc_tail.empty:
+            btc_tail = _safe_download_btc_tail_from_coincap(
                 (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
             )
         if not btc_tail.empty:
