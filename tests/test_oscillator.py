@@ -68,11 +68,35 @@ class TestOscillator(unittest.TestCase):
 
         optimized = oscillator.optimize_oscillator_parameters(log_days, residuals, initial_params)
 
-        self.assertTrue(0.1 <= optimized["t1_age"] <= 5.0)
+        self.assertTrue(2.0 <= optimized["t1_age"] <= 3.0)
         self.assertTrue(1.5 <= optimized["lambda_val"] <= 3.0)
         self.assertTrue(0.1 <= optimized["amp_factor_top"] <= 10.0)
         self.assertTrue(0.1 <= optimized["amp_factor_bottom"] <= 10.0)
         self.assertTrue(0.0 <= optimized["impulse_damping"] <= 2.0)
+
+    def test_optimize_single_oscillator_parameter_returns_value_in_bounds(self):
+        log_days = np.linspace(0.5, 3.0, 250)
+        residuals = np.cos(2.5 * log_days) * np.exp(-0.3 * (log_days - log_days.min()))
+        current_params = {
+            "t1_age": 2.49,
+            "lambda_val": 2.01,
+            "amp_factor_top": 1.13,
+            "amp_factor_bottom": 0.88,
+            "impulse_damping": 1.71,
+        }
+
+        best_value, best_r2 = oscillator.optimize_single_oscillator_parameter(
+            log_days,
+            residuals,
+            current_params,
+            parameter_key="lambda_val",
+            min_value=1.5,
+            max_value=3.0,
+            grid_points=25,
+        )
+
+        self.assertTrue(1.5 <= best_value <= 3.0)
+        self.assertTrue(np.isfinite(best_r2))
 
 
 if __name__ == "__main__":

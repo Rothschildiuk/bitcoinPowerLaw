@@ -310,5 +310,9 @@ def render_main_model_chart(
         hoverlabel=hover_label,
     )
     st.plotly_chart(
-        fig, width="stretch", theme=None, config={"displayModeBar": False}, key=chart_key
+        fig,
+        width="stretch",
+        theme=None,
+        config={"displayModeBar": True},
+        key=chart_key,
     )

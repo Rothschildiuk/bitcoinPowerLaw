@@ -11,6 +11,7 @@ from core.utils import calculate_r2_score, fancy_control, get_stable_trend_fit
 
 AUTO_FIT_MAX_PASSES = 2
 AUTO_FIT_GRID_POINTS = 9
+AUTO_FIT_SINGLE_GRID_POINTS = 41
 
 
 def fit_oscillator_component(
@@ -78,7 +79,7 @@ def compute_oscillator_fit_r2(
 def optimize_oscillator_parameters(log_days, residual_series, initial_params):
     optimized_params = dict(initial_params)
     bounds = {
-        "t1_age": (0.1, 5.0),
+        "t1_age": (2.0, 3.0),
         "lambda_val": (1.5, 3.0),
         "amp_factor_top": (0.1, 10.0),
         "amp_factor_bottom": (0.1, 10.0),
@@ -141,6 +142,51 @@ def optimize_oscillator_parameters(log_days, residual_series, initial_params):
             break
 
     return optimized_params
+
+
+def optimize_single_oscillator_parameter(
+    log_days,
+    residual_series,
+    current_params,
+    parameter_key,
+    min_value,
+    max_value,
+    step_value=None,
+    grid_points=AUTO_FIT_SINGLE_GRID_POINTS,
+):
+    params = dict(current_params)
+    if step_value is not None and step_value > 0:
+        candidates = np.arange(min_value, max_value + (step_value * 0.5), step_value)
+    else:
+        candidates = np.linspace(min_value, max_value, grid_points)
+    best_value = float(params[parameter_key])
+    best_r2 = compute_oscillator_fit_r2(
+        log_days,
+        residual_series,
+        params["t1_age"],
+        params["lambda_val"],
+        params["amp_factor_top"],
+        params["amp_factor_bottom"],
+        params["impulse_damping"],
+    )
+
+    for candidate in candidates:
+        trial = dict(params)
+        trial[parameter_key] = float(candidate)
+        score = compute_oscillator_fit_r2(
+            log_days,
+            residual_series,
+            trial["t1_age"],
+            trial["lambda_val"],
+            trial["amp_factor_top"],
+            trial["amp_factor_bottom"],
+            trial["impulse_damping"],
+        )
+        if score > best_r2:
+            best_r2 = score
+            best_value = float(candidate)
+
+    return best_value, best_r2
 
 
 def build_autofit_signature(all_abs_days, all_log_close):
@@ -222,8 +268,11 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
     days_since_genesis = all_abs_days - st.session_state.get(KEY_GENESIS_OFFSET, 0)
     valid_days_mask = days_since_genesis > 0
     oscillator_r2_display = 0.0
+    log_days = None
+    residual_series = None
+    has_fit_data = np.count_nonzero(valid_days_mask) > 100
 
-    if np.count_nonzero(valid_days_mask) > 100:
+    if has_fit_data:
         log_days = np.log10(days_since_genesis[valid_days_mask])
         _, _, trend_log_prices, residual_series = get_stable_trend_fit(
             log_days,
@@ -232,23 +281,57 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
             float(st.session_state.B),
         )
 
-    st.markdown("**1st Cycle Age**")
-    fancy_control("1st Cycle Age", "t1_age", 0.01, 0.1, 5.0)
+    def auto_fit_single_parameter(parameter_key, min_value, max_value, step_value):
+        if not has_fit_data:
+            return
 
-    st.markdown("**Lambda**")
-    fancy_control("Lambda", "lambda_val", 0.01, 1.5, 3.0)
+        current_params = {
+            "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
+            "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
+            "amp_factor_top": float(st.session_state.get("amp_factor_top", defaults["amp_factor_top"])),
+            "amp_factor_bottom": float(
+                st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])
+            ),
+            "impulse_damping": float(st.session_state.get("impulse_damping", defaults["impulse_damping"])),
+        }
 
-    st.markdown("**Top Amplitude**")
-    fancy_control("Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0)
+        best_value, _ = optimize_single_oscillator_parameter(
+            log_days,
+            residual_series,
+            current_params,
+            parameter_key,
+            min_value,
+            max_value,
+            step_value=step_value,
+        )
 
-    st.markdown("**Bottom Amplitude**")
-    fancy_control("Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0)
+        step_text = f"{step_value:.10f}".rstrip("0")
+        precision = len(step_text.split(".")[1]) if "." in step_text else 0
+        clipped_best = min(max_value, max(min_value, float(best_value)))
+        st.session_state[parameter_key] = round(clipped_best, precision)
 
-    st.markdown("**Impulse Damping**")
-    fancy_control("Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0)
+    def render_oscillator_control(title, key, step, min_v, max_v):
+        st.markdown(f"**{title}**")
+        fancy_control(
+            title,
+            key,
+            step,
+            min_v,
+            max_v,
+            on_auto_fit=lambda k=key, lo=min_v, hi=max_v, stp=step: auto_fit_single_parameter(
+                k, lo, hi, stp
+            ),
+            auto_fit_label="AF",
+        )
+
+    render_oscillator_control("1st Cycle Age", "t1_age", 0.001, 2.0, 3.0)
+    render_oscillator_control("Lambda", "lambda_val", 0.01, 1.5, 3.0)
+    render_oscillator_control("Top Amplitude", "amp_factor_top", 0.01, 0.1, 10.0)
+    render_oscillator_control("Bottom Amplitude", "amp_factor_bottom", 0.01, 0.1, 10.0)
+    render_oscillator_control("Impulse Damping", "impulse_damping", 0.01, 0.0, 2.0)
 
     # --- R2 Calculation for Sidebar Display ---
-    if np.count_nonzero(valid_days_mask) > 100:
+    if has_fit_data:
         oscillator_r2_display = compute_oscillator_fit_r2(
             log_days,
             residual_series,

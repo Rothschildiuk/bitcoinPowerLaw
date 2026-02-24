@@ -41,24 +41,41 @@ def inline_radio_control(
         )
 
 
-def fancy_control(label, key, step, min_v, max_v, disabled=False, on_manual_change=None):
-    c1, c2, c3 = st.columns([1, 2.5, 1])
+def fancy_control(
+    label,
+    key,
+    step,
+    min_v,
+    max_v,
+    disabled=False,
+    on_manual_change=None,
+    on_auto_fit=None,
+    auto_fit_label="AF",
+):
+    has_auto_fit = on_auto_fit is not None
+    if has_auto_fit:
+        c1, c2, c3, c4 = st.columns([1, 2.5, 1, 1])
+    else:
+        c1, c2, c3 = st.columns([1, 2.5, 1])
+    step_text = f"{step:.10f}".rstrip("0")
+    precision = len(step_text.split(".")[1]) if "." in step_text else 0
+    display_format = f"%.{precision}f"
     current_value = st.session_state.get(key, min_v)
     try:
         current_value = float(current_value)
     except (TypeError, ValueError):
         current_value = min_v
-    st.session_state[key] = round(min(max_v, max(min_v, current_value)), 3)
+    st.session_state[key] = round(min(max_v, max(min_v, current_value)), precision)
 
     def on_minus():
         new_val = st.session_state[key] - step
-        st.session_state[key] = round(max(min_v, new_val), 3)
+        st.session_state[key] = round(max(min_v, new_val), precision)
         if on_manual_change is not None:
             on_manual_change()
 
     def on_plus():
         new_val = st.session_state[key] + step
-        st.session_state[key] = round(min(max_v, new_val), 3)
+        st.session_state[key] = round(min(max_v, new_val), precision)
         if on_manual_change is not None:
             on_manual_change()
 
@@ -70,6 +87,13 @@ def fancy_control(label, key, step, min_v, max_v, disabled=False, on_manual_chan
         pass
     if c3.button("➕", key=f"{key}_p", disabled=disabled, on_click=on_plus):
         pass
+    if has_auto_fit and c4.button(
+        auto_fit_label,
+        key=f"{key}_af",
+        disabled=disabled,
+        on_click=on_auto_fit,
+    ):
+        pass
 
     return c2.slider(
         key,
@@ -77,6 +101,7 @@ def fancy_control(label, key, step, min_v, max_v, disabled=False, on_manual_chan
         max_v,
         key=key,
         step=step,
+        format=display_format,
         label_visibility="collapsed",
         disabled=disabled,
         on_change=on_slider_change,

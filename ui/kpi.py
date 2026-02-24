@@ -39,5 +39,6 @@ def render_model_kpis(
         "#0ecb81" if diff < 0 else "#ea3d2f",
     )
     _kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
+
     _kpi_card(k4, "TIME BELOW FAIR", f"{below_fair_pct:.1f}%", "history share", "#0ecb81")
     _kpi_card(k5, "TIME ABOVE FAIR", f"{above_fair_pct:.1f}%", "history share", "#ea3d2f")

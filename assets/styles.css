@@ -1,10 +1,27 @@
 .stApp, [data-testId="stAppViewContainer"] { background-color: __C_MAIN_BG__ !important; }
 .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; padding-left: 1rem !important; padding-right: 1rem !important; }
 footer {visibility: hidden; display: none;}
-[data-testId="stHeader"] { background-color: transparent; color: __C_TEXT_MAIN__; }
+[data-testid="stHeader"],
+[data-testId="stHeader"] {
+    display: none !important;
+    height: 0 !important;
+    pointer-events: none !important;
+    background-color: transparent;
+    color: __C_TEXT_MAIN__;
+}
+[class*="stAppHeader"],
+[class*="stAppToolbar"] {
+    display: none !important;
+    height: 0 !important;
+    pointer-events: none !important;
+}
+[data-testid="stHeader"] button,
 [data-testId="stHeader"] button { color: __C_TEXT_MAIN__ !important; }
 [data-testId="stAppDeployButton"] { display: none !important; }
 #MainMenu { visibility: hidden !important; }
+[data-testid="stToolbar"], [data-testId="stToolbar"], div[class*="stAppToolbar"] {
+    pointer-events: none !important;
+}
 
 [data-testId="stSidebar"] { width: 360px !important; background-color: __C_SIDEBAR_BG__ !important; border-right: 1px solid __C_BORDER__; }
 [data-testId="stSidebarContent"] { overflow-x: hidden !important; }
@@ -121,4 +138,58 @@ div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checke
 
 [data-testid="stMain"] .stRadio label[data-baseweb="radio"][aria-checked="true"] p {
     color: #111827 !important;
+}
+
+@media (max-width: 900px) {
+    .block-container {
+        padding-top: 0.5rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+
+    [data-testid="stSidebar"],
+    [data-testId="stSidebar"] {
+        width: min(92vw, 320px) !important;
+    }
+
+    .app-title {
+        font-size: 1.6rem;
+    }
+
+    .metric-card {
+        min-height: 88px;
+        padding: 8px 10px;
+    }
+
+    .metric-label {
+        font-size: 11px;
+    }
+
+    .metric-value {
+        font-size: 17px;
+    }
+
+    .metric-delta {
+        font-size: 11px;
+    }
+
+    [data-testid="stMain"] .stRadio > div[role="radiogroup"] {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
+
+    [data-testid="stMain"] .stRadio label[data-baseweb="radio"] {
+        padding: 4px 8px;
+    }
+
+    [data-testid="stMain"] .stRadio label[data-baseweb="radio"] p {
+        font-size: 14px !important;
+    }
+
+    .stButton > button {
+        height: 32px !important;
+        font-size: 14px !important;
+    }
 }

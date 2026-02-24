@@ -5,20 +5,20 @@ APP_VERSION = "1.0"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 
 # Model defaults
-DEFAULT_A = -17.0
-DEFAULT_B = 5.8
+DEFAULT_A = -16.520
+DEFAULT_B = 5.693
 OSC_DEFAULTS = {
     "lambda_val": 2.01,
-    "t1_age": 2.49,
+    "t1_age": 2.489,
     "amp_factor_top": 1.13,
     "amp_factor_bottom": 0.88,
-    "impulse_damping": 1.71,
+    "impulse_damping": 1.72,
 }
 
 # Forecast limits
 DEFAULT_FORECAST_HORIZON = 6
 FORECAST_HORIZON_MIN = 1
-FORECAST_HORIZON_MAX = 12
+FORECAST_HORIZON_MAX = 100
 
 # Session-state keys
 KEY_THEME_MODE = "theme_mode"

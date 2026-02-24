@@ -1,7 +1,7 @@
 import numpy as np
 import streamlit as st
 
-from core.constants import KEY_A, KEY_B, KEY_GENESIS_OFFSET, KEY_POWERLAW_AUTO_FIT
+from core.constants import DEFAULT_A, DEFAULT_B, KEY_A, KEY_B, KEY_GENESIS_OFFSET
 from core.utils import calculate_r2_score, fancy_control, inline_radio_control
 
 # --- MATH CORE ---
@@ -49,6 +49,73 @@ def find_best_fit_params(absolute_days, log_prices):
     return 0, intercept_a, slope_b, r2_score
 
 
+def optimize_single_powerlaw_parameter(
+    absolute_days,
+    log_prices,
+    genesis_offset_days,
+    current_intercept_a,
+    current_slope_b,
+    parameter_key,
+):
+    if parameter_key == "A":
+        coarse_candidates = np.linspace(-25.0, 0.0, 201)
+        best_value = float(current_intercept_a)
+        best_r2 = calculate_r2_for_manual_params(
+            absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
+        )
+        for candidate in coarse_candidates:
+            score = calculate_r2_for_manual_params(
+                absolute_days, log_prices, genesis_offset_days, float(candidate), current_slope_b
+            )
+            if score > best_r2:
+                best_r2 = score
+                best_value = float(candidate)
+
+        fine_lo = max(-25.0, best_value - 0.2)
+        fine_hi = min(0.0, best_value + 0.2)
+        fine_candidates = np.linspace(fine_lo, fine_hi, 401)
+        for candidate in fine_candidates:
+            score = calculate_r2_for_manual_params(
+                absolute_days, log_prices, genesis_offset_days, float(candidate), current_slope_b
+            )
+            if score > best_r2:
+                best_r2 = score
+                best_value = float(candidate)
+
+        return round(best_value, 3), best_r2
+
+    if parameter_key == "B":
+        coarse_candidates = np.linspace(1.0, 9.0, 201)
+        best_value = float(current_slope_b)
+        best_r2 = calculate_r2_for_manual_params(
+            absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
+        )
+        for candidate in coarse_candidates:
+            score = calculate_r2_for_manual_params(
+                absolute_days, log_prices, genesis_offset_days, current_intercept_a, float(candidate)
+            )
+            if score > best_r2:
+                best_r2 = score
+                best_value = float(candidate)
+
+        fine_lo = max(1.0, best_value - 0.15)
+        fine_hi = min(9.0, best_value + 0.15)
+        fine_candidates = np.linspace(fine_lo, fine_hi, 301)
+        for candidate in fine_candidates:
+            score = calculate_r2_for_manual_params(
+                absolute_days, log_prices, genesis_offset_days, current_intercept_a, float(candidate)
+            )
+            if score > best_r2:
+                best_r2 = score
+                best_value = float(candidate)
+
+        return round(best_value, 3), best_r2
+
+    return round(float(current_intercept_a), 3), calculate_r2_for_manual_params(
+        absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
+    )
+
+
 # Backward-compatible alias used by existing code.
 def find_global_best_fit_optimized(all_abs_days, all_log_close):
     return find_best_fit_params(all_abs_days, all_log_close)
@@ -62,21 +129,19 @@ def render_sidebar(
     if KEY_GENESIS_OFFSET not in st.session_state:
         st.session_state[KEY_GENESIS_OFFSET] = 0
 
-    opt_offset, opt_a, opt_b, _ = find_best_fit_params(all_abs_days, all_log_close)
+    opt_offset = 0
+    opt_a = DEFAULT_A
+    opt_b = DEFAULT_B
 
     if KEY_A not in st.session_state:
-        st.session_state[KEY_A] = float(round(opt_a, 3))
+        st.session_state[KEY_A] = float(DEFAULT_A)
     if KEY_B not in st.session_state:
-        st.session_state[KEY_B] = float(round(opt_b, 3))
+        st.session_state[KEY_B] = float(DEFAULT_B)
 
     def reset_powerlaw_params():
         st.session_state[KEY_GENESIS_OFFSET] = int(opt_offset)
-        st.session_state[KEY_A] = float(round(opt_a, 3))
-        st.session_state[KEY_B] = float(round(opt_b, 3))
-        st.session_state[KEY_POWERLAW_AUTO_FIT] = False
-
-    if KEY_POWERLAW_AUTO_FIT not in st.session_state:
-        st.session_state[KEY_POWERLAW_AUTO_FIT] = True
+        st.session_state[KEY_A] = float(DEFAULT_A)
+        st.session_state[KEY_B] = float(DEFAULT_B)
 
     # Controls - Time scale removed, Price scale optional
     if show_price_scale:
@@ -84,39 +149,57 @@ def render_sidebar(
     else:
         price_scale = "Log"
 
-    auto_fit = st.checkbox(
-        "Auto-Fit A & B",
-        key=KEY_POWERLAW_AUTO_FIT,
-        help="Automatically calculate best Slope (B) and Intercept (A) when Offset changes.",
-    )
-
-    def disable_auto_fit():
-        st.session_state[KEY_POWERLAW_AUTO_FIT] = False
-
-    # Get current values safely
-    current_intercept_a = st.session_state.get(KEY_A, opt_a)
-    current_slope_b = st.session_state.get(KEY_B, opt_b)
-    current_offset_days = st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)
-
-    if auto_fit:
-        # Calculate BEST fit parameters
-        fitted_slope_b, fitted_intercept_a, fitted_r2_score = fit_powerlaw_regression(
-            all_abs_days, all_log_close, current_offset_days
+    def auto_fit_intercept():
+        best_a, _ = optimize_single_powerlaw_parameter(
+            all_abs_days,
+            all_log_close,
+            int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
+            float(st.session_state.get(KEY_A, opt_a)),
+            float(st.session_state.get(KEY_B, opt_b)),
+            "A",
         )
-        st.session_state[KEY_A] = float(round(fitted_intercept_a, 3))
-        st.session_state[KEY_B] = float(round(fitted_slope_b, 3))
-        display_r2 = fitted_r2_score
-    else:
-        # Calculate R2 based on MANUAL sliders (The Fix)
-        display_r2 = calculate_r2_for_manual_params(
-            all_abs_days, all_log_close, current_offset_days, current_intercept_a, current_slope_b
+        st.session_state[KEY_A] = float(best_a)
+
+    def auto_fit_slope():
+        best_b, _ = optimize_single_powerlaw_parameter(
+            all_abs_days,
+            all_log_close,
+            int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
+            float(st.session_state.get(KEY_A, opt_a)),
+            float(st.session_state.get(KEY_B, opt_b)),
+            "B",
         )
+        st.session_state[KEY_B] = float(best_b)
 
     st.markdown("**A (Intercept)**")
-    fancy_control("A (Intercept)", KEY_A, 0.01, -25.0, 0.0, on_manual_change=disable_auto_fit)
+    fancy_control(
+        "A (Intercept)",
+        KEY_A,
+        0.001,
+        -25.0,
+        0.0,
+        on_auto_fit=auto_fit_intercept,
+        auto_fit_label="AF",
+    )
 
     st.markdown("**B (Slope)**")
-    fancy_control("B (Slope)", KEY_B, 0.01, 1.0, 9.0, on_manual_change=disable_auto_fit)
+    fancy_control(
+        "B (Slope)",
+        KEY_B,
+        0.001,
+        1.0,
+        9.0,
+        on_auto_fit=auto_fit_slope,
+        auto_fit_label="AF",
+    )
+
+    display_r2 = calculate_r2_for_manual_params(
+        all_abs_days,
+        all_log_close,
+        int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
+        float(st.session_state.get(KEY_A, opt_a)),
+        float(st.session_state.get(KEY_B, opt_b)),
+    )
 
     if callable(render_extra_controls):
         render_extra_controls()

@@ -28,7 +28,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     st.number_input(
         "BTC quantity",
         min_value=0.0,
-        value=float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 1.0)),
+        value=float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)),
         step=0.01,
         format="%.2f",
         key=KEY_PORTFOLIO_BTC_AMOUNT,
