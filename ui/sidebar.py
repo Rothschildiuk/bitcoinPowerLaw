@@ -3,15 +3,25 @@ import streamlit as st
 from core import oscillator, power_law
 from core.constants import (
     CURRENCY_DOLLAR,
+    CURRENCY_EURO,
+    CURRENCY_GOLD,
     CURRENCY_OPTIONS,
     DEFAULT_A,
     DEFAULT_B,
+    DEFAULT_EURO_A,
+    DEFAULT_EURO_B,
+    DEFAULT_GOLD_A,
+    DEFAULT_GOLD_B,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
     DEFAULT_FORECAST_HORIZON,
     KEY_A_PRICE,
+    KEY_A_EURO,
+    KEY_A_GOLD,
     KEY_A_REVENUE,
     KEY_B_PRICE,
+    KEY_B_EURO,
+    KEY_B_GOLD,
     KEY_B_REVENUE,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
@@ -180,6 +190,25 @@ def render_sidebar_panel(
         b_key = KEY_B_PRICE
         default_a = DEFAULT_A
         default_b = DEFAULT_B
+
+        if (
+            mode in [MODE_POWERLAW, MODE_PORTFOLIO]
+            and (mode != MODE_POWERLAW or powerlaw_series == POWERLAW_SERIES_PRICE)
+            and currency == CURRENCY_GOLD
+        ):
+            a_key = KEY_A_GOLD
+            b_key = KEY_B_GOLD
+            default_a = DEFAULT_GOLD_A
+            default_b = DEFAULT_GOLD_B
+        if (
+            mode in [MODE_POWERLAW, MODE_PORTFOLIO]
+            and (mode != MODE_POWERLAW or powerlaw_series == POWERLAW_SERIES_PRICE)
+            and currency == CURRENCY_EURO
+        ):
+            a_key = KEY_A_EURO
+            b_key = KEY_B_EURO
+            default_a = DEFAULT_EURO_A
+            default_b = DEFAULT_EURO_B
 
         if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE:
             model_abs_days = revenue_absolute_days

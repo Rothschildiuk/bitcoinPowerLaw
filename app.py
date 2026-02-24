@@ -13,6 +13,10 @@ from core.constants import (
     DEFAULT_THEME,
     DEFAULT_A,
     DEFAULT_B,
+    DEFAULT_EURO_A,
+    DEFAULT_EURO_B,
+    DEFAULT_GOLD_A,
+    DEFAULT_GOLD_B,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
     FORECAST_HORIZON_MAX,
@@ -20,6 +24,10 @@ from core.constants import (
     GENESIS_DATE,
     KEY_A_PRICE,
     KEY_B_PRICE,
+    KEY_A_EURO,
+    KEY_B_EURO,
+    KEY_A_GOLD,
+    KEY_B_GOLD,
     KEY_A_REVENUE,
     KEY_B_REVENUE,
     KEY_A,
@@ -70,6 +78,14 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
         st.session_state[KEY_A_PRICE] = DEFAULT_A
     if KEY_B_PRICE not in st.session_state:
         st.session_state[KEY_B_PRICE] = DEFAULT_B
+    if KEY_A_EURO not in st.session_state:
+        st.session_state[KEY_A_EURO] = DEFAULT_EURO_A
+    if KEY_B_EURO not in st.session_state:
+        st.session_state[KEY_B_EURO] = DEFAULT_EURO_B
+    if KEY_A_GOLD not in st.session_state:
+        st.session_state[KEY_A_GOLD] = DEFAULT_GOLD_A
+    if KEY_B_GOLD not in st.session_state:
+        st.session_state[KEY_B_GOLD] = DEFAULT_GOLD_B
     if KEY_A_REVENUE not in st.session_state:
         st.session_state[KEY_A_REVENUE] = DEFAULT_REVENUE_A
     if KEY_B_REVENUE not in st.session_state:
@@ -350,8 +366,16 @@ raw_df_usd["LogClose"] = np.log10(raw_df_usd["Close"])
 raw_revenue_df = raw_revenue_df[raw_revenue_df["Close"] > 0].copy()
 raw_revenue_df["LogClose"] = np.log10(raw_revenue_df["Close"])
 
+# Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
+sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
+if sidebar_currency not in [CURRENCY_DOLLAR, CURRENCY_EURO, CURRENCY_GOLD]:
+    sidebar_currency = CURRENCY_DOLLAR
+sidebar_price_close = build_currency_close_series(raw_df_usd, sidebar_currency)
+sidebar_price_close = sidebar_price_close[sidebar_price_close > 0]
+sidebar_price_log_close = np.log10(sidebar_price_close.values)
+
 price_absolute_days = raw_df_usd["AbsDays"].values
-price_log_close = raw_df_usd["LogClose"].values
+price_log_close = sidebar_price_log_close
 revenue_absolute_days = raw_revenue_df["AbsDays"].values
 revenue_log_close = raw_revenue_df["LogClose"].values
 
@@ -385,8 +409,15 @@ mode, currency, time_scale, price_scale, current_r2, powerlaw_series = render_si
 )
 
 # Keep backward-compatible keys in sync for oscillator mode code paths.
-st.session_state[KEY_A] = float(st.session_state.get(KEY_A_PRICE, DEFAULT_A))
-st.session_state[KEY_B] = float(st.session_state.get(KEY_B_PRICE, DEFAULT_B))
+if sidebar_currency == CURRENCY_GOLD:
+    st.session_state[KEY_A] = float(st.session_state.get(KEY_A_GOLD, DEFAULT_GOLD_A))
+    st.session_state[KEY_B] = float(st.session_state.get(KEY_B_GOLD, DEFAULT_GOLD_B))
+elif sidebar_currency == CURRENCY_EURO:
+    st.session_state[KEY_A] = float(st.session_state.get(KEY_A_EURO, DEFAULT_EURO_A))
+    st.session_state[KEY_B] = float(st.session_state.get(KEY_B_EURO, DEFAULT_EURO_B))
+else:
+    st.session_state[KEY_A] = float(st.session_state.get(KEY_A_PRICE, DEFAULT_A))
+    st.session_state[KEY_B] = float(st.session_state.get(KEY_B_PRICE, DEFAULT_B))
 
 if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE and currency != CURRENCY_DOLLAR:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
@@ -417,10 +448,21 @@ else:
     raw_df = raw_df[raw_df["Close"] > 0].copy()
     raw_df["LogClose"] = np.log10(raw_df["Close"])
     active_abs_days = raw_df["AbsDays"].values
-    active_a_key = KEY_A_PRICE
-    active_b_key = KEY_B_PRICE
-    active_default_a = DEFAULT_A
-    active_default_b = DEFAULT_B
+    if currency == CURRENCY_GOLD:
+        active_a_key = KEY_A_GOLD
+        active_b_key = KEY_B_GOLD
+        active_default_a = DEFAULT_GOLD_A
+        active_default_b = DEFAULT_GOLD_B
+    elif currency == CURRENCY_EURO:
+        active_a_key = KEY_A_EURO
+        active_b_key = KEY_B_EURO
+        active_default_a = DEFAULT_EURO_A
+        active_default_b = DEFAULT_EURO_B
+    else:
+        active_a_key = KEY_A_PRICE
+        active_b_key = KEY_B_PRICE
+        active_default_a = DEFAULT_A
+        active_default_b = DEFAULT_B
     target_series_name = "Bitcoin price"
     target_series_unit = currency
 
