@@ -161,20 +161,26 @@ def prepare_model_grid(current_gen_date, a_active, b_active, view_max):
 def build_portfolio_projection(
     _df_index, current_gen_date, a_active, b_active, btc_amount, forecast_unit, forecast_horizon
 ):
+    # Anchor projections to a stable "current day" across environments.
+    # If market data on a host is stale, use UTC today instead of lagging by the last data row.
+    latest_data_day = pd.Timestamp(_df_index.max()).normalize()
+    utc_today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    anchor_day = max(latest_data_day, utc_today)
+
     if forecast_unit == "Year":
-        latest_year = int(_df_index.max().year)
+        latest_year = int(anchor_day.year)
         start_period = pd.Timestamp(f"{latest_year - 1}-01-01")
         date_index = pd.date_range(start=start_period, periods=forecast_horizon + 1, freq="YS")
         change_usd_col, change_pct_col = "YoY_USD", "YoY_pct"
         table_title = "Yearly growth table"
     elif forecast_unit == "Day":
-        latest_day = _df_index.max().normalize()
+        latest_day = anchor_day
         start_period = latest_day - pd.Timedelta(days=1)
         date_index = pd.date_range(start=start_period, periods=forecast_horizon + 1, freq="D")
         change_usd_col, change_pct_col = "DoD_USD", "DoD_pct"
         table_title = "Daily growth table"
     else:
-        latest_month_start = _df_index.max().to_period("M").to_timestamp()
+        latest_month_start = anchor_day.to_period("M").to_timestamp()
         start_period = latest_month_start - pd.offsets.MonthBegin(1)
         date_index = pd.date_range(start=start_period, periods=forecast_horizon + 1, freq="MS")
         change_usd_col, change_pct_col = "MoM_USD", "MoM_pct"
@@ -255,7 +261,7 @@ def render_portfolio_view(
     g1, g2, g3 = st.columns(3)
     g1.metric(
         "Current Fair Price",
-        format_portfolio_money(portfolio_display_df["FairPriceDisplay"].iloc[0]),
+        format_portfolio_money(df_display["FairDisplay"].iloc[-1]),
     )
     g2.metric(
         "Portfolio (end of horizon)",

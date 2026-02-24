@@ -1,5 +1,7 @@
 import contextlib
 import io
+import json
+import urllib.request
 
 import numpy as np
 import pandas as pd
@@ -72,6 +74,34 @@ def _safe_download_close_series(symbol, start_date):
     return _extract_close_series(downloaded_df)
 
 
+def _safe_download_btc_tail_from_coingecko(start_date):
+    try:
+        start_ts = int(pd.Timestamp(start_date).timestamp())
+        end_ts = int(pd.Timestamp.utcnow().timestamp())
+        url = (
+            "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range"
+            f"?vs_currency=usd&from={start_ts}&to={end_ts}"
+        )
+        with urllib.request.urlopen(url, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return pd.Series(dtype=float)
+
+    prices = payload.get("prices", [])
+    if not prices:
+        return pd.Series(dtype=float)
+
+    tail_df = pd.DataFrame(prices, columns=["ts_ms", "Close"])
+    tail_df["Date"] = pd.to_datetime(tail_df["ts_ms"], unit="ms", utc=True).dt.tz_localize(None)
+    # CoinGecko can return multiple points per day; keep daily close-like last point.
+    tail_df = tail_df.sort_values("Date")
+    tail_df["Day"] = tail_df["Date"].dt.normalize()
+    daily_tail = tail_df.groupby("Day", as_index=True)["Close"].last()
+    daily_tail.index = pd.to_datetime(daily_tail.index)
+    daily_tail = pd.to_numeric(daily_tail, errors="coerce").dropna()
+    return daily_tail.astype(float)
+
+
 @st.cache_data(ttl=3600)
 def load_reference_series(start_date):
     eur_usd = _safe_download_close_series("EURUSD=X", start_date)
@@ -117,6 +147,10 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
             "BTC-USD",
             (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
         )
+        if btc_tail.empty:
+            btc_tail = _safe_download_btc_tail_from_coingecko(
+                (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+            )
         if not btc_tail.empty:
             tail_df = btc_tail.to_frame(name="Close")
             tail_df.index.name = "Date"
