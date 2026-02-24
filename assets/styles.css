@@ -3,27 +3,22 @@
 footer {visibility: hidden; display: none;}
 [data-testid="stHeader"],
 [data-testId="stHeader"] {
-    display: none !important;
-    height: 0 !important;
-    pointer-events: none !important;
     background-color: transparent;
     color: __C_TEXT_MAIN__;
-}
-[class*="stAppHeader"],
-[class*="stAppToolbar"] {
-    display: none !important;
-    height: 0 !important;
-    pointer-events: none !important;
 }
 [data-testid="stHeader"] button,
 [data-testId="stHeader"] button { color: __C_TEXT_MAIN__ !important; }
 [data-testId="stAppDeployButton"] { display: none !important; }
 #MainMenu { visibility: hidden !important; }
-[data-testid="stToolbar"], [data-testId="stToolbar"], div[class*="stAppToolbar"] {
-    pointer-events: none !important;
-}
+[data-testid="stToolbar"], [data-testId="stToolbar"], div[class*="stAppToolbar"] {}
 
 [data-testId="stSidebar"] { width: 360px !important; background-color: __C_SIDEBAR_BG__ !important; border-right: 1px solid __C_BORDER__; }
+[data-testid="stSidebar"][aria-expanded="false"],
+[data-testId="stSidebar"][aria-expanded="false"] {
+    margin-left: 0 !important;
+    transform: none !important;
+    left: 0 !important;
+}
 [data-testId="stSidebarContent"] { overflow-x: hidden !important; }
 [data-testId="stSidebar"] [data-testId="stVerticalBlock"] { gap: 0.4rem !important; padding-top: 0.5rem !important; }
 [data-testId="stSidebar"] p, [data-testId="stSidebar"] span, [data-testId="stSidebar"] label { color: __C_TEXT_MAIN__ !important; font-size: 15px !important; }

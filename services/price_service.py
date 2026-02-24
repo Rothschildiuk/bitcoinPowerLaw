@@ -18,6 +18,14 @@ MINER_REVENUE_CSV_URL = (
     "https://api.blockchain.info/charts/miners-revenue"
     "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
 )
+DIFFICULTY_CSV_URL = (
+    "https://api.blockchain.info/charts/difficulty"
+    "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
+)
+HASHRATE_CSV_URL = (
+    "https://api.blockchain.info/charts/hash-rate"
+    "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
+)
 
 
 def _extract_close_series(download_df):
@@ -209,3 +217,17 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
 def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL):
     revenue_df = pd.read_csv(revenue_history_url)
     return _normalize_chart_csv(revenue_df, "Close")
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_difficulty_data(difficulty_history_url=DIFFICULTY_CSV_URL):
+    difficulty_df = pd.read_csv(difficulty_history_url)
+    prepared_df = _normalize_chart_csv(difficulty_df, "Close")
+    return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL):
+    hashrate_df = pd.read_csv(hashrate_history_url)
+    prepared_df = _normalize_chart_csv(hashrate_df, "Close")
+    return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]

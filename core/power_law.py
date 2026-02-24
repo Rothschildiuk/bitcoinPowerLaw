@@ -58,7 +58,7 @@ def optimize_single_powerlaw_parameter(
     parameter_key,
 ):
     if parameter_key == "A":
-        coarse_candidates = np.linspace(-25.0, 0.0, 201)
+        coarse_candidates = np.linspace(-35.0, 0.0, 281)
         best_value = float(current_intercept_a)
         best_r2 = calculate_r2_for_manual_params(
             absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
@@ -71,7 +71,7 @@ def optimize_single_powerlaw_parameter(
                 best_r2 = score
                 best_value = float(candidate)
 
-        fine_lo = max(-25.0, best_value - 0.2)
+        fine_lo = max(-35.0, best_value - 0.2)
         fine_hi = min(0.0, best_value + 0.2)
         fine_candidates = np.linspace(fine_lo, fine_hi, 401)
         for candidate in fine_candidates:
@@ -85,7 +85,7 @@ def optimize_single_powerlaw_parameter(
         return round(best_value, 3), best_r2
 
     if parameter_key == "B":
-        coarse_candidates = np.linspace(1.0, 9.0, 201)
+        coarse_candidates = np.linspace(1.0, 12.0, 221)
         best_value = float(current_slope_b)
         best_r2 = calculate_r2_for_manual_params(
             absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
@@ -99,7 +99,7 @@ def optimize_single_powerlaw_parameter(
                 best_value = float(candidate)
 
         fine_lo = max(1.0, best_value - 0.15)
-        fine_hi = min(9.0, best_value + 0.15)
+        fine_hi = min(12.0, best_value + 0.15)
         fine_candidates = np.linspace(fine_lo, fine_hi, 301)
         for candidate in fine_candidates:
             score = calculate_r2_for_manual_params(
@@ -184,7 +184,7 @@ def render_sidebar(
         "A (Intercept)",
         a_key,
         0.001,
-        -25.0,
+        -35.0,
         0.0,
         on_auto_fit=auto_fit_intercept,
         auto_fit_label="AF",
@@ -196,7 +196,7 @@ def render_sidebar(
         b_key,
         0.001,
         1.0,
-        9.0,
+        12.0,
         on_auto_fit=auto_fit_slope,
         auto_fit_label="AF",
     )

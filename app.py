@@ -17,6 +17,10 @@ from core.constants import (
     DEFAULT_EURO_B,
     DEFAULT_GOLD_A,
     DEFAULT_GOLD_B,
+    DEFAULT_HASHRATE_A,
+    DEFAULT_HASHRATE_B,
+    DEFAULT_DIFFICULTY_A,
+    DEFAULT_DIFFICULTY_B,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
     FORECAST_HORIZON_MAX,
@@ -28,6 +32,10 @@ from core.constants import (
     KEY_B_EURO,
     KEY_A_GOLD,
     KEY_B_GOLD,
+    KEY_A_HASHRATE,
+    KEY_B_HASHRATE,
+    KEY_A_DIFFICULTY,
+    KEY_B_DIFFICULTY,
     KEY_A_REVENUE,
     KEY_B_REVENUE,
     KEY_A,
@@ -46,11 +54,15 @@ from core.constants import (
     OSC_DEFAULTS,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_DIFFICULTY,
+    POWERLAW_SERIES_HASHRATE,
     TIME_LOG,
 )
 from core.utils import calculate_r2_score, get_stable_trend_fit
 from services.price_service import (
     build_currency_close_series,
+    load_prepared_difficulty_data,
+    load_prepared_hashrate_data,
     load_prepared_miner_revenue_data,
     load_prepared_price_data,
 )
@@ -90,6 +102,14 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
         st.session_state[KEY_A_REVENUE] = DEFAULT_REVENUE_A
     if KEY_B_REVENUE not in st.session_state:
         st.session_state[KEY_B_REVENUE] = DEFAULT_REVENUE_B
+    if KEY_A_DIFFICULTY not in st.session_state:
+        st.session_state[KEY_A_DIFFICULTY] = DEFAULT_DIFFICULTY_A
+    if KEY_B_DIFFICULTY not in st.session_state:
+        st.session_state[KEY_B_DIFFICULTY] = DEFAULT_DIFFICULTY_B
+    if KEY_A_HASHRATE not in st.session_state:
+        st.session_state[KEY_A_HASHRATE] = DEFAULT_HASHRATE_A
+    if KEY_B_HASHRATE not in st.session_state:
+        st.session_state[KEY_B_HASHRATE] = DEFAULT_HASHRATE_B
     if KEY_A not in st.session_state:
         st.session_state[KEY_A] = st.session_state[KEY_A_PRICE]
     if KEY_B not in st.session_state:
@@ -348,7 +368,7 @@ def render_portfolio_view(
 
 # --- Page Configuration ---
 st.set_page_config(
-    layout="wide", page_icon="🚀", page_title="BTC Power Law Pro", initial_sidebar_state="auto"
+    layout="wide", page_icon="🚀", page_title="BTC Power Law Pro", initial_sidebar_state="expanded"
 )
 
 
@@ -364,6 +384,18 @@ except Exception as e:
     st.error(f"Error loading miner revenue data: {e}")
     st.stop()
 
+try:
+    raw_difficulty_df = load_prepared_difficulty_data()
+except Exception as e:
+    st.error(f"Error loading difficulty data: {e}")
+    st.stop()
+
+try:
+    raw_hashrate_df = load_prepared_hashrate_data()
+except Exception as e:
+    st.error(f"Error loading hashrate data: {e}")
+    st.stop()
+
 if KEY_CURRENCY_SELECTOR not in st.session_state:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
 
@@ -371,6 +403,10 @@ raw_df_usd = raw_df_usd[raw_df_usd["Close"] > 0].copy()
 raw_df_usd["LogClose"] = np.log10(raw_df_usd["Close"])
 raw_revenue_df = raw_revenue_df[raw_revenue_df["Close"] > 0].copy()
 raw_revenue_df["LogClose"] = np.log10(raw_revenue_df["Close"])
+raw_difficulty_df = raw_difficulty_df[raw_difficulty_df["Close"] > 0].copy()
+raw_difficulty_df["LogClose"] = np.log10(raw_difficulty_df["Close"])
+raw_hashrate_df = raw_hashrate_df[raw_hashrate_df["Close"] > 0].copy()
+raw_hashrate_df["LogClose"] = np.log10(raw_hashrate_df["Close"])
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
@@ -384,6 +420,10 @@ price_absolute_days = raw_df_usd["AbsDays"].values
 price_log_close = sidebar_price_log_close
 revenue_absolute_days = raw_revenue_df["AbsDays"].values
 revenue_log_close = raw_revenue_df["LogClose"].values
+difficulty_absolute_days = raw_difficulty_df["AbsDays"].values
+difficulty_log_close = raw_difficulty_df["LogClose"].values
+hashrate_absolute_days = raw_hashrate_df["AbsDays"].values
+hashrate_log_close = raw_hashrate_df["LogClose"].values
 
 # --- THEME + STATE ---
 initialize_app_session_state(price_absolute_days, price_log_close)
@@ -408,6 +448,10 @@ mode, currency, time_scale, price_scale, current_r2, powerlaw_series = render_si
     price_log_close,
     revenue_absolute_days,
     revenue_log_close,
+    difficulty_absolute_days,
+    difficulty_log_close,
+    hashrate_absolute_days,
+    hashrate_log_close,
     c_text_main,
     APP_VERSION,
     FORECAST_HORIZON_MIN,
@@ -425,11 +469,20 @@ else:
     st.session_state[KEY_A] = float(st.session_state.get(KEY_A_PRICE, DEFAULT_A))
     st.session_state[KEY_B] = float(st.session_state.get(KEY_B_PRICE, DEFAULT_B))
 
-if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE and currency != CURRENCY_DOLLAR:
+if (
+    mode == MODE_POWERLAW
+    and powerlaw_series
+    in [POWERLAW_SERIES_REVENUE, POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+    and currency != CURRENCY_DOLLAR
+):
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
     st.rerun()
 if (
-    not (mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE)
+    not (
+        mode == MODE_POWERLAW
+        and powerlaw_series
+        in [POWERLAW_SERIES_REVENUE, POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+    )
     and currency != st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
 ):
     st.rerun()
@@ -447,6 +500,26 @@ if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE:
     active_default_b = DEFAULT_REVENUE_B
     target_series_name = "Miner revenue"
     target_series_unit = "USD/day"
+    currency = CURRENCY_DOLLAR
+elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_DIFFICULTY:
+    raw_df = raw_difficulty_df.copy()
+    active_abs_days = difficulty_absolute_days
+    active_a_key = KEY_A_DIFFICULTY
+    active_b_key = KEY_B_DIFFICULTY
+    active_default_a = DEFAULT_DIFFICULTY_A
+    active_default_b = DEFAULT_DIFFICULTY_B
+    target_series_name = "Mining difficulty"
+    target_series_unit = "Difficulty"
+    currency = CURRENCY_DOLLAR
+elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_HASHRATE:
+    raw_df = raw_hashrate_df.copy()
+    active_abs_days = hashrate_absolute_days
+    active_a_key = KEY_A_HASHRATE
+    active_b_key = KEY_B_HASHRATE
+    active_default_a = DEFAULT_HASHRATE_A
+    active_default_b = DEFAULT_HASHRATE_B
+    target_series_name = "Network hashrate"
+    target_series_unit = "Hashrate"
     currency = CURRENCY_DOLLAR
 else:
     raw_df = raw_df_usd.copy()
@@ -493,6 +566,8 @@ df_display["Res"] = residual_vals
 df_display["Fair"] = 10 ** df_display["ModelLog"]
 
 currency_context = resolve_currency_format(currency)
+if mode == MODE_POWERLAW and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]:
+    currency_context = {"prefix": "", "suffix": "", "decimals": 0, "unit": "RAW"}
 currency_prefix = currency_context["prefix"]
 currency_suffix = currency_context["suffix"]
 currency_decimals = int(currency_context["decimals"])
@@ -604,7 +679,11 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         currency_decimals=currency_decimals,
         target_series_name=target_series_name,
         target_series_unit=target_series_unit,
-        show_halving_lines=(mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE),
+        show_halving_lines=(
+            mode == MODE_POWERLAW
+            and powerlaw_series
+            in [POWERLAW_SERIES_REVENUE, POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+        ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
             f"{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}"

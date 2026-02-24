@@ -12,16 +12,24 @@ from core.constants import (
     DEFAULT_EURO_B,
     DEFAULT_GOLD_A,
     DEFAULT_GOLD_B,
+    DEFAULT_HASHRATE_A,
+    DEFAULT_HASHRATE_B,
+    DEFAULT_DIFFICULTY_A,
+    DEFAULT_DIFFICULTY_B,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
     DEFAULT_FORECAST_HORIZON,
     KEY_A_PRICE,
     KEY_A_EURO,
     KEY_A_GOLD,
+    KEY_A_HASHRATE,
+    KEY_A_DIFFICULTY,
     KEY_A_REVENUE,
     KEY_B_PRICE,
     KEY_B_EURO,
     KEY_B_GOLD,
+    KEY_B_HASHRATE,
+    KEY_B_DIFFICULTY,
     KEY_B_REVENUE,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
@@ -37,6 +45,8 @@ from core.constants import (
     MODE_PORTFOLIO,
     MODE_POWERLAW,
     POWERLAW_SERIES_OPTIONS,
+    POWERLAW_SERIES_DIFFICULTY,
+    POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
     TIME_LOG,
@@ -106,6 +116,10 @@ def render_sidebar_panel(
     price_log_close,
     revenue_absolute_days,
     revenue_log_close,
+    difficulty_absolute_days,
+    difficulty_log_close,
+    hashrate_absolute_days,
+    hashrate_log_close,
     c_text_main,
     app_version,
     forecast_horizon_min,
@@ -151,23 +165,24 @@ def render_sidebar_panel(
             powerlaw_series = POWERLAW_SERIES_PRICE
             st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
         if mode == MODE_POWERLAW:
-            powerlaw_series = st.segmented_control(
+            powerlaw_series = st.radio(
                 "PowerLaw series",
                 POWERLAW_SERIES_OPTIONS,
-                selection_mode="single",
+                horizontal=True,
                 key=KEY_POWERLAW_SERIES,
-                width="stretch",
             )
             if powerlaw_series is None:
                 powerlaw_series = st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE)
                 st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
                 st.rerun()
 
-        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE:
+        is_non_price_series = mode == MODE_POWERLAW and powerlaw_series != POWERLAW_SERIES_PRICE
+
+        if is_non_price_series:
             currency = CURRENCY_DOLLAR
             st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
             st.markdown("**Currency**")
-            st.caption("Miner revenue uses USD only.")
+            st.caption("This series does not use currency conversion.")
         else:
             currency = st.radio(
                 "Currency",
@@ -217,13 +232,31 @@ def render_sidebar_panel(
             b_key = KEY_B_REVENUE
             default_a = DEFAULT_REVENUE_A
             default_b = DEFAULT_REVENUE_B
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_DIFFICULTY:
+            model_abs_days = difficulty_absolute_days
+            model_log_close = difficulty_log_close
+            a_key = KEY_A_DIFFICULTY
+            b_key = KEY_B_DIFFICULTY
+            default_a = DEFAULT_DIFFICULTY_A
+            default_b = DEFAULT_DIFFICULTY_B
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_HASHRATE:
+            model_abs_days = hashrate_absolute_days
+            model_log_close = hashrate_log_close
+            a_key = KEY_A_HASHRATE
+            b_key = KEY_B_HASHRATE
+            default_a = DEFAULT_HASHRATE_A
+            default_b = DEFAULT_HASHRATE_B
 
         if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
+            hide_price_scale = (
+                mode == MODE_POWERLAW
+                and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+            )
             price_scale, current_r2 = power_law.render_sidebar(
                 model_abs_days,
                 model_log_close,
                 c_text_main,
-                show_price_scale=(mode != MODE_PORTFOLIO),
+                show_price_scale=(mode != MODE_PORTFOLIO and not hide_price_scale),
                 render_extra_controls=(
                     lambda: (
                         _render_portfolio_sidebar_controls(

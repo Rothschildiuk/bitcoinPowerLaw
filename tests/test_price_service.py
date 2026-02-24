@@ -143,6 +143,40 @@ class TestPriceService(unittest.TestCase):
         self.assertIn("AbsDays", result.columns)
         self.assertIn("LogClose", result.columns)
 
+    @patch("services.price_service.pd.read_csv")
+    def test_load_prepared_difficulty_data_parses_timestamp_value(self, mock_read_csv):
+        price_service.load_prepared_difficulty_data.clear()
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "Timestamp": ["2009-12-31", "2010-01-01", "2020-01-02"],
+                "Value": [9.9e12, 1.0e13, 1.3e13],
+            }
+        )
+
+        result = price_service.load_prepared_difficulty_data("unused.csv")
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2010-01-01", "2020-01-02"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [1.0e13, 1.3e13])
+
+    @patch("services.price_service.pd.read_csv")
+    def test_load_prepared_hashrate_data_parses_timestamp_value(self, mock_read_csv):
+        price_service.load_prepared_hashrate_data.clear()
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "Timestamp": ["2009-12-31", "2010-01-01", "2020-01-02"],
+                "Value": [90_000_000.0, 100_000_000.0, 120_000_000.0],
+            }
+        )
+
+        result = price_service.load_prepared_hashrate_data("unused.csv")
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2010-01-01", "2020-01-02"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [100_000_000.0, 120_000_000.0])
+
 
 if __name__ == "__main__":
     unittest.main()
