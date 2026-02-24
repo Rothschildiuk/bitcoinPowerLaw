@@ -5,6 +5,13 @@ import streamlit as st
 
 from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
 
+HALVING_DATES = [
+    pd.Timestamp("2012-11-28"),
+    pd.Timestamp("2016-07-09"),
+    pd.Timestamp("2020-05-11"),
+    pd.Timestamp("2024-04-20"),
+]
+
 
 def _resolve_powerlaw_y_range(
     df_display,
@@ -101,6 +108,9 @@ def render_main_model_chart(
     currency_prefix,
     currency_suffix,
     currency_decimals,
+    target_series_name,
+    target_series_unit,
+    show_halving_lines,
     chart_key,
 ):
     fig = go.Figure()
@@ -192,14 +202,15 @@ def render_main_model_chart(
             )
         )
 
+        main_series_label = f"{target_series_name} ({target_series_unit})"
         btc_hover = (
             (
-                "📅 %{customdata}<br><b>Bitcoin price</b>: "
+                f"📅 %{{customdata}}<br><b>{main_series_label}</b>: "
                 f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
             )
             if is_log_time
             else (
-                "<b>Bitcoin price</b>: "
+                f"<b>{main_series_label}</b>: "
                 f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
             )
         )
@@ -208,13 +219,37 @@ def render_main_model_chart(
                 x=plot_x_main,
                 y=df_display["CloseDisplay"],
                 mode="lines",
-                name="Bitcoin price",
+                name=main_series_label,
                 legendrank=10,
                 line=dict(color=pl_btc_color, width=1.5),
                 customdata=df_display.index.strftime("%d.%m.%Y"),
                 hovertemplate=btc_hover,
             )
         )
+        if show_halving_lines:
+            for halving_date in HALVING_DATES:
+                halving_x = (
+                    max(1.0, float((halving_date - current_gen_date).days))
+                    if is_log_time
+                    else halving_date
+                )
+                fig.add_vline(
+                    x=halving_x,
+                    line_width=1.1,
+                    line_dash="dash",
+                    line_color="#f0b90b",
+                    opacity=0.75,
+                )
+                fig.add_annotation(
+                    x=halving_x,
+                    y=0.02,
+                    yref="paper",
+                    text=f"Halving {halving_date.year}",
+                    showarrow=False,
+                    yshift=0,
+                    textangle=-90,
+                    font=dict(size=9, color=pl_legend_color),
+                )
         y_range_model_x = plot_x_model if is_log_time else m_dates
         y_range_visible_start = (
             max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
@@ -281,6 +316,7 @@ def render_main_model_chart(
             range=x_range,
             gridcolor=pl_grid_color,
             tickfont=tick_font,
+            unifiedhovertitle=dict(text=" "),
         )
     else:
         fig.update_xaxes(
@@ -307,6 +343,7 @@ def render_main_model_chart(
         paper_bgcolor=pl_bg_color,
         plot_bgcolor=pl_bg_color,
         hovermode="x unified",
+        xaxis_unifiedhovertitle_text=" ",
         hoverlabel=hover_label,
     )
     st.plotly_chart(

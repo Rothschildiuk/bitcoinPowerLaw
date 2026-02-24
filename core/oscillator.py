@@ -1,12 +1,7 @@
 import numpy as np
 import streamlit as st
 
-from core.constants import (
-    KEY_A,
-    KEY_B,
-    KEY_GENESIS_OFFSET,
-    OSC_DEFAULTS,
-)
+from core.constants import DEFAULT_A, DEFAULT_B, KEY_A, KEY_B, KEY_GENESIS_OFFSET, OSC_DEFAULTS
 from core.utils import calculate_r2_score, fancy_control, get_stable_trend_fit
 
 AUTO_FIT_MAX_PASSES = 2
@@ -277,8 +272,8 @@ def render_sidebar(all_abs_days, all_log_close, text_color):
         _, _, trend_log_prices, residual_series = get_stable_trend_fit(
             log_days,
             all_log_close[valid_days_mask],
-            float(st.session_state.A),
-            float(st.session_state.B),
+            float(st.session_state.get(KEY_A, DEFAULT_A)),
+            float(st.session_state.get(KEY_B, DEFAULT_B)),
         )
 
     def auto_fit_single_parameter(parameter_key, min_value, max_value, step_value):

@@ -13,15 +13,22 @@ from core.constants import (
     DEFAULT_THEME,
     DEFAULT_A,
     DEFAULT_B,
+    DEFAULT_REVENUE_A,
+    DEFAULT_REVENUE_B,
     FORECAST_HORIZON_MAX,
     FORECAST_HORIZON_MIN,
     GENESIS_DATE,
+    KEY_A_PRICE,
+    KEY_B_PRICE,
+    KEY_A_REVENUE,
+    KEY_B_REVENUE,
     KEY_A,
     KEY_B,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
     KEY_LAST_MODE,
+    KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_UNIT,
@@ -29,10 +36,16 @@ from core.constants import (
     MODE_LOGPERIODIC,
     MODE_POWERLAW,
     OSC_DEFAULTS,
+    POWERLAW_SERIES_PRICE,
+    POWERLAW_SERIES_REVENUE,
     TIME_LOG,
 )
 from core.utils import calculate_r2_score, get_stable_trend_fit
-from services.price_service import build_currency_close_series, load_prepared_price_data
+from services.price_service import (
+    build_currency_close_series,
+    load_prepared_miner_revenue_data,
+    load_prepared_price_data,
+)
 from ui.charts import render_main_model_chart
 from ui.kpi import render_model_kpis
 from ui.sidebar import render_sidebar_panel
@@ -45,6 +58,7 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
         KEY_LAST_MODE: MODE_POWERLAW,
         KEY_CURRENCY_SELECTOR: CURRENCY_DOLLAR,
         KEY_CHART_REVISION: 0,
+        KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -52,10 +66,18 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
     # Light theme is disabled by product decision; always force dark theme.
     st.session_state[KEY_THEME_MODE] = DEFAULT_THEME
 
+    if KEY_A_PRICE not in st.session_state:
+        st.session_state[KEY_A_PRICE] = DEFAULT_A
+    if KEY_B_PRICE not in st.session_state:
+        st.session_state[KEY_B_PRICE] = DEFAULT_B
+    if KEY_A_REVENUE not in st.session_state:
+        st.session_state[KEY_A_REVENUE] = DEFAULT_REVENUE_A
+    if KEY_B_REVENUE not in st.session_state:
+        st.session_state[KEY_B_REVENUE] = DEFAULT_REVENUE_B
     if KEY_A not in st.session_state:
-        st.session_state[KEY_A] = DEFAULT_A
+        st.session_state[KEY_A] = st.session_state[KEY_A_PRICE]
     if KEY_B not in st.session_state:
-        st.session_state[KEY_B] = DEFAULT_B
+        st.session_state[KEY_B] = st.session_state[KEY_B_PRICE]
 
 
 def resolve_currency_format(selected_currency):
@@ -63,16 +85,16 @@ def resolve_currency_format(selected_currency):
         return {"prefix": "€", "suffix": "", "decimals": 2, "unit": "EUR"}
     if selected_currency == CURRENCY_GOLD:
         return {"prefix": "", "suffix": " oz", "decimals": 2, "unit": "XAU"}
-    return {"prefix": "$", "suffix": "", "decimals": 2, "unit": "USD"}
+    return {"prefix": "$", "suffix": "", "decimals": 0, "unit": "USD"}
 
 
 def format_currency_value(value, prefix, suffix, decimals):
     return f"{prefix}{value:,.{decimals}f}{suffix}"
 
 
-def resolve_trend_parameters(display_df, active_mode):
-    intercept_a = float(st.session_state.get(KEY_A, DEFAULT_A))
-    slope_b = float(st.session_state.get(KEY_B, DEFAULT_B))
+def resolve_trend_parameters(display_df, active_mode, a_key, b_key, default_a, default_b):
+    intercept_a = float(st.session_state.get(a_key, default_a))
+    slope_b = float(st.session_state.get(b_key, default_b))
     trend_log_prices = intercept_a + slope_b * display_df["LogD"].values
     residual_series = display_df["LogClose"].values - trend_log_prices
 
@@ -311,22 +333,30 @@ st.set_page_config(
 try:
     raw_df_usd = load_prepared_price_data()
 except Exception as e:
-    st.error(f"Error loading data: {e}")
+    st.error(f"Error loading BTC price data: {e}")
+    st.stop()
+
+try:
+    raw_revenue_df = load_prepared_miner_revenue_data()
+except Exception as e:
+    st.error(f"Error loading miner revenue data: {e}")
     st.stop()
 
 if KEY_CURRENCY_SELECTOR not in st.session_state:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
 
-currency_for_fit = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
-raw_df = raw_df_usd.copy()
-raw_df["Close"] = build_currency_close_series(raw_df_usd, currency_for_fit)
-raw_df = raw_df[raw_df["Close"] > 0]
-raw_df["LogClose"] = np.log10(raw_df["Close"])
-all_absolute_days = raw_df["AbsDays"].values
-all_log_close_prices = raw_df["LogClose"].values
+raw_df_usd = raw_df_usd[raw_df_usd["Close"] > 0].copy()
+raw_df_usd["LogClose"] = np.log10(raw_df_usd["Close"])
+raw_revenue_df = raw_revenue_df[raw_revenue_df["Close"] > 0].copy()
+raw_revenue_df["LogClose"] = np.log10(raw_revenue_df["Close"])
+
+price_absolute_days = raw_df_usd["AbsDays"].values
+price_log_close = raw_df_usd["LogClose"].values
+revenue_absolute_days = raw_revenue_df["AbsDays"].values
+revenue_log_close = raw_revenue_df["LogClose"].values
 
 # --- THEME + STATE ---
-initialize_app_session_state(all_absolute_days, all_log_close_prices)
+initialize_app_session_state(price_absolute_days, price_log_close)
 
 theme = get_theme(True)
 apply_theme_css(theme)
@@ -343,22 +373,58 @@ c_hover_text = theme["c_hover_text"]
 c_border = theme["c_border"]
 
 # --- SIDEBAR ASSEMBLY ---
-mode, currency, time_scale, price_scale, current_r2 = render_sidebar_panel(
-    all_absolute_days,
-    all_log_close_prices,
+mode, currency, time_scale, price_scale, current_r2, powerlaw_series = render_sidebar_panel(
+    price_absolute_days,
+    price_log_close,
+    revenue_absolute_days,
+    revenue_log_close,
     c_text_main,
     APP_VERSION,
     FORECAST_HORIZON_MIN,
     FORECAST_HORIZON_MAX,
 )
-if currency != currency_for_fit:
+
+# Keep backward-compatible keys in sync for oscillator mode code paths.
+st.session_state[KEY_A] = float(st.session_state.get(KEY_A_PRICE, DEFAULT_A))
+st.session_state[KEY_B] = float(st.session_state.get(KEY_B_PRICE, DEFAULT_B))
+
+if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE and currency != CURRENCY_DOLLAR:
+    st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
+    st.rerun()
+if (
+    not (mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE)
+    and currency != st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
+):
     st.rerun()
 
 # --- MAIN CALCULATIONS ---
 genesis_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, 0))
 current_gen_date = GENESIS_DATE + pd.Timedelta(days=genesis_offset)
 
-valid_idx = all_absolute_days > genesis_offset
+if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE:
+    raw_df = raw_revenue_df.copy()
+    active_abs_days = revenue_absolute_days
+    active_a_key = KEY_A_REVENUE
+    active_b_key = KEY_B_REVENUE
+    active_default_a = DEFAULT_REVENUE_A
+    active_default_b = DEFAULT_REVENUE_B
+    target_series_name = "Miner revenue"
+    target_series_unit = "USD/day"
+    currency = CURRENCY_DOLLAR
+else:
+    raw_df = raw_df_usd.copy()
+    raw_df["Close"] = build_currency_close_series(raw_df_usd, currency)
+    raw_df = raw_df[raw_df["Close"] > 0].copy()
+    raw_df["LogClose"] = np.log10(raw_df["Close"])
+    active_abs_days = raw_df["AbsDays"].values
+    active_a_key = KEY_A_PRICE
+    active_b_key = KEY_B_PRICE
+    active_default_a = DEFAULT_A
+    active_default_b = DEFAULT_B
+    target_series_name = "Bitcoin price"
+    target_series_unit = currency
+
+valid_idx = active_abs_days > genesis_offset
 df_display = raw_df.iloc[valid_idx].copy()
 if df_display.empty:
     st.error("No data available for the selected parameters.")
@@ -366,7 +432,14 @@ if df_display.empty:
 
 df_display["Days"] = df_display["AbsDays"] - genesis_offset
 df_display["LogD"] = np.log10(df_display["Days"])
-a_active, b_active, model_log_vals, residual_vals = resolve_trend_parameters(df_display, mode)
+a_active, b_active, model_log_vals, residual_vals = resolve_trend_parameters(
+    df_display,
+    mode,
+    active_a_key,
+    active_b_key,
+    active_default_a,
+    active_default_b,
+)
 df_display["ModelLog"] = model_log_vals
 df_display["Res"] = residual_vals
 df_display["Fair"] = 10 ** df_display["ModelLog"]
@@ -481,7 +554,13 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         currency_prefix=currency_prefix,
         currency_suffix=currency_suffix,
         currency_decimals=currency_decimals,
-        chart_key=f"chart_{mode}_{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}",
+        target_series_name=target_series_name,
+        target_series_unit=target_series_unit,
+        show_halving_lines=(mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE),
+        chart_key=(
+            f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
+            f"{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}"
+        ),
     )
 else:
     render_portfolio_view(
@@ -511,4 +590,6 @@ render_model_kpis(
     currency_prefix,
     currency_suffix,
     currency_decimals,
+    target_series_name,
+    target_series_unit,
 )

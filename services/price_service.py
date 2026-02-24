@@ -11,6 +11,10 @@ from core.constants import CURRENCY_DOLLAR, CURRENCY_EURO, CURRENCY_GOLD, GENESI
 BTC_HISTORY_CSV_URL = (
     "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
 )
+MINER_REVENUE_CSV_URL = (
+    "https://api.blockchain.info/charts/miners-revenue"
+    "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
+)
 
 
 def _extract_close_series(download_df):
@@ -24,6 +28,39 @@ def _extract_close_series(download_df):
         return pd.Series(dtype=float)
     close_series.index = pd.to_datetime(close_series.index).tz_localize(None)
     return close_series.astype(float)
+
+
+def _normalize_chart_csv(data_df, value_column_name):
+    if data_df is None or data_df.empty:
+        return pd.DataFrame(columns=["Close", "AbsDays", "LogClose"])
+
+    date_column = None
+    for candidate in ("Date", "Timestamp", "date", "timestamp"):
+        if candidate in data_df.columns:
+            date_column = candidate
+            break
+    if date_column is None:
+        date_column = data_df.columns[0]
+
+    value_column = None
+    for candidate in ("Value", "value", "Price", "price", "Close", "close"):
+        if candidate in data_df.columns:
+            value_column = candidate
+            break
+    if value_column is None:
+        value_column = data_df.columns[-1]
+
+    prepared_df = data_df[[date_column, value_column]].copy()
+    prepared_df.columns = ["Date", value_column_name]
+    prepared_df["Date"] = pd.to_datetime(prepared_df["Date"], errors="coerce")
+    prepared_df[value_column_name] = pd.to_numeric(prepared_df[value_column_name], errors="coerce")
+    prepared_df = prepared_df.dropna(subset=["Date", value_column_name])
+    prepared_df = prepared_df.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+    prepared_df = prepared_df.set_index("Date")
+    prepared_df = prepared_df[prepared_df[value_column_name] > 0]
+    prepared_df["AbsDays"] = (prepared_df.index - GENESIS_DATE).days
+    prepared_df["LogClose"] = np.log10(prepared_df[value_column_name])
+    return prepared_df
 
 
 def _safe_download_close_series(symbol, start_date):
@@ -90,3 +127,9 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
     full_df["AbsDays"] = (full_df.index - GENESIS_DATE).days
     full_df["LogClose"] = np.log10(full_df["Close"])
     return full_df
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL):
+    revenue_df = pd.read_csv(revenue_history_url)
+    return _normalize_chart_csv(revenue_df, "Close")

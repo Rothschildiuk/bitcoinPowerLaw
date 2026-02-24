@@ -19,7 +19,15 @@ def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
 
 
 def render_model_kpis(
-    df_display, a_active, b_active, p97_5, currency_prefix, currency_suffix, currency_decimals
+    df_display,
+    a_active,
+    b_active,
+    p97_5,
+    currency_prefix,
+    currency_suffix,
+    currency_decimals,
+    target_series_name,
+    target_series_unit,
 ):
     l_p, l_f = df_display["Close"].iloc[-1], df_display["Fair"].iloc[-1]
     l_p_display, l_f_display = df_display["CloseDisplay"].iloc[-1], df_display["FairDisplay"].iloc[-1]
@@ -30,7 +38,13 @@ def render_model_kpis(
     above_fair_pct = float((df_display["Close"] > df_display["Fair"]).mean() * 100.0)
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    _kpi_card(k1, "BTC PRICE", _format_money(l_p_display, currency_prefix, currency_suffix, currency_decimals))
+    _kpi_card(
+        k1,
+        f"{target_series_name.upper()}",
+        _format_money(l_p_display, currency_prefix, currency_suffix, currency_decimals),
+        target_series_unit,
+        "#9ba3af",
+    )
     _kpi_card(
         k2,
         "FAIR VALUE",

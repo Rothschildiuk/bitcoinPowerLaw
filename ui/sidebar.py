@@ -4,11 +4,20 @@ from core import oscillator, power_law
 from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_OPTIONS,
+    DEFAULT_A,
+    DEFAULT_B,
+    DEFAULT_REVENUE_A,
+    DEFAULT_REVENUE_B,
     DEFAULT_FORECAST_HORIZON,
+    KEY_A_PRICE,
+    KEY_A_REVENUE,
+    KEY_B_PRICE,
+    KEY_B_REVENUE,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
     KEY_MODE_SELECTOR,
+    KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY,
@@ -17,6 +26,9 @@ from core.constants import (
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
+    POWERLAW_SERIES_OPTIONS,
+    POWERLAW_SERIES_PRICE,
+    POWERLAW_SERIES_REVENUE,
     TIME_LOG,
     TIME_LIN,
 )
@@ -80,8 +92,10 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
 
 
 def render_sidebar_panel(
-    all_absolute_days,
-    all_log_close_prices,
+    price_absolute_days,
+    price_log_close,
+    revenue_absolute_days,
+    revenue_log_close,
     c_text_main,
     app_version,
     forecast_horizon_min,
@@ -122,13 +136,36 @@ def render_sidebar_panel(
             selected_currency = CURRENCY_DOLLAR
             st.session_state[KEY_CURRENCY_SELECTOR] = selected_currency
 
-        currency = st.radio(
-            "Currency",
-            CURRENCY_OPTIONS,
-            horizontal=True,
-            index=CURRENCY_OPTIONS.index(selected_currency),
-            key=KEY_CURRENCY_SELECTOR,
-        )
+        powerlaw_series = st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE)
+        if powerlaw_series not in POWERLAW_SERIES_OPTIONS:
+            powerlaw_series = POWERLAW_SERIES_PRICE
+            st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
+        if mode == MODE_POWERLAW:
+            powerlaw_series = st.segmented_control(
+                "PowerLaw series",
+                POWERLAW_SERIES_OPTIONS,
+                selection_mode="single",
+                key=KEY_POWERLAW_SERIES,
+                width="stretch",
+            )
+            if powerlaw_series is None:
+                powerlaw_series = st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE)
+                st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
+                st.rerun()
+
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE:
+            currency = CURRENCY_DOLLAR
+            st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
+            st.markdown("**Currency**")
+            st.caption("Miner revenue uses USD only.")
+        else:
+            currency = st.radio(
+                "Currency",
+                CURRENCY_OPTIONS,
+                horizontal=True,
+                index=CURRENCY_OPTIONS.index(selected_currency),
+                key=KEY_CURRENCY_SELECTOR,
+            )
 
         if mode != MODE_PORTFOLIO:
             time_scale = inline_radio_control("Time", [TIME_LOG, TIME_LIN], key=KEY_TIME_SCALE)
@@ -137,11 +174,25 @@ def render_sidebar_panel(
 
         current_r2 = 0.0
         price_scale = "Log"
+        model_abs_days = price_absolute_days
+        model_log_close = price_log_close
+        a_key = KEY_A_PRICE
+        b_key = KEY_B_PRICE
+        default_a = DEFAULT_A
+        default_b = DEFAULT_B
+
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_REVENUE:
+            model_abs_days = revenue_absolute_days
+            model_log_close = revenue_log_close
+            a_key = KEY_A_REVENUE
+            b_key = KEY_B_REVENUE
+            default_a = DEFAULT_REVENUE_A
+            default_b = DEFAULT_REVENUE_B
 
         if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
             price_scale, current_r2 = power_law.render_sidebar(
-                all_absolute_days,
-                all_log_close_prices,
+                model_abs_days,
+                model_log_close,
                 c_text_main,
                 show_price_scale=(mode != MODE_PORTFOLIO),
                 render_extra_controls=(
@@ -153,8 +204,12 @@ def render_sidebar_panel(
                         else None
                     )
                 ),
+                a_key=a_key,
+                b_key=b_key,
+                default_a=default_a,
+                default_b=default_b,
             )
         else:
-            oscillator.render_sidebar(all_absolute_days, all_log_close_prices, c_text_main)
+            oscillator.render_sidebar(price_absolute_days, price_log_close, c_text_main)
 
-    return mode, currency, time_scale, price_scale, current_r2
+    return mode, currency, time_scale, price_scale, current_r2, powerlaw_series

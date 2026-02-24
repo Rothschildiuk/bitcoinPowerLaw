@@ -61,6 +61,26 @@ class TestPriceService(unittest.TestCase):
         self.assertIn("AbsDays", result.columns)
         self.assertIn("LogClose", result.columns)
 
+    @patch("services.price_service.pd.read_csv")
+    def test_load_prepared_miner_revenue_data_parses_timestamp_value(self, mock_read_csv):
+        price_service.load_prepared_miner_revenue_data.clear()
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "Timestamp": ["2020-01-01", "2020-01-02"],
+                "Value": [11_000_000.0, 12_500_000.0],
+            }
+        )
+
+        result = price_service.load_prepared_miner_revenue_data("unused.csv")
+
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2020-01-01", "2020-01-02"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [11_000_000.0, 12_500_000.0])
+        self.assertIn("AbsDays", result.columns)
+        self.assertIn("LogClose", result.columns)
+
 
 if __name__ == "__main__":
     unittest.main()

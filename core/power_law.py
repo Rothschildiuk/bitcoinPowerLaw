@@ -123,25 +123,33 @@ def find_global_best_fit_optimized(all_abs_days, all_log_close):
 
 # --- SIDEBAR RENDERER ---
 def render_sidebar(
-    all_abs_days, all_log_close, text_color, show_price_scale=True, render_extra_controls=None
+    all_abs_days,
+    all_log_close,
+    text_color,
+    show_price_scale=True,
+    render_extra_controls=None,
+    a_key=KEY_A,
+    b_key=KEY_B,
+    default_a=DEFAULT_A,
+    default_b=DEFAULT_B,
 ):
     # Initialize defaults if needed
     if KEY_GENESIS_OFFSET not in st.session_state:
         st.session_state[KEY_GENESIS_OFFSET] = 0
 
     opt_offset = 0
-    opt_a = DEFAULT_A
-    opt_b = DEFAULT_B
+    opt_a = default_a
+    opt_b = default_b
 
-    if KEY_A not in st.session_state:
-        st.session_state[KEY_A] = float(DEFAULT_A)
-    if KEY_B not in st.session_state:
-        st.session_state[KEY_B] = float(DEFAULT_B)
+    if a_key not in st.session_state:
+        st.session_state[a_key] = float(default_a)
+    if b_key not in st.session_state:
+        st.session_state[b_key] = float(default_b)
 
     def reset_powerlaw_params():
         st.session_state[KEY_GENESIS_OFFSET] = int(opt_offset)
-        st.session_state[KEY_A] = float(DEFAULT_A)
-        st.session_state[KEY_B] = float(DEFAULT_B)
+        st.session_state[a_key] = float(default_a)
+        st.session_state[b_key] = float(default_b)
 
     # Controls - Time scale removed, Price scale optional
     if show_price_scale:
@@ -154,27 +162,27 @@ def render_sidebar(
             all_abs_days,
             all_log_close,
             int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
-            float(st.session_state.get(KEY_A, opt_a)),
-            float(st.session_state.get(KEY_B, opt_b)),
+            float(st.session_state.get(a_key, opt_a)),
+            float(st.session_state.get(b_key, opt_b)),
             "A",
         )
-        st.session_state[KEY_A] = float(best_a)
+        st.session_state[a_key] = float(best_a)
 
     def auto_fit_slope():
         best_b, _ = optimize_single_powerlaw_parameter(
             all_abs_days,
             all_log_close,
             int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
-            float(st.session_state.get(KEY_A, opt_a)),
-            float(st.session_state.get(KEY_B, opt_b)),
+            float(st.session_state.get(a_key, opt_a)),
+            float(st.session_state.get(b_key, opt_b)),
             "B",
         )
-        st.session_state[KEY_B] = float(best_b)
+        st.session_state[b_key] = float(best_b)
 
     st.markdown("**A (Intercept)**")
     fancy_control(
         "A (Intercept)",
-        KEY_A,
+        a_key,
         0.001,
         -25.0,
         0.0,
@@ -185,7 +193,7 @@ def render_sidebar(
     st.markdown("**B (Slope)**")
     fancy_control(
         "B (Slope)",
-        KEY_B,
+        b_key,
         0.001,
         1.0,
         9.0,
@@ -197,8 +205,8 @@ def render_sidebar(
         all_abs_days,
         all_log_close,
         int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
-        float(st.session_state.get(KEY_A, opt_a)),
-        float(st.session_state.get(KEY_B, opt_b)),
+        float(st.session_state.get(a_key, opt_a)),
+        float(st.session_state.get(b_key, opt_b)),
     )
 
     if callable(render_extra_controls):
