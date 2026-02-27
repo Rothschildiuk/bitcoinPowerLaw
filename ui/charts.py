@@ -3,7 +3,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
+from core.constants import (
+    BAND_METHOD_GAUSSIAN,
+    MODE_LOGPERIODIC,
+    MODE_POWERLAW,
+    TIME_LOG,
+)
 
 HALVING_DATES = [
     pd.Timestamp("2012-11-28"),
@@ -94,6 +99,7 @@ def render_main_model_chart(
     p16_5,
     p83_5,
     p97_5,
+    band_method,
     osc_t1_age,
     osc_lambda,
     pl_template,
@@ -122,6 +128,12 @@ def render_main_model_chart(
     is_log_time = time_scale == TIME_LOG
 
     if mode == MODE_POWERLAW:
+        is_gaussian_band = band_method == BAND_METHOD_GAUSSIAN
+        p97_5_name = "+2σ" if is_gaussian_band else "+2σ (97.5th percentile)"
+        p83_5_name = "+1σ" if is_gaussian_band else "+1σ (83.5th percentile)"
+        p16_5_name = "-1σ" if is_gaussian_band else "-1σ (16.5th percentile)"
+        p2_5_name = "-2σ" if is_gaussian_band else "-2σ (2.5th percentile)"
+
         p2_5_series = 10 ** (np.log10(m_fair_display) + p2_5)
         p16_5_series = 10 ** (np.log10(m_fair_display) + p16_5)
         p83_5_series = 10 ** (np.log10(m_fair_display) + p83_5)
@@ -133,11 +145,11 @@ def render_main_model_chart(
                 y=p97_5_series,
                 mode="lines",
                 line=dict(color="#ea3d2f", width=1.2, dash="dot"),
-                name="97.5th percentile",
+                name=p97_5_name,
                 legendrank=20,
                 customdata=m_dates_str,
                 hovertemplate=(
-                    "<b>97.5th percentile</b>: "
+                    f"<b>{p97_5_name}</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -148,11 +160,11 @@ def render_main_model_chart(
                 y=p83_5_series,
                 mode="lines",
                 line=dict(color="#1199d6", width=1.2, dash="dot"),
-                name="83.5th percentile",
+                name=p83_5_name,
                 legendrank=30,
                 customdata=m_dates_str,
                 hovertemplate=(
-                    "<b>83.5th percentile</b>: "
+                    f"<b>{p83_5_name}</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -178,11 +190,11 @@ def render_main_model_chart(
                 y=p16_5_series,
                 mode="lines",
                 line=dict(color="#1199d6", width=1.2, dash="dot"),
-                name="16.5th percentile",
+                name=p16_5_name,
                 legendrank=50,
                 customdata=m_dates_str,
                 hovertemplate=(
-                    "<b>16.5th percentile</b>: "
+                    f"<b>{p16_5_name}</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -193,11 +205,11 @@ def render_main_model_chart(
                 y=p2_5_series,
                 mode="lines",
                 line=dict(color="#ea3d2f", width=1.2, dash="dot"),
-                name="2.5th percentile",
+                name=p2_5_name,
                 legendrank=60,
                 customdata=m_dates_str,
                 hovertemplate=(
-                    "<b>2.5th percentile</b>: "
+                    f"<b>{p2_5_name}</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )

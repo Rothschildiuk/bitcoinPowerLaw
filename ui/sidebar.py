@@ -2,6 +2,8 @@ import streamlit as st
 
 from core import oscillator, power_law
 from core.constants import (
+    BAND_METHOD_OPTIONS,
+    BAND_METHOD_QUANTILE,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
@@ -28,6 +30,7 @@ from core.constants import (
     KEY_A_DIFFICULTY,
     KEY_A_REVENUE,
     KEY_B,
+    KEY_BAND_METHOD,
     KEY_B_PRICE,
     KEY_B_EURO,
     KEY_B_GOLD,
@@ -224,6 +227,21 @@ def render_sidebar_panel(
         else:
             time_scale = st.session_state.get(KEY_TIME_SCALE, TIME_LOG)
 
+        band_method = st.session_state.get(KEY_BAND_METHOD, BAND_METHOD_QUANTILE)
+        if band_method not in BAND_METHOD_OPTIONS:
+            band_method = BAND_METHOD_QUANTILE
+            st.session_state[KEY_BAND_METHOD] = band_method
+        if mode == MODE_POWERLAW:
+            band_method = st.radio(
+                "Band model",
+                BAND_METHOD_OPTIONS,
+                horizontal=True,
+                key=KEY_BAND_METHOD,
+            )
+        else:
+            st.session_state[KEY_BAND_METHOD] = BAND_METHOD_QUANTILE
+            band_method = BAND_METHOD_QUANTILE
+
         current_r2 = 0.0
         price_scale = "Log"
         model_abs_days = price_absolute_days
@@ -344,4 +362,13 @@ def render_sidebar_panel(
                 ),
             )
 
-    return mode, currency, time_scale, price_scale, current_r2, powerlaw_series, logperiodic_series
+    return (
+        mode,
+        currency,
+        time_scale,
+        price_scale,
+        current_r2,
+        powerlaw_series,
+        logperiodic_series,
+        band_method,
+    )

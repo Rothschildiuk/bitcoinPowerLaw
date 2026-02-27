@@ -6,6 +6,8 @@ import streamlit as st
 from core import oscillator, power_law
 from core.constants import (
     APP_VERSION,
+    BAND_METHOD_GAUSSIAN,
+    BAND_METHOD_QUANTILE,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
@@ -41,6 +43,7 @@ from core.constants import (
     KEY_B_REVENUE,
     KEY_A,
     KEY_B,
+    KEY_BAND_METHOD,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
@@ -83,6 +86,7 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
+        KEY_BAND_METHOD: BAND_METHOD_QUANTILE,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -169,6 +173,32 @@ def calculate_percentile_offsets(display_df, genesis_offset_days):
         baseline_residuals = display_df["LogClose"].values - baseline_log
 
     return np.percentile(baseline_residuals, [2.5, 16.5, 83.5, 97.5])
+
+
+def calculate_gaussian_offsets(display_df, genesis_offset_days):
+    """
+    Compute gaussian-like offsets (mean +/- 1σ and +/- 2σ) from baseline residuals.
+    """
+    fitted_b, fitted_a, _ = power_law.fit_powerlaw_regression(
+        display_df["AbsDays"].values,
+        display_df["LogClose"].values,
+        genesis_offset_days,
+    )
+    if fitted_a == 0.0 and fitted_b == 0.0:
+        baseline_residuals = display_df["Res"].values
+    else:
+        base_days = np.maximum(display_df["AbsDays"].values - genesis_offset_days, 1.0)
+        baseline_log = fitted_a + fitted_b * np.log10(base_days)
+        baseline_residuals = display_df["LogClose"].values - baseline_log
+
+    mu = float(np.mean(baseline_residuals))
+    sigma = float(np.std(baseline_residuals))
+    return (
+        mu - 2.0 * sigma,
+        mu - 1.0 * sigma,
+        mu + 1.0 * sigma,
+        mu + 2.0 * sigma,
+    )
 
 
 @st.cache_data(ttl=3600)
@@ -447,7 +477,16 @@ c_hover_text = theme["c_hover_text"]
 c_border = theme["c_border"]
 
 # --- SIDEBAR ASSEMBLY ---
-mode, currency, time_scale, price_scale, current_r2, powerlaw_series, logperiodic_series = (
+(
+    mode,
+    currency,
+    time_scale,
+    price_scale,
+    current_r2,
+    powerlaw_series,
+    logperiodic_series,
+    band_method,
+) = (
     render_sidebar_panel(
         price_absolute_days,
         price_log_close,
@@ -631,7 +670,10 @@ if mode == MODE_LOGPERIODIC:
     else:
         current_r2 = 0.0
 
-p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
+if mode == MODE_POWERLAW and band_method == BAND_METHOD_GAUSSIAN:
+    p2_5, p16_5, p83_5, p97_5 = calculate_gaussian_offsets(df_display, genesis_offset)
+else:
+    p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
 
 # --- OSCILLATOR CALC ---
 osc_lambda = float(st.session_state.get("lambda_val", OSC_DEFAULTS["lambda_val"]))
@@ -734,6 +776,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         p16_5=p16_5,
         p83_5=p83_5,
         p97_5=p97_5,
+        band_method=band_method,
         osc_t1_age=osc_t1_age,
         osc_lambda=osc_lambda,
         pl_template=pl_template,
