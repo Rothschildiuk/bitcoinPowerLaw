@@ -1,9 +1,15 @@
 import numpy as np
 import streamlit as st
 
-from core.constants import DEFAULT_A, DEFAULT_B, KEY_A, KEY_B, KEY_GENESIS_OFFSET
+from core.constants import (
+    DEFAULT_A,
+    DEFAULT_B,
+    KEY_A,
+    KEY_B,
+    KEY_GENESIS_OFFSET,
+)
 from core.optimization_utils import optimize_single_scalar_parameter
-from core.utils import calculate_r2_score, fancy_control, inline_radio_control
+from core.utils import calculate_r2_score, fancy_control
 
 # --- MATH CORE ---
 
@@ -101,7 +107,6 @@ def render_sidebar(
     all_abs_days,
     all_log_close,
     text_color,
-    show_price_scale=True,
     render_extra_controls=None,
     a_key=KEY_A,
     b_key=KEY_B,
@@ -125,12 +130,6 @@ def render_sidebar(
         st.session_state[KEY_GENESIS_OFFSET] = int(opt_offset)
         st.session_state[a_key] = float(default_a)
         st.session_state[b_key] = float(default_b)
-
-    # Controls - Time scale removed, Price scale optional
-    if show_price_scale:
-        price_scale = inline_radio_control("Price", ["Log", "Lin"])
-    else:
-        price_scale = "Log"
 
     def auto_fit_intercept():
         best_a, _ = optimize_single_powerlaw_parameter(
@@ -195,5 +194,4 @@ def render_sidebar(
 
     st.button("Reset parameters", use_container_width=True, on_click=reset_powerlaw_params)
 
-    # Return only price_scale and r2
-    return price_scale, display_r2
+    return display_r2

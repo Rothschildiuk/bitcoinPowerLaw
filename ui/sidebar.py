@@ -64,7 +64,6 @@ from core.constants import (
     TIME_LOG,
     TIME_LIN,
 )
-from core.utils import inline_radio_control
 
 
 def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_max):
@@ -197,11 +196,55 @@ def render_sidebar_panel(
                 LOGPERIODIC_SERIES_OPTIONS,
                 horizontal=True,
                 key=KEY_LOGPERIODIC_SERIES,
+                width="stretch",
             )
             if logperiodic_series is None:
                 logperiodic_series = st.session_state.get(KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE)
                 st.session_state[KEY_LOGPERIODIC_SERIES] = logperiodic_series
                 st.rerun()
+
+        time_scale = st.session_state.get(KEY_TIME_SCALE, TIME_LOG)
+        price_scale = st.session_state.get("price_scale_selector", "Log")
+        hide_price_scale = (
+            mode == MODE_POWERLAW
+            and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+        )
+
+        if mode == MODE_POWERLAW:
+            time_col, price_col = st.columns(2)
+            with time_col:
+                st.markdown("**Time**")
+                time_scale = st.radio(
+                    "Time",
+                    [TIME_LOG, TIME_LIN],
+                    horizontal=True,
+                    key=KEY_TIME_SCALE,
+                    label_visibility="collapsed",
+                    width="stretch",
+                )
+            with price_col:
+                st.markdown("**Price**")
+                if hide_price_scale:
+                    price_scale = "Log"
+                    st.session_state["price_scale_selector"] = "Log"
+                    st.radio(
+                        "Price",
+                        ["Log"],
+                        horizontal=True,
+                        key="price_scale_series_fixed",
+                        label_visibility="collapsed",
+                        disabled=True,
+                        width="stretch",
+                    )
+                else:
+                    price_scale = st.radio(
+                        "Price",
+                        ["Log", "Lin"],
+                        horizontal=True,
+                        key="price_scale_selector",
+                        label_visibility="collapsed",
+                        width="stretch",
+                    )
 
         is_non_price_series = (
             (mode == MODE_POWERLAW and powerlaw_series != POWERLAW_SERIES_PRICE)
@@ -220,12 +263,8 @@ def render_sidebar_panel(
                 horizontal=True,
                 index=CURRENCY_OPTIONS.index(selected_currency),
                 key=KEY_CURRENCY_SELECTOR,
+                width="stretch",
             )
-
-        if mode != MODE_PORTFOLIO:
-            time_scale = inline_radio_control("Time", [TIME_LOG, TIME_LIN], key=KEY_TIME_SCALE)
-        else:
-            time_scale = st.session_state.get(KEY_TIME_SCALE, TIME_LOG)
 
         band_method = st.session_state.get(KEY_BAND_METHOD, BAND_METHOD_QUANTILE)
         if band_method not in BAND_METHOD_OPTIONS:
@@ -237,13 +276,13 @@ def render_sidebar_panel(
                 BAND_METHOD_OPTIONS,
                 horizontal=True,
                 key=KEY_BAND_METHOD,
+                width="stretch",
             )
         else:
             st.session_state[KEY_BAND_METHOD] = BAND_METHOD_QUANTILE
             band_method = BAND_METHOD_QUANTILE
 
         current_r2 = 0.0
-        price_scale = "Log"
         model_abs_days = price_absolute_days
         model_log_close = price_log_close
         a_key = KEY_A_PRICE
@@ -307,15 +346,10 @@ def render_sidebar_panel(
             default_b = DEFAULT_HASHRATE_B
 
         if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
-            hide_price_scale = (
-                mode == MODE_POWERLAW
-                and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
-            )
-            price_scale, current_r2 = power_law.render_sidebar(
+            current_r2 = power_law.render_sidebar(
                 model_abs_days,
                 model_log_close,
                 c_text_main,
-                show_price_scale=(mode != MODE_PORTFOLIO and not hide_price_scale),
                 render_extra_controls=(
                     lambda: (
                         _render_portfolio_sidebar_controls(

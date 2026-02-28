@@ -135,6 +135,31 @@ div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checke
     color: #111827 !important;
 }
 
+/* Keep Plotly modebar above overlays and make buttons reliably clickable in Streamlit. */
+[data-testid="stPlotlyChart"],
+[data-testid="stPlotlyChart"] > div {
+    position: relative;
+    z-index: 1;
+}
+
+/* Streamlit element toolbar can overlap the chart header area and block modebar clicks. */
+[data-testid="stElementToolbar"] {
+    display: none !important;
+}
+
+[data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar-container,
+[data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar {
+    pointer-events: all !important;
+    top: 10px !important;
+    bottom: auto !important;
+    right: 8px !important;
+}
+
+[data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar-btn {
+    pointer-events: all !important;
+    cursor: pointer !important;
+}
+
 @media (max-width: 900px) {
     .block-container {
         padding-top: 0.5rem !important;
