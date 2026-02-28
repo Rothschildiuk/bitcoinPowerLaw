@@ -1,0 +1,16 @@
+{
+  "name": "powerlaw",
+  "version": "1.0.0",
+  "description": "Gemini CLI bootstrap for PowerLaw",
+  "scripts": {
+    "gemini": "mkdir -p .home && HOME=\"$PWD/.home\" gemini",
+    "gemini:review": "mkdir -p .home && HOME=\"$PWD/.home\" gemini --prompt \"Review the current git diff and report issues by severity with file/line references.\"",
+    "test": "echo \"No JS tests configured\" && exit 0"
+  },
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "devDependencies": {
+    "@google/gemini-cli": "^0.31.0"
+  }
+}

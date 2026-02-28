@@ -19,6 +19,8 @@ __pycache__/
 
 # Streamlit cache/settings
 .streamlit/
+.home/
+node_modules/
 
 # Local environment and logs
 .env
@@ -31,6 +33,8 @@ __pycache__/
 *.db
 *.json
 *.parquet
+!package.json
+!package-lock.json
 
 # macOS system files
 .DS_Store

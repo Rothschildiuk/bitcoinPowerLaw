@@ -2,6 +2,7 @@ import numpy as np
 import streamlit as st
 
 from core.constants import DEFAULT_A, DEFAULT_B, KEY_A, KEY_B, KEY_GENESIS_OFFSET, OSC_DEFAULTS
+from core.optimization_utils import optimize_parameter_by_candidates
 from core.utils import calculate_r2_score, fancy_control, get_stable_trend_fit
 
 AUTO_FIT_MAX_PASSES = 2
@@ -155,36 +156,22 @@ def optimize_single_oscillator_parameter(
     grid_points=AUTO_FIT_SINGLE_GRID_POINTS,
 ):
     params = dict(current_params)
-    if step_value is not None and step_value > 0:
-        candidates = np.arange(min_value, max_value + (step_value * 0.5), step_value)
-    else:
-        candidates = np.linspace(min_value, max_value, grid_points)
-    best_value = float(params[parameter_key])
-    best_r2 = compute_oscillator_fit_r2(
-        log_days,
-        residual_series,
-        params["t1_age"],
-        params["lambda_val"],
-        params["amp_factor_top"],
-        params["amp_factor_bottom"],
-        params["impulse_damping"],
-    )
-
-    for candidate in candidates:
-        trial = dict(params)
-        trial[parameter_key] = float(candidate)
-        score = compute_oscillator_fit_r2(
+    best_value, best_r2 = optimize_parameter_by_candidates(
+        float(params[parameter_key]),
+        lambda candidate: compute_oscillator_fit_r2(
             log_days,
             residual_series,
-            trial["t1_age"],
-            trial["lambda_val"],
-            trial["amp_factor_top"],
-            trial["amp_factor_bottom"],
-            trial["impulse_damping"],
-        )
-        if score > best_r2:
-            best_r2 = score
-            best_value = float(candidate)
+            params["t1_age"] if parameter_key != "t1_age" else float(candidate),
+            params["lambda_val"] if parameter_key != "lambda_val" else float(candidate),
+            params["amp_factor_top"] if parameter_key != "amp_factor_top" else float(candidate),
+            params["amp_factor_bottom"] if parameter_key != "amp_factor_bottom" else float(candidate),
+            params["impulse_damping"] if parameter_key != "impulse_damping" else float(candidate),
+        ),
+        min_value=min_value,
+        max_value=max_value,
+        step_value=step_value,
+        grid_points=grid_points,
+    )
 
     return best_value, best_r2
 

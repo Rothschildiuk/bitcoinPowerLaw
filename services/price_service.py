@@ -83,6 +83,32 @@ def _safe_download_close_series(symbol, start_date):
     return _extract_close_series(downloaded_df)
 
 
+def _fetch_json_with_retry(
+    url,
+    *,
+    retries=3,
+    timeout=15,
+    initial_backoff_seconds=0.4,
+    backoff_multiplier=2.0,
+):
+    headers = {"User-Agent": "PowerLaw/1.0"}
+    last_exception = None
+    for attempt in range(max(1, int(retries))):
+        try:
+            request = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            last_exception = exc
+            if attempt == retries - 1:
+                break
+            sleep_seconds = initial_backoff_seconds * (backoff_multiplier**attempt)
+            time.sleep(sleep_seconds)
+    if last_exception is not None:
+        return None
+    return None
+
+
 def _safe_download_btc_tail_from_coingecko(start_date):
     start_ts = int(pd.Timestamp(start_date).timestamp())
     end_ts = int(pd.Timestamp.utcnow().timestamp())
@@ -90,15 +116,7 @@ def _safe_download_btc_tail_from_coingecko(start_date):
         "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range"
         f"?vs_currency=usd&from={start_ts}&to={end_ts}"
     )
-    payload = None
-    for _ in range(3):
-        try:
-            request = urllib.request.Request(url, headers={"User-Agent": "PowerLaw/1.0"})
-            with urllib.request.urlopen(request, timeout=15) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            break
-        except Exception:
-            time.sleep(0.4)
+    payload = _fetch_json_with_retry(url, retries=3, timeout=15)
     if payload is None:
         return pd.Series(dtype=float)
 
@@ -118,17 +136,14 @@ def _safe_download_btc_tail_from_coingecko(start_date):
 
 
 def _safe_download_btc_tail_from_coincap(start_date):
-    try:
-        start_ms = int(pd.Timestamp(start_date).timestamp() * 1000)
-        end_ms = int(pd.Timestamp.utcnow().timestamp() * 1000)
-        url = (
-            "https://api.coincap.io/v2/assets/bitcoin/history"
-            f"?interval=d1&start={start_ms}&end={end_ms}"
-        )
-        request = urllib.request.Request(url, headers={"User-Agent": "PowerLaw/1.0"})
-        with urllib.request.urlopen(request, timeout=15) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception:
+    start_ms = int(pd.Timestamp(start_date).timestamp() * 1000)
+    end_ms = int(pd.Timestamp.utcnow().timestamp() * 1000)
+    url = (
+        "https://api.coincap.io/v2/assets/bitcoin/history"
+        f"?interval=d1&start={start_ms}&end={end_ms}"
+    )
+    payload = _fetch_json_with_retry(url, retries=3, timeout=15)
+    if payload is None:
         return pd.Series(dtype=float)
 
     rows = payload.get("data", [])

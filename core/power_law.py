@@ -2,6 +2,7 @@ import numpy as np
 import streamlit as st
 
 from core.constants import DEFAULT_A, DEFAULT_B, KEY_A, KEY_B, KEY_GENESIS_OFFSET
+from core.optimization_utils import optimize_single_scalar_parameter
 from core.utils import calculate_r2_score, fancy_control, inline_radio_control
 
 # --- MATH CORE ---
@@ -58,57 +59,31 @@ def optimize_single_powerlaw_parameter(
     parameter_key,
 ):
     if parameter_key == "A":
-        coarse_candidates = np.linspace(-35.0, 0.0, 281)
-        best_value = float(current_intercept_a)
-        best_r2 = calculate_r2_for_manual_params(
-            absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
+        best_value, best_r2 = optimize_single_scalar_parameter(
+            float(current_intercept_a),
+            lambda candidate: calculate_r2_for_manual_params(
+                absolute_days, log_prices, genesis_offset_days, float(candidate), current_slope_b
+            ),
+            min_value=-35.0,
+            max_value=0.0,
+            coarse_points=281,
+            fine_window=0.2,
+            fine_points=401,
         )
-        for candidate in coarse_candidates:
-            score = calculate_r2_for_manual_params(
-                absolute_days, log_prices, genesis_offset_days, float(candidate), current_slope_b
-            )
-            if score > best_r2:
-                best_r2 = score
-                best_value = float(candidate)
-
-        fine_lo = max(-35.0, best_value - 0.2)
-        fine_hi = min(0.0, best_value + 0.2)
-        fine_candidates = np.linspace(fine_lo, fine_hi, 401)
-        for candidate in fine_candidates:
-            score = calculate_r2_for_manual_params(
-                absolute_days, log_prices, genesis_offset_days, float(candidate), current_slope_b
-            )
-            if score > best_r2:
-                best_r2 = score
-                best_value = float(candidate)
-
         return round(best_value, 3), best_r2
 
     if parameter_key == "B":
-        coarse_candidates = np.linspace(1.0, 12.0, 221)
-        best_value = float(current_slope_b)
-        best_r2 = calculate_r2_for_manual_params(
-            absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
+        best_value, best_r2 = optimize_single_scalar_parameter(
+            float(current_slope_b),
+            lambda candidate: calculate_r2_for_manual_params(
+                absolute_days, log_prices, genesis_offset_days, current_intercept_a, float(candidate)
+            ),
+            min_value=1.0,
+            max_value=12.0,
+            coarse_points=221,
+            fine_window=0.15,
+            fine_points=301,
         )
-        for candidate in coarse_candidates:
-            score = calculate_r2_for_manual_params(
-                absolute_days, log_prices, genesis_offset_days, current_intercept_a, float(candidate)
-            )
-            if score > best_r2:
-                best_r2 = score
-                best_value = float(candidate)
-
-        fine_lo = max(1.0, best_value - 0.15)
-        fine_hi = min(12.0, best_value + 0.15)
-        fine_candidates = np.linspace(fine_lo, fine_hi, 301)
-        for candidate in fine_candidates:
-            score = calculate_r2_for_manual_params(
-                absolute_days, log_prices, genesis_offset_days, current_intercept_a, float(candidate)
-            )
-            if score > best_r2:
-                best_r2 = score
-                best_value = float(candidate)
-
         return round(best_value, 3), best_r2
 
     return round(float(current_intercept_a), 3), calculate_r2_for_manual_params(

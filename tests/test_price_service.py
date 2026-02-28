@@ -6,6 +6,20 @@ import pandas as pd
 from services import price_service
 
 
+class _FakeHttpResponse:
+    def __init__(self, payload_bytes):
+        self._payload_bytes = payload_bytes
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return self._payload_bytes
+
+
 class TestPriceService(unittest.TestCase):
     def test_extract_close_series_handles_empty_input(self):
         series = price_service._extract_close_series(pd.DataFrame())
@@ -33,6 +47,22 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service.build_currency_close_series(raw_df, "EUR")
         self.assertListEqual(result.round(6).tolist(), [50.0, 60.0])
+
+    @patch("services.price_service.time.sleep")
+    @patch("services.price_service.urllib.request.urlopen")
+    def test_fetch_json_with_retry_retries_before_success(self, mock_urlopen, mock_sleep):
+        success_response = _FakeHttpResponse(b'{"ok": true}')
+        mock_urlopen.side_effect = [Exception("boom-1"), Exception("boom-2"), success_response]
+
+        payload = price_service._fetch_json_with_retry(
+            "https://example.test/data",
+            retries=3,
+            initial_backoff_seconds=0.1,
+        )
+
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(mock_urlopen.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
 
     @patch("services.price_service._safe_download_close_series")
     @patch("services.price_service._safe_download_btc_tail_from_coingecko")

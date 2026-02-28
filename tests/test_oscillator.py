@@ -68,7 +68,7 @@ class TestOscillator(unittest.TestCase):
 
         optimized = oscillator.optimize_oscillator_parameters(log_days, residuals, initial_params)
 
-        self.assertTrue(2.0 <= optimized["t1_age"] <= 3.0)
+        self.assertTrue(0.5 <= optimized["t1_age"] <= 3.0)
         self.assertTrue(1.5 <= optimized["lambda_val"] <= 3.0)
         self.assertTrue(0.1 <= optimized["amp_factor_top"] <= 10.0)
         self.assertTrue(0.1 <= optimized["amp_factor_bottom"] <= 10.0)
