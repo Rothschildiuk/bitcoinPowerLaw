@@ -207,6 +207,62 @@ class TestPriceService(unittest.TestCase):
         )
         self.assertListEqual(result["Close"].tolist(), [100_000_000.0, 120_000_000.0])
 
+    @patch("services.price_service.load_bitcoin_visuals_daily_data")
+    def test_load_prepared_lightning_nodes_data_parses_day_and_nodes(self, mock_load_daily):
+        price_service.load_prepared_lightning_nodes_data.clear()
+        mock_load_daily.return_value = pd.DataFrame(
+            {
+                "day": ["2024-01-01", "2024-01-02", "2024-01-03"],
+                "nodes_with_channels": [11_000, "", 12_500],
+            }
+        )
+
+        result = price_service.load_prepared_lightning_nodes_data("unused.csv")
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2024-01-01", "2024-01-03"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [11_000.0, 12_500.0])
+
+    @patch("services.price_service.load_bitcoin_visuals_daily_data")
+    def test_load_prepared_lightning_capacity_data_parses_day_and_capacity(self, mock_load_daily):
+        price_service.load_prepared_lightning_capacity_data.clear()
+        mock_load_daily.return_value = pd.DataFrame(
+            {
+                "day": ["2024-01-01", "2024-01-02", "2024-01-03"],
+                "capacity_total": [4_500.5, 0.0, 4_700.25],
+            }
+        )
+
+        result = price_service.load_prepared_lightning_capacity_data("unused.csv")
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2024-01-01", "2024-01-03"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [4_500.5, 4_700.25])
+
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_liquid_btc_data_parses_official_reserves_api(self, mock_fetch_json):
+        price_service.load_prepared_liquid_btc_data.clear()
+        mock_fetch_json.side_effect = [
+            [
+                {"date": "2024-01-01", "amount": "100000000"},
+                {"date": "2024-02-01", "amount": "200000000"},
+            ],
+            {"amount": "250000000", "lastBlockUpdate": 1},
+        ]
+
+        result = price_service.load_prepared_liquid_btc_data(
+            liquid_reserves_month_url="unused-month",
+            liquid_reserves_url="unused-current",
+        )
+
+        self.assertFalse(result.empty)
+        self.assertAlmostEqual(float(result.iloc[0]["Close"]), 1.0)
+        self.assertAlmostEqual(float(result.iloc[-1]["Close"]), 2.5)
+        self.assertIn("AbsDays", result.columns)
+        self.assertIn("LogClose", result.columns)
+
 
 if __name__ == "__main__":
     unittest.main()

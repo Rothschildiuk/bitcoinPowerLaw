@@ -18,6 +18,12 @@ from core.constants import (
     DEFAULT_HASHRATE_B,
     DEFAULT_DIFFICULTY_A,
     DEFAULT_DIFFICULTY_B,
+    DEFAULT_LIGHTNING_CAPACITY_A,
+    DEFAULT_LIGHTNING_CAPACITY_B,
+    DEFAULT_LIGHTNING_NODES_A,
+    DEFAULT_LIGHTNING_NODES_B,
+    DEFAULT_LIQUID_BTC_A,
+    DEFAULT_LIQUID_BTC_B,
     OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
@@ -28,6 +34,9 @@ from core.constants import (
     KEY_A_GOLD,
     KEY_A_HASHRATE,
     KEY_A_DIFFICULTY,
+    KEY_A_LIGHTNING_CAPACITY,
+    KEY_A_LIGHTNING_NODES,
+    KEY_A_LIQUID_BTC,
     KEY_A_REVENUE,
     KEY_B,
     KEY_BAND_METHOD,
@@ -36,6 +45,9 @@ from core.constants import (
     KEY_B_GOLD,
     KEY_B_HASHRATE,
     KEY_B_DIFFICULTY,
+    KEY_B_LIGHTNING_CAPACITY,
+    KEY_B_LIGHTNING_NODES,
+    KEY_B_LIQUID_BTC,
     KEY_B_REVENUE,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
@@ -59,6 +71,9 @@ from core.constants import (
     POWERLAW_SERIES_OPTIONS,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_HASHRATE,
+    POWERLAW_SERIES_LIGHTNING_CAPACITY,
+    POWERLAW_SERIES_LIGHTNING_NODES,
+    POWERLAW_SERIES_LIQUID_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
     TIME_LOG,
@@ -131,6 +146,12 @@ def render_sidebar_panel(
     difficulty_log_close,
     hashrate_absolute_days,
     hashrate_log_close,
+    lightning_nodes_absolute_days,
+    lightning_nodes_log_close,
+    lightning_capacity_absolute_days,
+    lightning_capacity_log_close,
+    liquid_btc_absolute_days,
+    liquid_btc_log_close,
     c_text_main,
     app_version,
     forecast_horizon_min,
@@ -199,16 +220,18 @@ def render_sidebar_panel(
                 width="stretch",
             )
             if logperiodic_series is None:
-                logperiodic_series = st.session_state.get(KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE)
+                logperiodic_series = st.session_state.get(
+                    KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE
+                )
                 st.session_state[KEY_LOGPERIODIC_SERIES] = logperiodic_series
                 st.rerun()
 
         time_scale = st.session_state.get(KEY_TIME_SCALE, TIME_LOG)
         price_scale = st.session_state.get("price_scale_selector", "Log")
-        hide_price_scale = (
-            mode == MODE_POWERLAW
-            and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
-        )
+        hide_price_scale = mode == MODE_POWERLAW and powerlaw_series in [
+            POWERLAW_SERIES_DIFFICULTY,
+            POWERLAW_SERIES_HASHRATE,
+        ]
 
         if mode == MODE_POWERLAW:
             time_col, price_col = st.columns(2)
@@ -247,9 +270,8 @@ def render_sidebar_panel(
                     )
 
         is_non_price_series = (
-            (mode == MODE_POWERLAW and powerlaw_series != POWERLAW_SERIES_PRICE)
-            or (mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE)
-        )
+            mode == MODE_POWERLAW and powerlaw_series != POWERLAW_SERIES_PRICE
+        ) or (mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE)
 
         if is_non_price_series:
             currency = CURRENCY_DOLLAR
@@ -289,6 +311,10 @@ def render_sidebar_panel(
         b_key = KEY_B_PRICE
         default_a = DEFAULT_A
         default_b = DEFAULT_B
+        a_min = -35.0
+        a_max = 0.0
+        b_min = 1.0
+        b_max = 12.0
 
         if (
             mode in [MODE_POWERLAW, MODE_PORTFOLIO]
@@ -330,6 +356,27 @@ def render_sidebar_panel(
             b_key = KEY_B_HASHRATE
             default_a = DEFAULT_HASHRATE_A
             default_b = DEFAULT_HASHRATE_B
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIGHTNING_NODES:
+            model_abs_days = lightning_nodes_absolute_days
+            model_log_close = lightning_nodes_log_close
+            a_key = KEY_A_LIGHTNING_NODES
+            b_key = KEY_B_LIGHTNING_NODES
+            default_a = DEFAULT_LIGHTNING_NODES_A
+            default_b = DEFAULT_LIGHTNING_NODES_B
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIGHTNING_CAPACITY:
+            model_abs_days = lightning_capacity_absolute_days
+            model_log_close = lightning_capacity_log_close
+            a_key = KEY_A_LIGHTNING_CAPACITY
+            b_key = KEY_B_LIGHTNING_CAPACITY
+            default_a = DEFAULT_LIGHTNING_CAPACITY_A
+            default_b = DEFAULT_LIGHTNING_CAPACITY_B
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIQUID_BTC:
+            model_abs_days = liquid_btc_absolute_days
+            model_log_close = liquid_btc_log_close
+            a_key = KEY_A_LIQUID_BTC
+            b_key = KEY_B_LIQUID_BTC
+            default_a = DEFAULT_LIQUID_BTC_A
+            default_b = DEFAULT_LIQUID_BTC_B
         if mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
             model_abs_days = difficulty_absolute_days
             model_log_close = difficulty_log_close
@@ -363,6 +410,10 @@ def render_sidebar_panel(
                 b_key=b_key,
                 default_a=default_a,
                 default_b=default_b,
+                a_min=a_min,
+                a_max=a_max,
+                b_min=b_min,
+                b_max=b_max,
             )
         else:
             # Keep legacy A/B keys aligned before rendering LogPeriodic controls,

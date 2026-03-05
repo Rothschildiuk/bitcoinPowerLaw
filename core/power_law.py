@@ -63,6 +63,10 @@ def optimize_single_powerlaw_parameter(
     current_intercept_a,
     current_slope_b,
     parameter_key,
+    a_min=-35.0,
+    a_max=0.0,
+    b_min=1.0,
+    b_max=12.0,
 ):
     if parameter_key == "A":
         best_value, best_r2 = optimize_single_scalar_parameter(
@@ -70,8 +74,8 @@ def optimize_single_powerlaw_parameter(
             lambda candidate: calculate_r2_for_manual_params(
                 absolute_days, log_prices, genesis_offset_days, float(candidate), current_slope_b
             ),
-            min_value=-35.0,
-            max_value=0.0,
+            min_value=float(a_min),
+            max_value=float(a_max),
             coarse_points=281,
             fine_window=0.2,
             fine_points=401,
@@ -82,10 +86,14 @@ def optimize_single_powerlaw_parameter(
         best_value, best_r2 = optimize_single_scalar_parameter(
             float(current_slope_b),
             lambda candidate: calculate_r2_for_manual_params(
-                absolute_days, log_prices, genesis_offset_days, current_intercept_a, float(candidate)
+                absolute_days,
+                log_prices,
+                genesis_offset_days,
+                current_intercept_a,
+                float(candidate),
             ),
-            min_value=1.0,
-            max_value=12.0,
+            min_value=float(b_min),
+            max_value=float(b_max),
             coarse_points=221,
             fine_window=0.15,
             fine_points=301,
@@ -112,6 +120,10 @@ def render_sidebar(
     b_key=KEY_B,
     default_a=DEFAULT_A,
     default_b=DEFAULT_B,
+    a_min=-35.0,
+    a_max=0.0,
+    b_min=1.0,
+    b_max=12.0,
 ):
     # Initialize defaults if needed
     if KEY_GENESIS_OFFSET not in st.session_state:
@@ -139,6 +151,10 @@ def render_sidebar(
             float(st.session_state.get(a_key, opt_a)),
             float(st.session_state.get(b_key, opt_b)),
             "A",
+            a_min=a_min,
+            a_max=a_max,
+            b_min=b_min,
+            b_max=b_max,
         )
         st.session_state[a_key] = float(best_a)
 
@@ -150,6 +166,10 @@ def render_sidebar(
             float(st.session_state.get(a_key, opt_a)),
             float(st.session_state.get(b_key, opt_b)),
             "B",
+            a_min=a_min,
+            a_max=a_max,
+            b_min=b_min,
+            b_max=b_max,
         )
         st.session_state[b_key] = float(best_b)
 
@@ -158,8 +178,8 @@ def render_sidebar(
         "A (Intercept)",
         a_key,
         0.001,
-        -35.0,
-        0.0,
+        float(a_min),
+        float(a_max),
         on_auto_fit=auto_fit_intercept,
         auto_fit_label="AF",
     )
@@ -169,8 +189,8 @@ def render_sidebar(
         "B (Slope)",
         b_key,
         0.001,
-        1.0,
-        12.0,
+        float(b_min),
+        float(b_max),
         on_auto_fit=auto_fit_slope,
         auto_fit_label="AF",
     )

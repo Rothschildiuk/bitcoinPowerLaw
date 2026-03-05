@@ -11,9 +11,7 @@ import yfinance as yf
 
 from core.constants import CURRENCY_DOLLAR, CURRENCY_EURO, CURRENCY_GOLD, GENESIS_DATE
 
-BTC_HISTORY_CSV_URL = (
-    "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
-)
+BTC_HISTORY_CSV_URL = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
 MINER_REVENUE_CSV_URL = (
     "https://api.blockchain.info/charts/miners-revenue"
     "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
@@ -26,6 +24,9 @@ HASHRATE_CSV_URL = (
     "https://api.blockchain.info/charts/hash-rate"
     "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
 )
+BITCOIN_VISUALS_DAILY_CSV_URL = "https://bitcoinvisuals.com/static/data/data_daily.csv"
+LIQUID_RESERVES_URL = "https://liquid.network/api/v1/liquid/reserves"
+LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month"
 
 
 def _extract_close_series(download_df):
@@ -109,6 +110,29 @@ def _fetch_json_with_retry(
     return None
 
 
+def _fetch_csv_with_retry(
+    url,
+    *,
+    retries=3,
+    timeout=20,
+    initial_backoff_seconds=0.4,
+    backoff_multiplier=2.0,
+):
+    headers = {"User-Agent": "PowerLaw/1.0"}
+    for attempt in range(max(1, int(retries))):
+        try:
+            request = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload_text = response.read().decode("utf-8")
+            return pd.read_csv(io.StringIO(payload_text))
+        except Exception:
+            if attempt == retries - 1:
+                break
+            sleep_seconds = initial_backoff_seconds * (backoff_multiplier**attempt)
+            time.sleep(sleep_seconds)
+    return pd.DataFrame()
+
+
 def _safe_download_btc_tail_from_coingecko(start_date):
     start_ts = int(pd.Timestamp(start_date).timestamp())
     end_ts = int(pd.Timestamp.utcnow().timestamp())
@@ -154,7 +178,9 @@ def _safe_download_btc_tail_from_coincap(start_date):
     if "time" not in history_df.columns or "priceUsd" not in history_df.columns:
         return pd.Series(dtype=float)
 
-    history_df["Date"] = pd.to_datetime(history_df["time"], unit="ms", utc=True).dt.tz_localize(None)
+    history_df["Date"] = pd.to_datetime(history_df["time"], unit="ms", utc=True).dt.tz_localize(
+        None
+    )
     history_df["Close"] = pd.to_numeric(history_df["priceUsd"], errors="coerce")
     history_df = history_df.dropna(subset=["Date", "Close"]).sort_values("Date")
     history_df["Day"] = history_df["Date"].dt.normalize()
@@ -203,7 +229,9 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
 
     latest_csv_date = full_df.index.max()
     today = pd.Timestamp.utcnow().tz_localize(None).normalize()
-    if stale_after_days is not None and (today - latest_csv_date.normalize()).days > int(stale_after_days):
+    if stale_after_days is not None and (today - latest_csv_date.normalize()).days > int(
+        stale_after_days
+    ):
         btc_tail = _safe_download_close_series(
             "BTC-USD",
             (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
@@ -246,3 +274,90 @@ def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL):
     hashrate_df = pd.read_csv(hashrate_history_url)
     prepared_df = _normalize_chart_csv(hashrate_df, "Close")
     return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
+
+
+@st.cache_data(ttl=3600)
+def load_bitcoin_visuals_daily_data(data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
+    data_df = _fetch_csv_with_retry(data_url)
+    if data_df.empty:
+        raise ValueError("Unable to load Bitcoin Visuals daily data.")
+    return data_df
+
+
+def _load_prepared_lightning_series(value_column_name, data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
+    daily_df = load_bitcoin_visuals_daily_data(data_url)
+    if "day" not in daily_df.columns or value_column_name not in daily_df.columns:
+        raise ValueError(f"Missing required columns for Lightning series: day, {value_column_name}")
+
+    series_df = daily_df[["day", value_column_name]].copy()
+    series_df.columns = ["Date", "Close"]
+    return _normalize_chart_csv(series_df, "Close")
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_lightning_nodes_data(lightning_data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
+    return _load_prepared_lightning_series("nodes_with_channels", lightning_data_url)
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_lightning_capacity_data(lightning_data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
+    return _load_prepared_lightning_series("capacity_total", lightning_data_url)
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_liquid_btc_data(
+    liquid_reserves_month_url=LIQUID_RESERVES_MONTH_URL,
+    liquid_reserves_url=LIQUID_RESERVES_URL,
+):
+    month_payload = _fetch_json_with_retry(liquid_reserves_month_url)
+    if not isinstance(month_payload, list) or len(month_payload) == 0:
+        raise ValueError("Unable to load Liquid monthly reserve history.")
+
+    month_df = pd.DataFrame(month_payload)
+    if "date" not in month_df.columns or "amount" not in month_df.columns:
+        raise ValueError("Liquid monthly reserve payload is missing required columns.")
+
+    month_df = month_df[["date", "amount"]].copy()
+    month_df.columns = ["Date", "Sats"]
+    month_df["Date"] = pd.to_datetime(month_df["Date"], errors="coerce")
+    month_df["Sats"] = pd.to_numeric(month_df["Sats"], errors="coerce")
+    month_df = month_df.dropna(subset=["Date", "Sats"])
+    month_df["Close"] = month_df["Sats"] / 1e8
+
+    reserves_payload = _fetch_json_with_retry(liquid_reserves_url)
+    if isinstance(reserves_payload, dict) and "amount" in reserves_payload:
+        current_btc = float(pd.to_numeric(reserves_payload.get("amount"), errors="coerce") / 1e8)
+        if current_btc > 0:
+            month_df = pd.concat(
+                [
+                    month_df,
+                    pd.DataFrame(
+                        {
+                            "Date": [pd.Timestamp.utcnow().tz_localize(None).normalize()],
+                            "Sats": [current_btc * 1e8],
+                            "Close": [current_btc],
+                        }
+                    ),
+                ],
+                ignore_index=True,
+            )
+
+    points_df = month_df[["Date", "Close"]].copy()
+    prepared_df = _normalize_chart_csv(points_df, "Close")
+    if prepared_df.empty:
+        raise ValueError("Liquid BTC reserve series is empty after normalization.")
+
+    last_known_day = prepared_df.index.max().normalize()
+    utc_today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    full_daily_index = pd.date_range(
+        prepared_df.index.min().normalize(), max(last_known_day, utc_today), freq="D"
+    )
+
+    daily_df = prepared_df[["Close"]].copy()
+    daily_df.index = daily_df.index.normalize()
+    daily_df = daily_df[~daily_df.index.duplicated(keep="last")]
+    daily_df = daily_df.reindex(full_daily_index).ffill().dropna()
+
+    daily_df["AbsDays"] = (daily_df.index - GENESIS_DATE).days
+    daily_df["LogClose"] = np.log10(daily_df["Close"])
+    return daily_df

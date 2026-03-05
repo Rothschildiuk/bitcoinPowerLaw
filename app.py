@@ -21,6 +21,12 @@ from core.constants import (
     DEFAULT_GOLD_B,
     DEFAULT_HASHRATE_A,
     DEFAULT_HASHRATE_B,
+    DEFAULT_LIGHTNING_CAPACITY_A,
+    DEFAULT_LIGHTNING_CAPACITY_B,
+    DEFAULT_LIGHTNING_NODES_A,
+    DEFAULT_LIGHTNING_NODES_B,
+    DEFAULT_LIQUID_BTC_A,
+    DEFAULT_LIQUID_BTC_B,
     DEFAULT_DIFFICULTY_A,
     DEFAULT_DIFFICULTY_B,
     DEFAULT_REVENUE_A,
@@ -37,6 +43,12 @@ from core.constants import (
     KEY_B_GOLD,
     KEY_A_HASHRATE,
     KEY_B_HASHRATE,
+    KEY_A_LIGHTNING_CAPACITY,
+    KEY_B_LIGHTNING_CAPACITY,
+    KEY_A_LIGHTNING_NODES,
+    KEY_B_LIGHTNING_NODES,
+    KEY_A_LIQUID_BTC,
+    KEY_B_LIQUID_BTC,
     KEY_A_DIFFICULTY,
     KEY_B_DIFFICULTY,
     KEY_A_REVENUE,
@@ -62,6 +74,9 @@ from core.constants import (
     POWERLAW_SERIES_REVENUE,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_HASHRATE,
+    POWERLAW_SERIES_LIGHTNING_CAPACITY,
+    POWERLAW_SERIES_LIGHTNING_NODES,
+    POWERLAW_SERIES_LIQUID_BTC,
     TIME_LOG,
 )
 from core.utils import calculate_r2_score, get_stable_trend_fit
@@ -69,6 +84,9 @@ from services.price_service import (
     build_currency_close_series,
     load_prepared_difficulty_data,
     load_prepared_hashrate_data,
+    load_prepared_lightning_capacity_data,
+    load_prepared_lightning_nodes_data,
+    load_prepared_liquid_btc_data,
     load_prepared_miner_revenue_data,
     load_prepared_price_data,
 )
@@ -118,6 +136,18 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
         st.session_state[KEY_A_HASHRATE] = DEFAULT_HASHRATE_A
     if KEY_B_HASHRATE not in st.session_state:
         st.session_state[KEY_B_HASHRATE] = DEFAULT_HASHRATE_B
+    if KEY_A_LIGHTNING_NODES not in st.session_state:
+        st.session_state[KEY_A_LIGHTNING_NODES] = DEFAULT_LIGHTNING_NODES_A
+    if KEY_B_LIGHTNING_NODES not in st.session_state:
+        st.session_state[KEY_B_LIGHTNING_NODES] = DEFAULT_LIGHTNING_NODES_B
+    if KEY_A_LIGHTNING_CAPACITY not in st.session_state:
+        st.session_state[KEY_A_LIGHTNING_CAPACITY] = DEFAULT_LIGHTNING_CAPACITY_A
+    if KEY_B_LIGHTNING_CAPACITY not in st.session_state:
+        st.session_state[KEY_B_LIGHTNING_CAPACITY] = DEFAULT_LIGHTNING_CAPACITY_B
+    if KEY_A_LIQUID_BTC not in st.session_state:
+        st.session_state[KEY_A_LIQUID_BTC] = DEFAULT_LIQUID_BTC_A
+    if KEY_B_LIQUID_BTC not in st.session_state:
+        st.session_state[KEY_B_LIQUID_BTC] = DEFAULT_LIQUID_BTC_B
     if KEY_A not in st.session_state:
         st.session_state[KEY_A] = st.session_state[KEY_A_PRICE]
     if KEY_B not in st.session_state:
@@ -430,6 +460,24 @@ except Exception as e:
     st.error(f"Error loading hashrate data: {e}")
     st.stop()
 
+try:
+    raw_lightning_nodes_df = load_prepared_lightning_nodes_data()
+except Exception as e:
+    st.error(f"Error loading Lightning node data: {e}")
+    st.stop()
+
+try:
+    raw_lightning_capacity_df = load_prepared_lightning_capacity_data()
+except Exception as e:
+    st.error(f"Error loading Lightning capacity data: {e}")
+    st.stop()
+
+try:
+    raw_liquid_btc_df = load_prepared_liquid_btc_data()
+except Exception as e:
+    st.error(f"Error loading Liquid BTC data: {e}")
+    st.stop()
+
 if KEY_CURRENCY_SELECTOR not in st.session_state:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
 
@@ -441,6 +489,12 @@ raw_difficulty_df = raw_difficulty_df[raw_difficulty_df["Close"] > 0].copy()
 raw_difficulty_df["LogClose"] = np.log10(raw_difficulty_df["Close"])
 raw_hashrate_df = raw_hashrate_df[raw_hashrate_df["Close"] > 0].copy()
 raw_hashrate_df["LogClose"] = np.log10(raw_hashrate_df["Close"])
+raw_lightning_nodes_df = raw_lightning_nodes_df[raw_lightning_nodes_df["Close"] > 0].copy()
+raw_lightning_nodes_df["LogClose"] = np.log10(raw_lightning_nodes_df["Close"])
+raw_lightning_capacity_df = raw_lightning_capacity_df[raw_lightning_capacity_df["Close"] > 0].copy()
+raw_lightning_capacity_df["LogClose"] = np.log10(raw_lightning_capacity_df["Close"])
+raw_liquid_btc_df = raw_liquid_btc_df[raw_liquid_btc_df["Close"] > 0].copy()
+raw_liquid_btc_df["LogClose"] = np.log10(raw_liquid_btc_df["Close"])
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
@@ -458,6 +512,12 @@ difficulty_absolute_days = raw_difficulty_df["AbsDays"].values
 difficulty_log_close = raw_difficulty_df["LogClose"].values
 hashrate_absolute_days = raw_hashrate_df["AbsDays"].values
 hashrate_log_close = raw_hashrate_df["LogClose"].values
+lightning_nodes_absolute_days = raw_lightning_nodes_df["AbsDays"].values
+lightning_nodes_log_close = raw_lightning_nodes_df["LogClose"].values
+lightning_capacity_absolute_days = raw_lightning_capacity_df["AbsDays"].values
+lightning_capacity_log_close = raw_lightning_capacity_df["LogClose"].values
+liquid_btc_absolute_days = raw_liquid_btc_df["AbsDays"].values
+liquid_btc_log_close = raw_liquid_btc_df["LogClose"].values
 
 # --- THEME + STATE ---
 initialize_app_session_state(price_absolute_days, price_log_close)
@@ -486,21 +546,25 @@ c_border = theme["c_border"]
     powerlaw_series,
     logperiodic_series,
     band_method,
-) = (
-    render_sidebar_panel(
-        price_absolute_days,
-        price_log_close,
-        revenue_absolute_days,
-        revenue_log_close,
-        difficulty_absolute_days,
-        difficulty_log_close,
-        hashrate_absolute_days,
-        hashrate_log_close,
-        c_text_main,
-        APP_VERSION,
-        FORECAST_HORIZON_MIN,
-        FORECAST_HORIZON_MAX,
-    )
+) = render_sidebar_panel(
+    price_absolute_days,
+    price_log_close,
+    revenue_absolute_days,
+    revenue_log_close,
+    difficulty_absolute_days,
+    difficulty_log_close,
+    hashrate_absolute_days,
+    hashrate_log_close,
+    lightning_nodes_absolute_days,
+    lightning_nodes_log_close,
+    lightning_capacity_absolute_days,
+    lightning_capacity_log_close,
+    liquid_btc_absolute_days,
+    liquid_btc_log_close,
+    c_text_main,
+    APP_VERSION,
+    FORECAST_HORIZON_MIN,
+    FORECAST_HORIZON_MAX,
 )
 # Keep backward-compatible keys in sync for oscillator mode code paths.
 if mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
@@ -522,19 +586,30 @@ else:
 if (
     mode == MODE_POWERLAW
     and powerlaw_series
-    in [POWERLAW_SERIES_REVENUE, POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+    in [
+        POWERLAW_SERIES_REVENUE,
+        POWERLAW_SERIES_DIFFICULTY,
+        POWERLAW_SERIES_HASHRATE,
+        POWERLAW_SERIES_LIGHTNING_NODES,
+        POWERLAW_SERIES_LIGHTNING_CAPACITY,
+        POWERLAW_SERIES_LIQUID_BTC,
+    ]
     and currency != CURRENCY_DOLLAR
 ):
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
     st.rerun()
-if (
-    not (
-        mode == MODE_POWERLAW
-        and powerlaw_series
-        in [POWERLAW_SERIES_REVENUE, POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
-    )
-    and currency != st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
-):
+if not (
+    mode == MODE_POWERLAW
+    and powerlaw_series
+    in [
+        POWERLAW_SERIES_REVENUE,
+        POWERLAW_SERIES_DIFFICULTY,
+        POWERLAW_SERIES_HASHRATE,
+        POWERLAW_SERIES_LIGHTNING_NODES,
+        POWERLAW_SERIES_LIGHTNING_CAPACITY,
+        POWERLAW_SERIES_LIQUID_BTC,
+    ]
+) and currency != st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR):
     st.rerun()
 if (
     mode == MODE_LOGPERIODIC
@@ -577,6 +652,36 @@ elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_HASHRATE:
     active_default_b = DEFAULT_HASHRATE_B
     target_series_name = "Network hashrate"
     target_series_unit = "Hashrate"
+    currency = CURRENCY_DOLLAR
+elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIGHTNING_NODES:
+    raw_df = raw_lightning_nodes_df.copy()
+    active_abs_days = lightning_nodes_absolute_days
+    active_a_key = KEY_A_LIGHTNING_NODES
+    active_b_key = KEY_B_LIGHTNING_NODES
+    active_default_a = DEFAULT_LIGHTNING_NODES_A
+    active_default_b = DEFAULT_LIGHTNING_NODES_B
+    target_series_name = "Lightning nodes"
+    target_series_unit = "Nodes"
+    currency = CURRENCY_DOLLAR
+elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIGHTNING_CAPACITY:
+    raw_df = raw_lightning_capacity_df.copy()
+    active_abs_days = lightning_capacity_absolute_days
+    active_a_key = KEY_A_LIGHTNING_CAPACITY
+    active_b_key = KEY_B_LIGHTNING_CAPACITY
+    active_default_a = DEFAULT_LIGHTNING_CAPACITY_A
+    active_default_b = DEFAULT_LIGHTNING_CAPACITY_B
+    target_series_name = "Lightning capacity"
+    target_series_unit = "BTC"
+    currency = CURRENCY_DOLLAR
+elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIQUID_BTC:
+    raw_df = raw_liquid_btc_df.copy()
+    active_abs_days = liquid_btc_absolute_days
+    active_a_key = KEY_A_LIQUID_BTC
+    active_b_key = KEY_B_LIQUID_BTC
+    active_default_a = DEFAULT_LIQUID_BTC_A
+    active_default_b = DEFAULT_LIQUID_BTC_B
+    target_series_name = "Liquid BTC balance"
+    target_series_unit = "BTC"
     currency = CURRENCY_DOLLAR
 elif mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
     raw_df = raw_difficulty_df.copy()
@@ -644,11 +749,23 @@ df_display["Fair"] = 10 ** df_display["ModelLog"]
 
 currency_context = resolve_currency_format(currency)
 if (
-    mode == MODE_POWERLAW and powerlaw_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+    mode == MODE_POWERLAW
+    and powerlaw_series
+    in [
+        POWERLAW_SERIES_DIFFICULTY,
+        POWERLAW_SERIES_HASHRATE,
+        POWERLAW_SERIES_LIGHTNING_NODES,
+    ]
 ) or (
-    mode == MODE_LOGPERIODIC and logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+    mode == MODE_LOGPERIODIC
+    and logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
 ):
     currency_context = {"prefix": "", "suffix": "", "decimals": 0, "unit": "RAW"}
+if mode == MODE_POWERLAW and powerlaw_series in [
+    POWERLAW_SERIES_LIGHTNING_CAPACITY,
+    POWERLAW_SERIES_LIQUID_BTC,
+]:
+    currency_context = {"prefix": "", "suffix": " BTC", "decimals": 3, "unit": "BTC"}
 currency_prefix = currency_context["prefix"]
 currency_suffix = currency_context["suffix"]
 currency_decimals = int(currency_context["decimals"])
@@ -658,7 +775,10 @@ df_display["FairDisplay"] = df_display["Fair"]
 
 # Use a shared LogPeriodic R² mask so scoring follows the same visible segment.
 lp_r2_mask = np.ones(len(df_display), dtype=bool)
-if mode == MODE_LOGPERIODIC and logperiodic_series in [POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]:
+if mode == MODE_LOGPERIODIC and logperiodic_series in [
+    POWERLAW_SERIES_DIFFICULTY,
+    POWERLAW_SERIES_HASHRATE,
+]:
     lp_r2_mask = df_display["AbsDays"].values >= OSCILLATOR_DIFF_HASH_START_ABS_DAYS
 
 # Calculate R2 for Trend if not returned by sidebar (LogPeriodic mode)
@@ -796,7 +916,14 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         show_halving_lines=(
             mode == MODE_POWERLAW
             and powerlaw_series
-            in [POWERLAW_SERIES_REVENUE, POWERLAW_SERIES_DIFFICULTY, POWERLAW_SERIES_HASHRATE]
+            in [
+                POWERLAW_SERIES_REVENUE,
+                POWERLAW_SERIES_DIFFICULTY,
+                POWERLAW_SERIES_HASHRATE,
+                POWERLAW_SERIES_LIGHTNING_NODES,
+                POWERLAW_SERIES_LIGHTNING_CAPACITY,
+                POWERLAW_SERIES_LIQUID_BTC,
+            ]
         ),
         osc_visible_start_abs_day=(
             OSCILLATOR_DIFF_HASH_START_ABS_DAYS
