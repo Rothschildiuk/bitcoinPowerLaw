@@ -263,6 +263,73 @@ class TestPriceService(unittest.TestCase):
         self.assertIn("AbsDays", result.columns)
         self.assertIn("LogClose", result.columns)
 
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_liquid_btc_data_raises_for_empty_month_payload(self, mock_fetch_json):
+        price_service.load_prepared_liquid_btc_data.clear()
+        mock_fetch_json.return_value = []
+
+        with self.assertRaises(ValueError):
+            price_service.load_prepared_liquid_btc_data(
+                liquid_reserves_month_url="unused-month",
+                liquid_reserves_url="unused-current",
+            )
+
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_liquid_btc_data_raises_for_missing_required_columns(
+        self, mock_fetch_json
+    ):
+        price_service.load_prepared_liquid_btc_data.clear()
+        mock_fetch_json.return_value = [{"date": "2024-01-01", "value": "100000000"}]
+
+        with self.assertRaises(ValueError):
+            price_service.load_prepared_liquid_btc_data(
+                liquid_reserves_month_url="unused-month",
+                liquid_reserves_url="unused-current",
+            )
+
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_liquid_btc_data_prefers_current_amount_for_today_duplicate(
+        self, mock_fetch_json
+    ):
+        price_service.load_prepared_liquid_btc_data.clear()
+        today = pd.Timestamp.utcnow().tz_localize(None).normalize().strftime("%Y-%m-%d")
+        mock_fetch_json.side_effect = [
+            [
+                {"date": "2024-01-01", "amount": "100000000"},
+                {"date": today, "amount": "200000000"},
+            ],
+            {"amount": "333000000", "lastBlockUpdate": 1},
+        ]
+
+        result = price_service.load_prepared_liquid_btc_data(
+            liquid_reserves_month_url="unused-month",
+            liquid_reserves_url="unused-current",
+        )
+        self.assertAlmostEqual(float(result.iloc[-1]["Close"]), 3.33)
+
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_liquid_btc_data_returns_monotonic_daily_index_without_nans(
+        self, mock_fetch_json
+    ):
+        price_service.load_prepared_liquid_btc_data.clear()
+        mock_fetch_json.side_effect = [
+            [
+                {"date": "2024-01-01", "amount": "100000000"},
+                {"date": "2024-03-01", "amount": "300000000"},
+                {"date": "bad-date", "amount": "not-a-number"},
+            ],
+            {"amount": "350000000", "lastBlockUpdate": 1},
+        ]
+
+        result = price_service.load_prepared_liquid_btc_data(
+            liquid_reserves_month_url="unused-month",
+            liquid_reserves_url="unused-current",
+        )
+
+        self.assertTrue(result.index.is_monotonic_increasing)
+        self.assertFalse(result[["Close", "AbsDays", "LogClose"]].isna().any().any())
+        self.assertTrue((result["Close"] > 0).all())
+
 
 if __name__ == "__main__":
     unittest.main()
