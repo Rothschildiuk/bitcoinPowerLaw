@@ -3,6 +3,7 @@ import io
 import json
 import time
 import urllib.request
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -27,6 +28,195 @@ HASHRATE_CSV_URL = (
 BITCOIN_VISUALS_DAILY_CSV_URL = "https://bitcoinvisuals.com/static/data/data_daily.csv"
 LIQUID_RESERVES_URL = "https://liquid.network/api/v1/liquid/reserves"
 LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month"
+LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
+LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
+LOCAL_CACHE_SCHEMA_VERSION = 3
+FAST_REFRESH_SECONDS = 3600
+SLOW_REFRESH_SECONDS = 6 * 3600
+REFERENCE_REFRESH_SECONDS = 12 * 3600
+
+
+def _ensure_local_data_cache_dir():
+    LOCAL_DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_cache_frame_path(cache_key):
+    return LOCAL_DATA_CACHE_DIR / f"{cache_key}.csv"
+
+
+def _get_cache_meta_path(cache_key):
+    return LOCAL_DATA_CACHE_DIR / f"{cache_key}.meta.json"
+
+
+def _read_cache_meta(cache_key):
+    meta_path = _get_cache_meta_path(cache_key)
+    if not meta_path.exists():
+        return {}
+
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_cache_meta(cache_key, *, error_message=None, store_index=None):
+    _ensure_local_data_cache_dir()
+    meta_path = _get_cache_meta_path(cache_key)
+    payload = {
+        "version": LOCAL_CACHE_SCHEMA_VERSION,
+        "checked_at": pd.Timestamp.utcnow().tz_localize(None).isoformat(),
+    }
+    if store_index is not None:
+        payload["store_index"] = bool(store_index)
+    if error_message:
+        payload["last_error"] = str(error_message)
+    meta_path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _read_cached_dataframe(cache_key):
+    frame_path = _get_cache_frame_path(cache_key)
+    if not frame_path.exists():
+        return None
+
+    try:
+        cached_df = pd.read_csv(frame_path)
+    except Exception:
+        return None
+
+    cache_meta = _read_cache_meta(cache_key)
+    if cache_meta.get("store_index") and "Date" in cached_df.columns:
+        cached_df["Date"] = pd.to_datetime(cached_df["Date"], errors="coerce")
+        cached_df = cached_df.dropna(subset=["Date"]).set_index("Date").sort_index()
+    return cached_df
+
+
+def _write_cached_dataframe(cache_key, data_df):
+    if data_df is None or data_df.empty:
+        return
+
+    _ensure_local_data_cache_dir()
+    frame_path = _get_cache_frame_path(cache_key)
+    data_to_store = data_df.copy()
+    store_index = not isinstance(data_to_store.index, pd.RangeIndex)
+    if store_index:
+        data_to_store.to_csv(frame_path, index_label="Date")
+    else:
+        data_to_store.to_csv(frame_path, index=False)
+    _write_cache_meta(cache_key, store_index=store_index)
+
+
+def _is_cache_refresh_due(cache_key, min_check_interval_seconds):
+    cache_meta = _read_cache_meta(cache_key)
+    if int(cache_meta.get("version", 0)) != LOCAL_CACHE_SCHEMA_VERSION:
+        return True
+    checked_at = cache_meta.get("checked_at")
+    if not checked_at:
+        return True
+
+    checked_ts = pd.to_datetime(checked_at, errors="coerce")
+    if pd.isna(checked_ts):
+        return True
+
+    age_seconds = (
+        pd.Timestamp.utcnow().tz_localize(None) - checked_ts.tz_localize(None)
+    ).total_seconds()
+    return age_seconds >= float(min_check_interval_seconds)
+
+
+def _is_cache_valid(cache_key, cached_df, validator_fn=None):
+    if cached_df is None or cached_df.empty:
+        return False
+
+    cache_meta = _read_cache_meta(cache_key)
+    if int(cache_meta.get("version", 0)) != LOCAL_CACHE_SCHEMA_VERSION:
+        return False
+
+    if validator_fn is not None:
+        try:
+            return bool(validator_fn(cached_df))
+        except Exception:
+            return False
+
+    return True
+
+
+def _load_or_refresh_dataframe_cache(
+    cache_key,
+    fetch_fn,
+    *,
+    min_check_interval_seconds,
+    validator_fn=None,
+):
+    cached_df = _read_cached_dataframe(cache_key)
+    has_valid_cache = _is_cache_valid(cache_key, cached_df, validator_fn=validator_fn)
+    if has_valid_cache and not _is_cache_refresh_due(cache_key, min_check_interval_seconds):
+        return cached_df
+
+    try:
+        fresh_df = fetch_fn()
+    except Exception as exc:
+        if has_valid_cache:
+            _write_cache_meta(cache_key, error_message=exc)
+            return cached_df
+        raise
+
+    if fresh_df is None or fresh_df.empty:
+        if has_valid_cache:
+            _write_cache_meta(cache_key, error_message="Empty refresh result")
+            return cached_df
+        return fresh_df
+
+    _write_cached_dataframe(cache_key, fresh_df)
+    return fresh_df
+
+
+def _validate_reference_frame(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 100
+        and ("EURUSD" in data_df.columns or "XAUUSD" in data_df.columns)
+    )
+
+
+def _validate_prepared_price_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 1000
+        and "Close" in data_df.columns
+        and data_df.index.min() <= pd.Timestamp("2011-01-01")
+    )
+
+
+def _validate_prepared_chart_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 100
+        and "Close" in data_df.columns
+        and "AbsDays" in data_df.columns
+        and "LogClose" in data_df.columns
+    )
+
+
+def _validate_bitcoin_visuals_daily_data(data_df):
+    return isinstance(data_df, pd.DataFrame) and len(data_df) >= 100 and "day" in data_df.columns
+
+
+def _validate_prepared_liquid_btc_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 30
+        and "Close" in data_df.columns
+        and data_df.index.min() <= pd.Timestamp("2024-12-31")
+    )
+
+
+def _validate_prepared_liquid_transactions_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 100
+        and "Close" in data_df.columns
+        and data_df.index.min() <= pd.Timestamp("2019-01-31")
+    )
 
 
 def _extract_close_series(download_df):
@@ -191,11 +381,40 @@ def _safe_download_btc_tail_from_coincap(start_date):
 
 @st.cache_data(ttl=3600)
 def load_reference_series(start_date):
-    eur_usd = _safe_download_close_series("EURUSD=X", start_date)
-    # GC=F is usually more stable than XAUUSD=X on hosted environments.
-    xau_usd = _safe_download_close_series("GC=F", start_date)
-    if xau_usd.empty:
-        xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
+    def fetch_reference_frame():
+        eur_usd = _safe_download_close_series("EURUSD=X", start_date)
+        # GC=F is usually more stable than XAUUSD=X on hosted environments.
+        xau_usd = _safe_download_close_series("GC=F", start_date)
+        if xau_usd.empty:
+            xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
+
+        reference_df = pd.concat(
+            [
+                eur_usd.rename("EURUSD"),
+                xau_usd.rename("XAUUSD"),
+            ],
+            axis=1,
+        ).sort_index()
+        return reference_df
+
+    reference_df = _load_or_refresh_dataframe_cache(
+        "reference_series",
+        fetch_reference_frame,
+        min_check_interval_seconds=REFERENCE_REFRESH_SECONDS,
+        validator_fn=_validate_reference_frame,
+    )
+    eur_usd = (
+        pd.to_numeric(reference_df["EURUSD"], errors="coerce").dropna()
+        if "EURUSD" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    xau_usd = (
+        pd.to_numeric(reference_df["XAUUSD"], errors="coerce").dropna()
+        if "XAUUSD" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    eur_usd.index = pd.to_datetime(eur_usd.index)
+    xau_usd.index = pd.to_datetime(xau_usd.index)
     return eur_usd, xau_usd
 
 
@@ -220,68 +439,104 @@ def build_currency_close_series(raw_df, selected_currency):
 
 @st.cache_data(ttl=3600)
 def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=3):
-    full_df = pd.read_csv(price_history_url)
-    full_df["Date"] = pd.to_datetime(full_df["Date"])
-    full_df.set_index("Date", inplace=True)
-    full_df.rename(columns={"Price": "Close"}, inplace=True)
-    full_df["Close"] = pd.to_numeric(full_df["Close"], errors="coerce")
-    full_df = full_df.dropna(subset=["Close"]).sort_index()
+    def fetch_price_data():
+        full_df = pd.read_csv(price_history_url)
+        full_df["Date"] = pd.to_datetime(full_df["Date"])
+        full_df.set_index("Date", inplace=True)
+        full_df.rename(columns={"Price": "Close"}, inplace=True)
+        full_df["Close"] = pd.to_numeric(full_df["Close"], errors="coerce")
+        full_df = full_df.dropna(subset=["Close"]).sort_index()
 
-    latest_csv_date = full_df.index.max()
-    today = pd.Timestamp.utcnow().tz_localize(None).normalize()
-    if stale_after_days is not None and (today - latest_csv_date.normalize()).days > int(
-        stale_after_days
-    ):
-        btc_tail = _safe_download_close_series(
-            "BTC-USD",
-            (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
-        )
-        if btc_tail.empty:
-            btc_tail = _safe_download_btc_tail_from_coingecko(
-                (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        latest_csv_date = full_df.index.max()
+        today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+        if stale_after_days is not None and (today - latest_csv_date.normalize()).days > int(
+            stale_after_days
+        ):
+            btc_tail = _safe_download_close_series(
+                "BTC-USD",
+                (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
             )
-        if btc_tail.empty:
-            btc_tail = _safe_download_btc_tail_from_coincap(
-                (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-            )
-        if not btc_tail.empty:
-            tail_df = btc_tail.to_frame(name="Close")
-            tail_df.index.name = "Date"
-            full_df = pd.concat([full_df[["Close"]], tail_df], axis=0)
-            full_df = full_df[~full_df.index.duplicated(keep="last")].sort_index()
+            if btc_tail.empty:
+                btc_tail = _safe_download_btc_tail_from_coingecko(
+                    (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                )
+            if btc_tail.empty:
+                btc_tail = _safe_download_btc_tail_from_coincap(
+                    (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                )
+            if not btc_tail.empty:
+                tail_df = btc_tail.to_frame(name="Close")
+                tail_df.index.name = "Date"
+                full_df = pd.concat([full_df[["Close"]], tail_df], axis=0)
+                full_df = full_df[~full_df.index.duplicated(keep="last")].sort_index()
 
-    full_df = full_df[full_df["Close"] > 0]
-    full_df["AbsDays"] = (full_df.index - GENESIS_DATE).days
-    full_df["LogClose"] = np.log10(full_df["Close"])
-    return full_df
+        full_df = full_df[full_df["Close"] > 0]
+        full_df["AbsDays"] = (full_df.index - GENESIS_DATE).days
+        full_df["LogClose"] = np.log10(full_df["Close"])
+        return full_df
+
+    return _load_or_refresh_dataframe_cache(
+        "prepared_price_data",
+        fetch_price_data,
+        min_check_interval_seconds=FAST_REFRESH_SECONDS,
+        validator_fn=_validate_prepared_price_data,
+    )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL):
-    revenue_df = pd.read_csv(revenue_history_url)
-    return _normalize_chart_csv(revenue_df, "Close")
+    return _load_or_refresh_dataframe_cache(
+        "prepared_miner_revenue_data",
+        lambda: _normalize_chart_csv(pd.read_csv(revenue_history_url), "Close"),
+        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
+        validator_fn=_validate_prepared_chart_data,
+    )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_difficulty_data(difficulty_history_url=DIFFICULTY_CSV_URL):
-    difficulty_df = pd.read_csv(difficulty_history_url)
-    prepared_df = _normalize_chart_csv(difficulty_df, "Close")
-    return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
+    def fetch_difficulty_data():
+        difficulty_df = pd.read_csv(difficulty_history_url)
+        prepared_df = _normalize_chart_csv(difficulty_df, "Close")
+        return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
+
+    return _load_or_refresh_dataframe_cache(
+        "prepared_difficulty_data",
+        fetch_difficulty_data,
+        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
+        validator_fn=_validate_prepared_chart_data,
+    )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL):
-    hashrate_df = pd.read_csv(hashrate_history_url)
-    prepared_df = _normalize_chart_csv(hashrate_df, "Close")
-    return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
+    def fetch_hashrate_data():
+        hashrate_df = pd.read_csv(hashrate_history_url)
+        prepared_df = _normalize_chart_csv(hashrate_df, "Close")
+        return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
+
+    return _load_or_refresh_dataframe_cache(
+        "prepared_hashrate_data",
+        fetch_hashrate_data,
+        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
+        validator_fn=_validate_prepared_chart_data,
+    )
 
 
 @st.cache_data(ttl=3600)
 def load_bitcoin_visuals_daily_data(data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
-    data_df = _fetch_csv_with_retry(data_url)
-    if data_df.empty:
-        raise ValueError("Unable to load Bitcoin Visuals daily data.")
-    return data_df
+    def fetch_daily_data():
+        data_df = _fetch_csv_with_retry(data_url)
+        if data_df.empty:
+            raise ValueError("Unable to load Bitcoin Visuals daily data.")
+        return data_df
+
+    return _load_or_refresh_dataframe_cache(
+        "bitcoin_visuals_daily_data",
+        fetch_daily_data,
+        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
+        validator_fn=_validate_bitcoin_visuals_daily_data,
+    )
 
 
 def _load_prepared_lightning_series(value_column_name, data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
@@ -309,55 +564,93 @@ def load_prepared_liquid_btc_data(
     liquid_reserves_month_url=LIQUID_RESERVES_MONTH_URL,
     liquid_reserves_url=LIQUID_RESERVES_URL,
 ):
-    month_payload = _fetch_json_with_retry(liquid_reserves_month_url)
-    if not isinstance(month_payload, list) or len(month_payload) == 0:
-        raise ValueError("Unable to load Liquid monthly reserve history.")
+    def fetch_liquid_btc_data():
+        month_payload = _fetch_json_with_retry(liquid_reserves_month_url)
+        if not isinstance(month_payload, list) or len(month_payload) == 0:
+            raise ValueError("Unable to load Liquid monthly reserve history.")
 
-    month_df = pd.DataFrame(month_payload)
-    if "date" not in month_df.columns or "amount" not in month_df.columns:
-        raise ValueError("Liquid monthly reserve payload is missing required columns.")
+        month_df = pd.DataFrame(month_payload)
+        if "date" not in month_df.columns or "amount" not in month_df.columns:
+            raise ValueError("Liquid monthly reserve payload is missing required columns.")
 
-    month_df = month_df[["date", "amount"]].copy()
-    month_df.columns = ["Date", "Sats"]
-    month_df["Date"] = pd.to_datetime(month_df["Date"], errors="coerce")
-    month_df["Sats"] = pd.to_numeric(month_df["Sats"], errors="coerce")
-    month_df = month_df.dropna(subset=["Date", "Sats"])
-    month_df["Close"] = month_df["Sats"] / 1e8
+        month_df = month_df[["date", "amount"]].copy()
+        month_df.columns = ["Date", "Sats"]
+        month_df["Date"] = pd.to_datetime(month_df["Date"], errors="coerce")
+        month_df["Sats"] = pd.to_numeric(month_df["Sats"], errors="coerce")
+        month_df = month_df.dropna(subset=["Date", "Sats"])
+        month_df["Close"] = month_df["Sats"] / 1e8
 
-    reserves_payload = _fetch_json_with_retry(liquid_reserves_url)
-    if isinstance(reserves_payload, dict) and "amount" in reserves_payload:
-        current_btc = float(pd.to_numeric(reserves_payload.get("amount"), errors="coerce") / 1e8)
-        if current_btc > 0:
-            month_df = pd.concat(
-                [
-                    month_df,
-                    pd.DataFrame(
-                        {
-                            "Date": [pd.Timestamp.utcnow().tz_localize(None).normalize()],
-                            "Sats": [current_btc * 1e8],
-                            "Close": [current_btc],
-                        }
-                    ),
-                ],
-                ignore_index=True,
+        reserves_payload = _fetch_json_with_retry(liquid_reserves_url)
+        if isinstance(reserves_payload, dict) and "amount" in reserves_payload:
+            current_btc = float(
+                pd.to_numeric(reserves_payload.get("amount"), errors="coerce") / 1e8
             )
+            if current_btc > 0:
+                month_df = pd.concat(
+                    [
+                        month_df,
+                        pd.DataFrame(
+                            {
+                                "Date": [pd.Timestamp.utcnow().tz_localize(None).normalize()],
+                                "Sats": [current_btc * 1e8],
+                                "Close": [current_btc],
+                            }
+                        ),
+                    ],
+                    ignore_index=True,
+                )
 
-    points_df = month_df[["Date", "Close"]].copy()
-    prepared_df = _normalize_chart_csv(points_df, "Close")
-    if prepared_df.empty:
-        raise ValueError("Liquid BTC reserve series is empty after normalization.")
+        points_df = month_df[["Date", "Close"]].copy()
+        prepared_df = _normalize_chart_csv(points_df, "Close")
+        if prepared_df.empty:
+            raise ValueError("Liquid BTC reserve series is empty after normalization.")
 
-    last_known_day = prepared_df.index.max().normalize()
-    utc_today = pd.Timestamp.utcnow().tz_localize(None).normalize()
-    full_daily_index = pd.date_range(
-        prepared_df.index.min().normalize(), max(last_known_day, utc_today), freq="D"
+        last_known_day = prepared_df.index.max().normalize()
+        utc_today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+        full_daily_index = pd.date_range(
+            prepared_df.index.min().normalize(), max(last_known_day, utc_today), freq="D"
+        )
+
+        daily_df = prepared_df[["Close"]].copy()
+        daily_df.index = daily_df.index.normalize()
+        daily_df = daily_df[~daily_df.index.duplicated(keep="last")]
+        daily_df = daily_df.reindex(full_daily_index).ffill().dropna()
+
+        daily_df["AbsDays"] = (daily_df.index - GENESIS_DATE).days
+        daily_df["LogClose"] = np.log10(daily_df["Close"])
+        return daily_df
+
+    return _load_or_refresh_dataframe_cache(
+        "prepared_liquid_btc_data",
+        fetch_liquid_btc_data,
+        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
+        validator_fn=_validate_prepared_liquid_btc_data,
     )
 
-    daily_df = prepared_df[["Close"]].copy()
-    daily_df.index = daily_df.index.normalize()
-    daily_df = daily_df[~daily_df.index.duplicated(keep="last")]
-    daily_df = daily_df.reindex(full_daily_index).ffill().dropna()
 
-    daily_df["AbsDays"] = (daily_df.index - GENESIS_DATE).days
-    daily_df["LogClose"] = np.log10(daily_df["Close"])
-    return daily_df
+@st.cache_data(ttl=3600)
+def load_prepared_liquid_transactions_data(liquid_charts_data_url=LIQUID_CHARTS_DATA_URL):
+    def fetch_liquid_transactions_data():
+        payload = _fetch_json_with_retry(liquid_charts_data_url)
+        if not isinstance(payload, dict) or "data" not in payload:
+            raise ValueError("Unable to load Liquid charts data.")
+
+        charts_data = payload["data"]
+        weekly_transactions = charts_data.get("Weekly Transactions")
+        if not isinstance(weekly_transactions, list) or len(weekly_transactions) == 0:
+            raise ValueError("Liquid weekly transactions payload is missing data.")
+
+        transactions_df = pd.DataFrame(weekly_transactions)
+        if "Start Time" not in transactions_df.columns or "TX Total" not in transactions_df.columns:
+            raise ValueError("Liquid weekly transactions payload is missing required columns.")
+
+        transactions_df = transactions_df[["Start Time", "TX Total"]].copy()
+        transactions_df.columns = ["Date", "Close"]
+        return _normalize_chart_csv(transactions_df, "Close")
+
+    return _load_or_refresh_dataframe_cache(
+        "prepared_liquid_transactions_data",
+        fetch_liquid_transactions_data,
+        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
+        validator_fn=_validate_prepared_liquid_transactions_data,
+    )

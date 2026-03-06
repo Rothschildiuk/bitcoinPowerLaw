@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pandas as pd
@@ -21,6 +23,94 @@ class _FakeHttpResponse:
 
 
 class TestPriceService(unittest.TestCase):
+    def setUp(self):
+        self._temp_dir = TemporaryDirectory()
+        self._cache_dir = Path(self._temp_dir.name)
+        self._cache_patch = patch.object(price_service, "LOCAL_DATA_CACHE_DIR", self._cache_dir)
+        self._cache_patch.start()
+
+    def tearDown(self):
+        self._cache_patch.stop()
+        self._temp_dir.cleanup()
+
+    def test_load_or_refresh_dataframe_cache_uses_fresh_local_snapshot(self):
+        cached_df = pd.DataFrame(
+            {"Close": [100.0]},
+            index=pd.to_datetime(["2024-01-01"]),
+        )
+
+        price_service._write_cached_dataframe("sample", cached_df)
+
+        result = price_service._load_or_refresh_dataframe_cache(
+            "sample",
+            lambda: self.fail("fetch_fn should not run when cache is fresh"),
+            min_check_interval_seconds=3600,
+        )
+
+        self.assertListEqual(result["Close"].tolist(), [100.0])
+
+    def test_load_or_refresh_dataframe_cache_returns_stale_snapshot_on_refresh_error(self):
+        cached_df = pd.DataFrame(
+            {"Close": [200.0]},
+            index=pd.to_datetime(["2024-01-01"]),
+        )
+
+        price_service._write_cached_dataframe("sample", cached_df)
+        stale_meta = self._cache_dir / "sample.meta.json"
+        stale_meta.write_text(
+            f'{{"version":{price_service.LOCAL_CACHE_SCHEMA_VERSION},"checked_at":"2020-01-01T00:00:00"}}',
+            encoding="utf-8",
+        )
+
+        result = price_service._load_or_refresh_dataframe_cache(
+            "sample",
+            lambda: (_ for _ in ()).throw(RuntimeError("network down")),
+            min_check_interval_seconds=1,
+        )
+
+        self.assertListEqual(result["Close"].tolist(), [200.0])
+
+    def test_load_or_refresh_dataframe_cache_refreshes_outdated_schema_cache(self):
+        stale_df = pd.DataFrame(
+            {"Close": [1.0, 2.0]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-02"]),
+        )
+        fresh_df = pd.DataFrame(
+            {"Close": [10.0, 20.0, 30.0]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"]),
+        )
+
+        price_service._write_cached_dataframe("sample", stale_df)
+        stale_meta = self._cache_dir / "sample.meta.json"
+        stale_meta.write_text(
+            '{"version":1,"checked_at":"2026-01-01T00:00:00"}',
+            encoding="utf-8",
+        )
+
+        result = price_service._load_or_refresh_dataframe_cache(
+            "sample",
+            lambda: fresh_df,
+            min_check_interval_seconds=3600,
+            validator_fn=lambda df: len(df) >= 3,
+        )
+
+        self.assertListEqual(result["Close"].tolist(), [10.0, 20.0, 30.0])
+
+    def test_write_and_read_cached_dataframe_preserves_range_index_frames(self):
+        raw_df = pd.DataFrame(
+            {
+                "day": ["2024-01-01", "2024-01-02"],
+                "nodes_with_channels": [1000, 1010],
+            }
+        )
+
+        price_service._write_cached_dataframe("raw_sample", raw_df)
+        restored_df = price_service._read_cached_dataframe("raw_sample")
+
+        self.assertListEqual(restored_df.columns.tolist(), raw_df.columns.tolist())
+        self.assertIsInstance(restored_df.index, pd.RangeIndex)
+        self.assertListEqual(restored_df["day"].tolist(), ["2024-01-01", "2024-01-02"])
+
     def test_extract_close_series_handles_empty_input(self):
         series = price_service._extract_close_series(pd.DataFrame())
         self.assertTrue(series.empty)
@@ -329,6 +419,46 @@ class TestPriceService(unittest.TestCase):
         self.assertTrue(result.index.is_monotonic_increasing)
         self.assertFalse(result[["Close", "AbsDays", "LogClose"]].isna().any().any())
         self.assertTrue((result["Close"] > 0).all())
+
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_liquid_transactions_data_parses_weekly_transactions(
+        self, mock_fetch_json
+    ):
+        price_service.load_prepared_liquid_transactions_data.clear()
+        mock_fetch_json.return_value = {
+            "data": {
+                "Weekly Transactions": [
+                    {
+                        "Start Time": "2024-01-01 00:00:00",
+                        "End Time": "2024-01-07 23:59:59",
+                        "TX Total": 1200,
+                    },
+                    {
+                        "Start Time": "2024-01-08 00:00:00",
+                        "End Time": "2024-01-14 23:59:59",
+                        "TX Total": 1350,
+                    },
+                ]
+            }
+        }
+
+        result = price_service.load_prepared_liquid_transactions_data("unused-url")
+
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2024-01-01", "2024-01-08"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [1200.0, 1350.0])
+        self.assertIn("AbsDays", result.columns)
+        self.assertIn("LogClose", result.columns)
+
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_liquid_transactions_data_raises_for_missing_data(self, mock_fetch_json):
+        price_service.load_prepared_liquid_transactions_data.clear()
+        mock_fetch_json.return_value = {"data": {"Weekly Transactions": []}}
+
+        with self.assertRaises(ValueError):
+            price_service.load_prepared_liquid_transactions_data("unused-url")
 
 
 if __name__ == "__main__":

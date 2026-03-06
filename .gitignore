@@ -33,6 +33,8 @@ node_modules/
 *.db
 *.json
 *.parquet
+output/data_cache/
+output/playwright/artifacts/
 !package.json
 !package-lock.json
 
