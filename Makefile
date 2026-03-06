@@ -4,6 +4,7 @@ PIP := $(VENV)/bin/pip
 STREAMLIT := $(VENV)/bin/streamlit
 BLACK := $(VENV)/bin/black
 BLACK_CONFIG := --config config/pyproject.toml
+BLACK_TARGETS := app.py core services tests ui
 
 .PHONY: help install run format check test clean
 
@@ -24,10 +25,10 @@ run:
 	$(STREAMLIT) run app.py
 
 format:
-	$(BLACK) $(BLACK_CONFIG) .
+	$(BLACK) $(BLACK_CONFIG) $(BLACK_TARGETS)
 
 check:
-	$(BLACK) $(BLACK_CONFIG) --check .
+	$(BLACK) $(BLACK_CONFIG) --check $(BLACK_TARGETS)
 
 test:
 	$(PY) -m pytest -q

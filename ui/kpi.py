@@ -30,7 +30,10 @@ def render_model_kpis(
     target_series_unit,
 ):
     l_p, l_f = df_display["Close"].iloc[-1], df_display["Fair"].iloc[-1]
-    l_p_display, l_f_display = df_display["CloseDisplay"].iloc[-1], df_display["FairDisplay"].iloc[-1]
+    l_p_display, l_f_display = (
+        df_display["CloseDisplay"].iloc[-1],
+        df_display["FairDisplay"].iloc[-1],
+    )
     diff = ((l_p - l_f) / l_f) * 100
     pot_target = 10 ** (a_active + b_active * np.log10(df_display["Days"].max()) + p97_5)
     pot = ((pot_target - l_p) / l_p) * 100

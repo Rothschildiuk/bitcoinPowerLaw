@@ -164,7 +164,11 @@ def optimize_single_oscillator_parameter(
             params["t1_age"] if parameter_key != "t1_age" else float(candidate),
             params["lambda_val"] if parameter_key != "lambda_val" else float(candidate),
             params["amp_factor_top"] if parameter_key != "amp_factor_top" else float(candidate),
-            params["amp_factor_bottom"] if parameter_key != "amp_factor_bottom" else float(candidate),
+            (
+                params["amp_factor_bottom"]
+                if parameter_key != "amp_factor_bottom"
+                else float(candidate)
+            ),
             params["impulse_damping"] if parameter_key != "impulse_damping" else float(candidate),
         ),
         min_value=min_value,
@@ -279,11 +283,15 @@ def render_sidebar(
         current_params = {
             "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
             "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
-            "amp_factor_top": float(st.session_state.get("amp_factor_top", defaults["amp_factor_top"])),
+            "amp_factor_top": float(
+                st.session_state.get("amp_factor_top", defaults["amp_factor_top"])
+            ),
             "amp_factor_bottom": float(
                 st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])
             ),
-            "impulse_damping": float(st.session_state.get("impulse_damping", defaults["impulse_damping"])),
+            "impulse_damping": float(
+                st.session_state.get("impulse_damping", defaults["impulse_damping"])
+            ),
         }
 
         best_value, _ = optimize_single_oscillator_parameter(

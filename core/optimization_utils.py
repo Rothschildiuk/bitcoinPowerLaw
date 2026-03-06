@@ -63,4 +63,3 @@ def optimize_parameter_by_candidates(
             best_value = candidate
 
     return best_value, best_score
-
