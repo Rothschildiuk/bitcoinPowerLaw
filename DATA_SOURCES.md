@@ -49,6 +49,7 @@ Most prepared datasets are cached on disk under `output/data_cache/`.
 - Cache metadata is stored as `.meta.json` alongside cached CSV files.
 - Cache schema version is used to invalidate stale serialization/layout assumptions.
 - If refresh fails and a valid cached snapshot exists, the app serves cached data.
+- Cache files are local runtime artifacts and are intentionally ignored by git.
 
 ## Refresh Intervals
 - Fast series: 1 hour
@@ -59,3 +60,11 @@ Most prepared datasets are cached on disk under `output/data_cache/`.
 - Blockchain.com early difficulty/hashrate rows contain noisy startup-era data.
 - Difficulty/hashrate analysis is intentionally filtered from `2010-07-18` onward in the app layer.
 - Some upstreams are unofficial or undocumented and should be treated as operational dependencies, not strict contracts.
+
+## Default Refresh Workflow
+- `make update-defaults` recomputes checked-in defaults from the current cached/live datasets.
+- The script updates:
+  - PowerLaw `A/B` defaults
+  - LogPeriodic defaults for Bitcoin, Difficulty, and Hashrate
+- Safe preview command:
+  - `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`

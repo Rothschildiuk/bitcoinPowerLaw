@@ -14,6 +14,7 @@ Each series config defines:
 - PowerLaw / LogPeriodic availability
 - chart behavior such as halving lines
 - analysis cutoff for noisy early data
+- LogPeriodic parameter bounds overrides where needed
 
 ## Series Families
 
@@ -36,12 +37,15 @@ Each series config defines:
 ### Bitcoin
 - Only series that supports currency switching (`USD`, `EUR`, `GOLD`)
 - Available in both PowerLaw and LogPeriodic
+- Uses the base LogPeriodic parameter bounds
 
 ### Difficulty and Hashrate
 - Available in PowerLaw and LogPeriodic
 - Force log price scale
 - Use startup-era analysis cutoff from `2010-07-18`
 - Early raw history may still exist in the cache, but chart/model analysis starts from the cutoff
+- Use wider LogPeriodic `Lambda` bounds than Bitcoin
+- Their checked-in LogPeriodic defaults are intended to be refreshed from current data
 
 ### Lightning BTC and Liquid BTC
 - Displayed with `BTC` suffix and 3 decimals
@@ -55,6 +59,13 @@ Each series config defines:
 3. Add loader in `services/price_service.py`
 4. Register raw/sidebar data in `app.py`
 5. Add tests for registry and loader behavior
+
+## Default Maintenance
+- Checked-in defaults are not purely hand-tuned anymore.
+- Use `make update-defaults` to refresh:
+  - PowerLaw `A/B`
+  - LogPeriodic defaults for supported series
+- Review the resulting `core/constants.py` diff before committing.
 
 ## Preferred Refactor Direction
 - Put series-specific rules in the registry

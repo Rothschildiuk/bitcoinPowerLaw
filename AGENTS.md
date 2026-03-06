@@ -20,6 +20,9 @@
 - Tests:
   - `make test`
   - `npm test` (placeholder; exits 0 with "No JS tests configured")
+- Default refresh:
+  - `make update-defaults`
+  - `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`
 - Cleanup:
   - `make clean`
 - Gemini CLI helpers:
@@ -30,8 +33,10 @@
 - Python dependencies are sourced from `config/requirements.txt`.
 - Transitive Python versions are pinned via `config/constraints.txt` for reproducible installs.
 - `requirements.txt` points to `config/requirements.txt` via `-r`.
+- `config/requirements.txt` must reference `constraints.txt` with a path relative to `config/`, otherwise Streamlit Cloud resolves it incorrectly.
 - `npm test` is a placeholder and currently does not run JS tests.
 - `run.command` runs `make install` automatically when `venv/bin/streamlit` is missing.
+- `make update-defaults` rewrites both PowerLaw `A/B` defaults and LogPeriodic oscillator defaults in `core/constants.py`.
 
 ## Fast Context Files
 - `ARCHITECTURE.md` explains the runtime flow and main modules.
