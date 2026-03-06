@@ -1,8 +1,13 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
-from core.power_law import calculate_r2_for_manual_params, fit_powerlaw_regression
+from core.power_law import (
+    calculate_r2_for_manual_params,
+    find_best_fit_params_for_offset,
+    fit_powerlaw_regression,
+)
 from core.utils import calculate_r2_score, get_stable_trend_fit
 
 
@@ -64,6 +69,22 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
 
         r2 = calculate_r2_for_manual_params(days, log_prices, 0, intercept, slope)
         self.assertTrue(np.isclose(r2, 1.0, atol=1e-12))
+
+    @patch("core.power_law.fit_powerlaw_regression")
+    def test_find_best_fit_params_for_offset_preserves_requested_offset(self, mock_fit):
+        mock_fit.return_value = (5.5, -16.1, 0.98)
+
+        offset, intercept, slope, r2 = find_best_fit_params_for_offset(
+            np.array([10.0, 20.0, 30.0]),
+            np.array([1.0, 2.0, 3.0]),
+            genesis_offset_days=42,
+        )
+
+        self.assertEqual(offset, 42)
+        self.assertEqual(intercept, -16.1)
+        self.assertEqual(slope, 5.5)
+        self.assertEqual(r2, 0.98)
+        self.assertEqual(mock_fit.call_args.args[2], 42)
 
 
 if __name__ == "__main__":

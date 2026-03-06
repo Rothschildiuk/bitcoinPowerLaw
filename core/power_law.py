@@ -7,6 +7,10 @@ from core.constants import (
     KEY_A,
     KEY_B,
     KEY_GENESIS_OFFSET,
+    POWERLAW_INTERCEPT_MAX,
+    POWERLAW_INTERCEPT_MIN,
+    POWERLAW_SLOPE_MAX,
+    POWERLAW_SLOPE_MIN,
 )
 from core.optimization_utils import optimize_single_scalar_parameter
 from core.utils import calculate_r2_score, fancy_control
@@ -56,6 +60,15 @@ def find_best_fit_params(absolute_days, log_prices):
     return 0, intercept_a, slope_b, r2_score
 
 
+def find_best_fit_params_for_offset(absolute_days, log_prices, genesis_offset_days):
+    slope_b, intercept_a, r2_score = fit_powerlaw_regression(
+        absolute_days,
+        log_prices,
+        genesis_offset_days,
+    )
+    return int(genesis_offset_days), intercept_a, slope_b, r2_score
+
+
 def optimize_single_powerlaw_parameter(
     absolute_days,
     log_prices,
@@ -63,10 +76,10 @@ def optimize_single_powerlaw_parameter(
     current_intercept_a,
     current_slope_b,
     parameter_key,
-    a_min=-35.0,
-    a_max=0.0,
-    b_min=1.0,
-    b_max=12.0,
+    a_min=POWERLAW_INTERCEPT_MIN,
+    a_max=POWERLAW_INTERCEPT_MAX,
+    b_min=POWERLAW_SLOPE_MIN,
+    b_max=POWERLAW_SLOPE_MAX,
 ):
     if parameter_key == "A":
         best_value, best_r2 = optimize_single_scalar_parameter(
@@ -120,10 +133,10 @@ def render_sidebar(
     b_key=KEY_B,
     default_a=DEFAULT_A,
     default_b=DEFAULT_B,
-    a_min=-35.0,
-    a_max=0.0,
-    b_min=1.0,
-    b_max=12.0,
+    a_min=POWERLAW_INTERCEPT_MIN,
+    a_max=POWERLAW_INTERCEPT_MAX,
+    b_min=POWERLAW_SLOPE_MIN,
+    b_max=POWERLAW_SLOPE_MAX,
 ):
     # Initialize defaults if needed
     if KEY_GENESIS_OFFSET not in st.session_state:
@@ -173,6 +186,18 @@ def render_sidebar(
         )
         st.session_state[b_key] = float(best_b)
 
+    def auto_fit_model():
+        current_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset))
+        _, best_a, best_b, _ = find_best_fit_params_for_offset(
+            all_abs_days,
+            all_log_close,
+            current_offset,
+        )
+        if best_a == 0.0 and best_b == 0.0:
+            return
+        st.session_state[a_key] = round(float(best_a), 3)
+        st.session_state[b_key] = round(float(best_b), 3)
+
     st.markdown("**A (Intercept)**")
     fancy_control(
         "A (Intercept)",
@@ -212,6 +237,7 @@ def render_sidebar(
         unsafe_allow_html=True,
     )
 
+    st.button("Auto-fit model", use_container_width=True, on_click=auto_fit_model)
     st.button("Reset parameters", use_container_width=True, on_click=reset_powerlaw_params)
 
     return display_r2

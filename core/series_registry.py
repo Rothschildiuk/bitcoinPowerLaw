@@ -46,6 +46,7 @@ from core.constants import (
     KEY_B_REVENUE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
+    OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     OSC_DEFAULTS,
     OSC_DEFAULTS_DIFFICULTY,
     OSC_DEFAULTS_HASHRATE,
@@ -78,6 +79,7 @@ class SeriesModelConfig:
     logperiodic_enabled: bool = False
     lock_price_scale_to_log: bool = False
     show_halving_lines: bool = False
+    analysis_min_abs_day: int | None = None
     oscillator_defaults: dict | None = None
     oscillator_min_abs_day: int | None = None
 
@@ -128,6 +130,7 @@ _BASE_SERIES_CONFIGS = {
         logperiodic_enabled=True,
         lock_price_scale_to_log=True,
         show_halving_lines=True,
+        analysis_min_abs_day=OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
         oscillator_defaults=OSC_DEFAULTS_DIFFICULTY,
     ),
     POWERLAW_SERIES_HASHRATE: SeriesModelConfig(
@@ -145,6 +148,7 @@ _BASE_SERIES_CONFIGS = {
         logperiodic_enabled=True,
         lock_price_scale_to_log=True,
         show_halving_lines=True,
+        analysis_min_abs_day=OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
         oscillator_defaults=OSC_DEFAULTS_HASHRATE,
     ),
     POWERLAW_SERIES_LIGHTNING_NODES: SeriesModelConfig(
@@ -241,6 +245,32 @@ _PRICE_CURRENCY_OVERRIDES = {
     },
 }
 
+_POWERLAW_SERIES_GROUPS = [
+    (
+        "Bitcoin network",
+        [
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_REVENUE,
+            POWERLAW_SERIES_DIFFICULTY,
+            POWERLAW_SERIES_HASHRATE,
+        ],
+    ),
+    (
+        "Lightning Network",
+        [
+            POWERLAW_SERIES_LIGHTNING_NODES,
+            POWERLAW_SERIES_LIGHTNING_CAPACITY,
+        ],
+    ),
+    (
+        "Liquid",
+        [
+            POWERLAW_SERIES_LIQUID_BTC,
+            POWERLAW_SERIES_LIQUID_TRANSACTIONS,
+        ],
+    ),
+]
+
 
 def get_series_config(series_name, selected_currency=CURRENCY_DOLLAR):
     base_config = _BASE_SERIES_CONFIGS.get(series_name, _BASE_SERIES_CONFIGS[POWERLAW_SERIES_PRICE])
@@ -257,6 +287,23 @@ def get_powerlaw_series_options():
     return [
         config.series_name for config in _BASE_SERIES_CONFIGS.values() if config.powerlaw_enabled
     ]
+
+
+def get_powerlaw_series_groups():
+    return list(_POWERLAW_SERIES_GROUPS)
+
+
+def get_powerlaw_series_group_map():
+    return {
+        group_name: list(series_options) for group_name, series_options in _POWERLAW_SERIES_GROUPS
+    }
+
+
+def get_powerlaw_series_group_for_series(series_name):
+    for group_name, series_options in _POWERLAW_SERIES_GROUPS:
+        if series_name in series_options:
+            return group_name
+    return _POWERLAW_SERIES_GROUPS[0][0]
 
 
 def get_logperiodic_series_options():

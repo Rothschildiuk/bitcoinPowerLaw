@@ -6,6 +6,7 @@ from core.constants import (
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
+    OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS,
@@ -14,7 +15,10 @@ from core.constants import (
 )
 from core.series_registry import (
     get_active_model_config,
+    get_powerlaw_series_group_for_series,
+    get_powerlaw_series_group_map,
     get_logperiodic_series_options,
+    get_powerlaw_series_groups,
     get_powerlaw_series_options,
     get_selected_series_name,
     iter_session_model_defaults,
@@ -30,6 +34,26 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn(POWERLAW_SERIES_HASHRATE, get_logperiodic_series_options())
         self.assertNotIn(POWERLAW_SERIES_LIQUID_TRANSACTIONS, get_logperiodic_series_options())
 
+    def test_powerlaw_series_groups_cover_all_powerlaw_options(self):
+        grouped_series = [
+            series_name
+            for _, series_options in get_powerlaw_series_groups()
+            for series_name in series_options
+        ]
+        self.assertCountEqual(grouped_series, get_powerlaw_series_options())
+
+    def test_powerlaw_series_group_mapping_resolves_group_for_series(self):
+        group_map = get_powerlaw_series_group_map()
+
+        self.assertEqual(
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_HASHRATE), "Bitcoin network"
+        )
+        self.assertEqual(
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_LIQUID_TRANSACTIONS),
+            "Liquid",
+        )
+        self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin network"])
+
     def test_price_series_config_tracks_selected_currency(self):
         euro_config = get_active_model_config(
             MODE_POWERLAW,
@@ -43,7 +67,7 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(euro_config.target_series_unit, CURRENCY_EURO)
         self.assertTrue(euro_config.supports_currency_selector)
 
-    def test_logperiodic_difficulty_uses_full_history_without_start_cutoff(self):
+    def test_logperiodic_difficulty_uses_filtered_analysis_start(self):
         difficulty_config = get_active_model_config(
             MODE_LOGPERIODIC,
             POWERLAW_SERIES_PRICE,
@@ -52,7 +76,10 @@ class TestSeriesRegistry(unittest.TestCase):
         )
 
         self.assertEqual(difficulty_config.series_name, POWERLAW_SERIES_DIFFICULTY)
-        self.assertIsNone(difficulty_config.oscillator_min_abs_day)
+        self.assertEqual(
+            difficulty_config.analysis_min_abs_day,
+            OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
+        )
         self.assertTrue(difficulty_config.lock_price_scale_to_log)
 
     def test_portfolio_always_uses_bitcoin_price_series(self):

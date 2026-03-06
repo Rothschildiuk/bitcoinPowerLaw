@@ -586,6 +586,8 @@ if not active_model.supports_currency_selector:
     currency = CURRENCY_DOLLAR
 
 valid_idx = active_abs_days > genesis_offset
+if active_model.analysis_min_abs_day is not None:
+    valid_idx = valid_idx & (active_abs_days >= int(active_model.analysis_min_abs_day))
 df_display = raw_df.iloc[valid_idx].copy()
 if df_display.empty:
     st.error("No data available for the selected parameters.")

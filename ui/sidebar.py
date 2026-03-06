@@ -25,13 +25,20 @@ from core.constants import (
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
+    POWERLAW_INTERCEPT_MAX,
+    POWERLAW_INTERCEPT_MIN,
     POWERLAW_SERIES_PRICE,
+    POWERLAW_SLOPE_MAX,
+    POWERLAW_SLOPE_MIN,
     TIME_LOG,
     TIME_LIN,
 )
 from core.series_registry import (
     get_active_model_config,
     get_logperiodic_series_options,
+    get_powerlaw_series_group_for_series,
+    get_powerlaw_series_group_map,
+    get_powerlaw_series_groups,
     get_powerlaw_series_options,
     series_supports_currency_selector,
 )
@@ -95,6 +102,42 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     )
 
 
+def _render_powerlaw_series_selector(powerlaw_series):
+    st.markdown("**PowerLaw series**")
+    group_map = get_powerlaw_series_group_map()
+    group_names = [group_name for group_name, _ in get_powerlaw_series_groups()]
+    active_group = get_powerlaw_series_group_for_series(powerlaw_series)
+
+    selected_group = st.radio(
+        "Series family",
+        group_names,
+        index=group_names.index(active_group),
+        horizontal=True,
+        width="stretch",
+        label_visibility="collapsed",
+    )
+
+    series_options = group_map[selected_group]
+    if powerlaw_series not in series_options:
+        powerlaw_series = series_options[0]
+        st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
+
+    selected_series = st.radio(
+        "Series",
+        series_options,
+        index=series_options.index(powerlaw_series),
+        horizontal=True,
+        width="stretch",
+        label_visibility="collapsed",
+    )
+
+    if selected_series != st.session_state.get(KEY_POWERLAW_SERIES):
+        st.session_state[KEY_POWERLAW_SERIES] = selected_series
+        st.rerun()
+
+    return selected_series
+
+
 def render_sidebar_panel(
     sidebar_series_data,
     c_text_main,
@@ -145,12 +188,7 @@ def render_sidebar_panel(
             powerlaw_series = POWERLAW_SERIES_PRICE
             st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
         if mode == MODE_POWERLAW:
-            powerlaw_series = st.radio(
-                "PowerLaw series",
-                powerlaw_series_options,
-                horizontal=True,
-                key=KEY_POWERLAW_SERIES,
-            )
+            powerlaw_series = _render_powerlaw_series_selector(powerlaw_series)
             if powerlaw_series is None:
                 powerlaw_series = st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE)
                 st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
@@ -256,10 +294,10 @@ def render_sidebar_panel(
             band_method = BAND_METHOD_QUANTILE
 
         current_r2 = 0.0
-        a_min = -35.0
-        a_max = 0.0
-        b_min = 1.0
-        b_max = 12.0
+        a_min = POWERLAW_INTERCEPT_MIN
+        a_max = POWERLAW_INTERCEPT_MAX
+        b_min = POWERLAW_SLOPE_MIN
+        b_max = POWERLAW_SLOPE_MAX
         active_model = get_active_model_config(
             mode,
             powerlaw_series,
@@ -269,6 +307,10 @@ def render_sidebar_panel(
         active_series_data = sidebar_series_data[active_model.series_name]
         model_abs_days = active_series_data["absolute_days"]
         model_log_close = active_series_data["log_close"]
+        if active_model.analysis_min_abs_day is not None:
+            analysis_mask = model_abs_days >= float(active_model.analysis_min_abs_day)
+            model_abs_days = model_abs_days[analysis_mask]
+            model_log_close = model_log_close[analysis_mask]
         a_key = active_model.a_key
         b_key = active_model.b_key
         default_a = active_model.default_a
