@@ -1,4 +1,4 @@
--c config/constraints.txt
+-c constraints.txt
 
 streamlit==1.54.0
 pandas==2.3.3
