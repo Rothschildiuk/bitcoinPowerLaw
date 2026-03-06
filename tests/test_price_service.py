@@ -127,6 +127,30 @@ class TestPriceService(unittest.TestCase):
         series = price_service._extract_close_series(download_df)
         self.assertListEqual(series.tolist(), [10.0, 20.0])
 
+    @patch("services.price_service.pd.read_csv")
+    def test_build_normalized_csv_adapter_applies_postprocess_and_cache_contract(
+        self, mock_read_csv
+    ):
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "Timestamp": ["2010-01-01", "2010-01-02", "2010-01-03"],
+                "Value": [1.0, 2.0, 3.0],
+            }
+        )
+
+        adapter = price_service._build_normalized_csv_adapter(
+            "sample_chart",
+            "unused.csv",
+            refresh_seconds=3600,
+            validator_fn=price_service._validate_prepared_chart_data,
+            postprocess_fn=lambda data_df: data_df.iloc[1:],
+        )
+        result = price_service._load_source_adapter(adapter)
+
+        self.assertEqual(adapter.cache_key, "sample_chart")
+        self.assertEqual(adapter.refresh_seconds, 3600)
+        self.assertListEqual(result["Close"].tolist(), [2.0, 3.0])
+
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_eur(self, mock_load_reference_series):
         idx = pd.to_datetime(["2024-01-01", "2024-01-02"])

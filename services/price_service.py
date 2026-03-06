@@ -3,7 +3,9 @@ import io
 import json
 import time
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -34,6 +36,22 @@ LOCAL_CACHE_SCHEMA_VERSION = 3
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
+
+
+@dataclass(frozen=True)
+class DataFrameSourceAdapter:
+    cache_key: str
+    refresh_seconds: int
+    fetch_fn: Callable[[], pd.DataFrame]
+    validator_fn: Callable[[pd.DataFrame], bool] | None = None
+
+    def load(self):
+        return _load_or_refresh_dataframe_cache(
+            self.cache_key,
+            self.fetch_fn,
+            min_check_interval_seconds=self.refresh_seconds,
+            validator_fn=self.validator_fn,
+        )
 
 
 def _ensure_local_data_cache_dir():
@@ -170,6 +188,10 @@ def _load_or_refresh_dataframe_cache(
     return fresh_df
 
 
+def _load_source_adapter(adapter):
+    return adapter.load()
+
+
 def _validate_reference_frame(data_df):
     return (
         isinstance(data_df, pd.DataFrame)
@@ -263,6 +285,29 @@ def _normalize_chart_csv(data_df, value_column_name):
     prepared_df["AbsDays"] = (prepared_df.index - GENESIS_DATE).days
     prepared_df["LogClose"] = np.log10(prepared_df[value_column_name])
     return prepared_df
+
+
+def _build_normalized_csv_adapter(
+    cache_key,
+    source_url,
+    *,
+    refresh_seconds,
+    validator_fn,
+    value_column_name="Close",
+    postprocess_fn=None,
+):
+    def fetch_frame():
+        prepared_df = _normalize_chart_csv(pd.read_csv(source_url), value_column_name)
+        if callable(postprocess_fn):
+            prepared_df = postprocess_fn(prepared_df)
+        return prepared_df
+
+    return DataFrameSourceAdapter(
+        cache_key=cache_key,
+        refresh_seconds=refresh_seconds,
+        fetch_fn=fetch_frame,
+        validator_fn=validator_fn,
+    )
 
 
 def _safe_download_close_series(symbol, start_date):
@@ -397,11 +442,13 @@ def load_reference_series(start_date):
         ).sort_index()
         return reference_df
 
-    reference_df = _load_or_refresh_dataframe_cache(
-        "reference_series",
-        fetch_reference_frame,
-        min_check_interval_seconds=REFERENCE_REFRESH_SECONDS,
-        validator_fn=_validate_reference_frame,
+    reference_df = _load_source_adapter(
+        DataFrameSourceAdapter(
+            cache_key="reference_series",
+            refresh_seconds=REFERENCE_REFRESH_SECONDS,
+            fetch_fn=fetch_reference_frame,
+            validator_fn=_validate_reference_frame,
+        )
     )
     eur_usd = (
         pd.to_numeric(reference_df["EURUSD"], errors="coerce").dropna()
@@ -475,51 +522,55 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
         full_df["LogClose"] = np.log10(full_df["Close"])
         return full_df
 
-    return _load_or_refresh_dataframe_cache(
-        "prepared_price_data",
-        fetch_price_data,
-        min_check_interval_seconds=FAST_REFRESH_SECONDS,
-        validator_fn=_validate_prepared_price_data,
+    return _load_source_adapter(
+        DataFrameSourceAdapter(
+            cache_key="prepared_price_data",
+            refresh_seconds=FAST_REFRESH_SECONDS,
+            fetch_fn=fetch_price_data,
+            validator_fn=_validate_prepared_price_data,
+        )
     )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL):
-    return _load_or_refresh_dataframe_cache(
-        "prepared_miner_revenue_data",
-        lambda: _normalize_chart_csv(pd.read_csv(revenue_history_url), "Close"),
-        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
-        validator_fn=_validate_prepared_chart_data,
+    return _load_source_adapter(
+        _build_normalized_csv_adapter(
+            "prepared_miner_revenue_data",
+            revenue_history_url,
+            refresh_seconds=SLOW_REFRESH_SECONDS,
+            validator_fn=_validate_prepared_chart_data,
+        )
     )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_difficulty_data(difficulty_history_url=DIFFICULTY_CSV_URL):
-    def fetch_difficulty_data():
-        difficulty_df = pd.read_csv(difficulty_history_url)
-        prepared_df = _normalize_chart_csv(difficulty_df, "Close")
-        return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
-
-    return _load_or_refresh_dataframe_cache(
-        "prepared_difficulty_data",
-        fetch_difficulty_data,
-        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
-        validator_fn=_validate_prepared_chart_data,
+    return _load_source_adapter(
+        _build_normalized_csv_adapter(
+            "prepared_difficulty_data",
+            difficulty_history_url,
+            refresh_seconds=SLOW_REFRESH_SECONDS,
+            validator_fn=_validate_prepared_chart_data,
+            postprocess_fn=lambda prepared_df: prepared_df[
+                prepared_df.index >= pd.Timestamp("2010-01-01")
+            ],
+        )
     )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL):
-    def fetch_hashrate_data():
-        hashrate_df = pd.read_csv(hashrate_history_url)
-        prepared_df = _normalize_chart_csv(hashrate_df, "Close")
-        return prepared_df[prepared_df.index >= pd.Timestamp("2010-01-01")]
-
-    return _load_or_refresh_dataframe_cache(
-        "prepared_hashrate_data",
-        fetch_hashrate_data,
-        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
-        validator_fn=_validate_prepared_chart_data,
+    return _load_source_adapter(
+        _build_normalized_csv_adapter(
+            "prepared_hashrate_data",
+            hashrate_history_url,
+            refresh_seconds=SLOW_REFRESH_SECONDS,
+            validator_fn=_validate_prepared_chart_data,
+            postprocess_fn=lambda prepared_df: prepared_df[
+                prepared_df.index >= pd.Timestamp("2010-01-01")
+            ],
+        )
     )
 
 
@@ -531,11 +582,13 @@ def load_bitcoin_visuals_daily_data(data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
             raise ValueError("Unable to load Bitcoin Visuals daily data.")
         return data_df
 
-    return _load_or_refresh_dataframe_cache(
-        "bitcoin_visuals_daily_data",
-        fetch_daily_data,
-        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
-        validator_fn=_validate_bitcoin_visuals_daily_data,
+    return _load_source_adapter(
+        DataFrameSourceAdapter(
+            cache_key="bitcoin_visuals_daily_data",
+            refresh_seconds=SLOW_REFRESH_SECONDS,
+            fetch_fn=fetch_daily_data,
+            validator_fn=_validate_bitcoin_visuals_daily_data,
+        )
     )
 
 
@@ -620,11 +673,13 @@ def load_prepared_liquid_btc_data(
         daily_df["LogClose"] = np.log10(daily_df["Close"])
         return daily_df
 
-    return _load_or_refresh_dataframe_cache(
-        "prepared_liquid_btc_data",
-        fetch_liquid_btc_data,
-        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
-        validator_fn=_validate_prepared_liquid_btc_data,
+    return _load_source_adapter(
+        DataFrameSourceAdapter(
+            cache_key="prepared_liquid_btc_data",
+            refresh_seconds=SLOW_REFRESH_SECONDS,
+            fetch_fn=fetch_liquid_btc_data,
+            validator_fn=_validate_prepared_liquid_btc_data,
+        )
     )
 
 
@@ -648,9 +703,11 @@ def load_prepared_liquid_transactions_data(liquid_charts_data_url=LIQUID_CHARTS_
         transactions_df.columns = ["Date", "Close"]
         return _normalize_chart_csv(transactions_df, "Close")
 
-    return _load_or_refresh_dataframe_cache(
-        "prepared_liquid_transactions_data",
-        fetch_liquid_transactions_data,
-        min_check_interval_seconds=SLOW_REFRESH_SECONDS,
-        validator_fn=_validate_prepared_liquid_transactions_data,
+    return _load_source_adapter(
+        DataFrameSourceAdapter(
+            cache_key="prepared_liquid_transactions_data",
+            refresh_seconds=SLOW_REFRESH_SECONDS,
+            fetch_fn=fetch_liquid_transactions_data,
+            validator_fn=_validate_prepared_liquid_transactions_data,
+        )
     )
