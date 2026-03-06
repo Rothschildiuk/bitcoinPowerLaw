@@ -32,5 +32,10 @@
 - `npm test` is a placeholder and currently does not run JS tests.
 - `run.command` runs `make install` automatically when `venv/bin/streamlit` is missing.
 
+## Fast Context Files
+- `ARCHITECTURE.md` explains the runtime flow and main modules.
+- `DATA_SOURCES.md` lists external APIs, cache behavior, and reliability notes.
+- `SERIES_GUIDE.md` explains series families, units, filters, and mode support.
+
 ## TODO
 - `scripts/playwright/` exists, but no committed entry command is present yet.
