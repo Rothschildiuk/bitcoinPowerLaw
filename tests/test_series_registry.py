@@ -6,7 +6,6 @@ from core.constants import (
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
-    OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS,
@@ -44,7 +43,7 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(euro_config.target_series_unit, CURRENCY_EURO)
         self.assertTrue(euro_config.supports_currency_selector)
 
-    def test_logperiodic_difficulty_uses_series_specific_oscillator_bounds(self):
+    def test_logperiodic_difficulty_uses_full_history_without_start_cutoff(self):
         difficulty_config = get_active_model_config(
             MODE_LOGPERIODIC,
             POWERLAW_SERIES_PRICE,
@@ -53,10 +52,7 @@ class TestSeriesRegistry(unittest.TestCase):
         )
 
         self.assertEqual(difficulty_config.series_name, POWERLAW_SERIES_DIFFICULTY)
-        self.assertEqual(
-            difficulty_config.oscillator_min_abs_day,
-            OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
-        )
+        self.assertIsNone(difficulty_config.oscillator_min_abs_day)
         self.assertTrue(difficulty_config.lock_price_scale_to_log)
 
     def test_portfolio_always_uses_bitcoin_price_series(self):

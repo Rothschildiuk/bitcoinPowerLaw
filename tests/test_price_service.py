@@ -151,6 +151,29 @@ class TestPriceService(unittest.TestCase):
         self.assertEqual(adapter.refresh_seconds, 3600)
         self.assertListEqual(result["Close"].tolist(), [2.0, 3.0])
 
+    @patch("services.price_service.pd.read_csv")
+    def test_build_blockchain_chart_adapter_reads_headerless_csv(self, mock_read_csv):
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "Timestamp": ["2009-01-03", "2009-01-04"],
+                "Value": [1.0, 2.0],
+            }
+        )
+
+        adapter = price_service._build_blockchain_chart_adapter(
+            "difficulty_sample",
+            "unused.csv",
+        )
+        result = adapter.fetch_fn()
+
+        _, kwargs = mock_read_csv.call_args
+        self.assertIsNone(kwargs["header"])
+        self.assertEqual(kwargs["names"], ["Timestamp", "Value"])
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2009-01-03", "2009-01-04"],
+        )
+
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_eur(self, mock_load_reference_series):
         idx = pd.to_datetime(["2024-01-01", "2024-01-02"])
@@ -272,8 +295,8 @@ class TestPriceService(unittest.TestCase):
         price_service.load_prepared_miner_revenue_data.clear()
         mock_read_csv.return_value = pd.DataFrame(
             {
-                "Timestamp": ["2020-01-01", "2020-01-02"],
-                "Value": [11_000_000.0, 12_500_000.0],
+                "Timestamp": ["2009-01-03", "2020-01-01", "2020-01-02"],
+                "Value": [10_000_000.0, 11_000_000.0, 12_500_000.0],
             }
         )
 
@@ -281,9 +304,9 @@ class TestPriceService(unittest.TestCase):
 
         self.assertListEqual(
             result.index.strftime("%Y-%m-%d").tolist(),
-            ["2020-01-01", "2020-01-02"],
+            ["2009-01-03", "2020-01-01", "2020-01-02"],
         )
-        self.assertListEqual(result["Close"].tolist(), [11_000_000.0, 12_500_000.0])
+        self.assertListEqual(result["Close"].tolist(), [10_000_000.0, 11_000_000.0, 12_500_000.0])
         self.assertIn("AbsDays", result.columns)
         self.assertIn("LogClose", result.columns)
 
@@ -300,9 +323,9 @@ class TestPriceService(unittest.TestCase):
         result = price_service.load_prepared_difficulty_data("unused.csv")
         self.assertListEqual(
             result.index.strftime("%Y-%m-%d").tolist(),
-            ["2010-01-01", "2020-01-02"],
+            ["2009-12-31", "2010-01-01", "2020-01-02"],
         )
-        self.assertListEqual(result["Close"].tolist(), [1.0e13, 1.3e13])
+        self.assertListEqual(result["Close"].tolist(), [9.9e12, 1.0e13, 1.3e13])
 
     @patch("services.price_service.pd.read_csv")
     def test_load_prepared_hashrate_data_parses_timestamp_value(self, mock_read_csv):
@@ -317,9 +340,9 @@ class TestPriceService(unittest.TestCase):
         result = price_service.load_prepared_hashrate_data("unused.csv")
         self.assertListEqual(
             result.index.strftime("%Y-%m-%d").tolist(),
-            ["2010-01-01", "2020-01-02"],
+            ["2009-12-31", "2010-01-01", "2020-01-02"],
         )
-        self.assertListEqual(result["Close"].tolist(), [100_000_000.0, 120_000_000.0])
+        self.assertListEqual(result["Close"].tolist(), [90_000_000.0, 100_000_000.0, 120_000_000.0])
 
     @patch("services.price_service.load_bitcoin_visuals_daily_data")
     def test_load_prepared_lightning_nodes_data_parses_day_and_nodes(self, mock_load_daily):

@@ -32,7 +32,7 @@ LIQUID_RESERVES_URL = "https://liquid.network/api/v1/liquid/reserves"
 LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month"
 LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
-LOCAL_CACHE_SCHEMA_VERSION = 3
+LOCAL_CACHE_SCHEMA_VERSION = 4
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
@@ -295,9 +295,13 @@ def _build_normalized_csv_adapter(
     validator_fn,
     value_column_name="Close",
     postprocess_fn=None,
+    read_csv_kwargs=None,
 ):
     def fetch_frame():
-        prepared_df = _normalize_chart_csv(pd.read_csv(source_url), value_column_name)
+        prepared_df = _normalize_chart_csv(
+            pd.read_csv(source_url, **(read_csv_kwargs or {})),
+            value_column_name,
+        )
         if callable(postprocess_fn):
             prepared_df = postprocess_fn(prepared_df)
         return prepared_df
@@ -307,6 +311,16 @@ def _build_normalized_csv_adapter(
         refresh_seconds=refresh_seconds,
         fetch_fn=fetch_frame,
         validator_fn=validator_fn,
+    )
+
+
+def _build_blockchain_chart_adapter(cache_key, source_url):
+    return _build_normalized_csv_adapter(
+        cache_key,
+        source_url,
+        refresh_seconds=SLOW_REFRESH_SECONDS,
+        validator_fn=_validate_prepared_chart_data,
+        read_csv_kwargs={"header": None, "names": ["Timestamp", "Value"]},
     )
 
 
@@ -535,42 +549,21 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
 @st.cache_data(ttl=3600)
 def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL):
     return _load_source_adapter(
-        _build_normalized_csv_adapter(
-            "prepared_miner_revenue_data",
-            revenue_history_url,
-            refresh_seconds=SLOW_REFRESH_SECONDS,
-            validator_fn=_validate_prepared_chart_data,
-        )
+        _build_blockchain_chart_adapter("prepared_miner_revenue_data", revenue_history_url)
     )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_difficulty_data(difficulty_history_url=DIFFICULTY_CSV_URL):
     return _load_source_adapter(
-        _build_normalized_csv_adapter(
-            "prepared_difficulty_data",
-            difficulty_history_url,
-            refresh_seconds=SLOW_REFRESH_SECONDS,
-            validator_fn=_validate_prepared_chart_data,
-            postprocess_fn=lambda prepared_df: prepared_df[
-                prepared_df.index >= pd.Timestamp("2010-01-01")
-            ],
-        )
+        _build_blockchain_chart_adapter("prepared_difficulty_data", difficulty_history_url)
     )
 
 
 @st.cache_data(ttl=3600)
 def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL):
     return _load_source_adapter(
-        _build_normalized_csv_adapter(
-            "prepared_hashrate_data",
-            hashrate_history_url,
-            refresh_seconds=SLOW_REFRESH_SECONDS,
-            validator_fn=_validate_prepared_chart_data,
-            postprocess_fn=lambda prepared_df: prepared_df[
-                prepared_df.index >= pd.Timestamp("2010-01-01")
-            ],
-        )
+        _build_blockchain_chart_adapter("prepared_hashrate_data", hashrate_history_url)
     )
 
 
