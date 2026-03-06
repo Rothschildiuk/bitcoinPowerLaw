@@ -28,6 +28,7 @@
 
 ## Grounded Notes
 - Python dependencies are sourced from `config/requirements.txt`.
+- Transitive Python versions are pinned via `config/constraints.txt` for reproducible installs.
 - `requirements.txt` points to `config/requirements.txt` via `-r`.
 - `npm test` is a placeholder and currently does not run JS tests.
 - `run.command` runs `make install` automatically when `venv/bin/streamlit` is missing.

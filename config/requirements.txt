@@ -1,7 +1,9 @@
-streamlit
-pandas
-numpy
-plotly
-yfinance
-pytest
-black
+-c config/constraints.txt
+
+streamlit==1.54.0
+pandas==2.3.3
+numpy==2.4.2
+plotly==6.5.2
+yfinance==1.1.0
+pytest==9.0.2
+black==26.1.0
