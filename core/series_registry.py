@@ -82,6 +82,7 @@ class SeriesModelConfig:
     analysis_min_abs_day: int | None = None
     oscillator_defaults: dict | None = None
     oscillator_min_abs_day: int | None = None
+    oscillator_parameter_bounds: dict[str, tuple[float, float]] | None = None
 
 
 _BASE_SERIES_CONFIGS = {
@@ -132,6 +133,7 @@ _BASE_SERIES_CONFIGS = {
         show_halving_lines=True,
         analysis_min_abs_day=DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
         oscillator_defaults=OSC_DEFAULTS_DIFFICULTY,
+        oscillator_parameter_bounds={"lambda_val": (1.5, 8.0)},
     ),
     POWERLAW_SERIES_HASHRATE: SeriesModelConfig(
         series_name=POWERLAW_SERIES_HASHRATE,
@@ -150,6 +152,7 @@ _BASE_SERIES_CONFIGS = {
         show_halving_lines=True,
         analysis_min_abs_day=DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
         oscillator_defaults=OSC_DEFAULTS_HASHRATE,
+        oscillator_parameter_bounds={"lambda_val": (1.5, 8.0)},
     ),
     POWERLAW_SERIES_LIGHTNING_NODES: SeriesModelConfig(
         series_name=POWERLAW_SERIES_LIGHTNING_NODES,

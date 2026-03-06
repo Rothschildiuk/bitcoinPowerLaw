@@ -80,6 +80,7 @@ class TestSeriesRegistry(unittest.TestCase):
             difficulty_config.analysis_min_abs_day,
             DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
         )
+        self.assertEqual(difficulty_config.oscillator_parameter_bounds["lambda_val"], (1.5, 8.0))
         self.assertTrue(difficulty_config.lock_price_scale_to_log)
 
     def test_portfolio_always_uses_bitcoin_price_series(self):

@@ -98,6 +98,69 @@ class TestOscillator(unittest.TestCase):
         self.assertTrue(1.5 <= best_value <= 3.0)
         self.assertTrue(np.isfinite(best_r2))
 
+    def test_optimize_oscillator_parameters_respects_lambda_override_bounds(self):
+        log_days = np.linspace(0.5, 3.0, 250)
+        residuals = np.cos(2.5 * log_days) * np.exp(-0.3 * (log_days - log_days.min()))
+        initial_params = {
+            "t1_age": 2.49,
+            "lambda_val": 4.72,
+            "amp_factor_top": 0.69,
+            "amp_factor_bottom": 0.78,
+            "impulse_damping": 0.25,
+        }
+
+        optimized = oscillator.optimize_oscillator_parameters(
+            log_days,
+            residuals,
+            initial_params,
+            bounds_override={"lambda_val": (1.5, 8.0)},
+            parameter_order=["t1_age", "lambda_val"],
+        )
+
+        self.assertTrue(0.5 <= optimized["t1_age"] <= 3.0)
+        self.assertTrue(1.5 <= optimized["lambda_val"] <= 8.0)
+
+    def test_optimize_visible_oscillator_parameters_matches_sequential_af_strategy(self):
+        log_days = np.linspace(0.5, 3.0, 250)
+        residuals = np.cos(2.5 * log_days) * np.exp(-0.3 * (log_days - log_days.min()))
+        initial_params = {
+            "t1_age": 1.61,
+            "lambda_val": 5.00,
+            "amp_factor_top": 0.68,
+            "amp_factor_bottom": 0.74,
+            "impulse_damping": 0.11,
+        }
+
+        optimized = oscillator.optimize_visible_oscillator_parameters(
+            log_days,
+            residuals,
+            initial_params,
+            bounds_override={"lambda_val": (1.5, 8.0)},
+            parameter_order=["t1_age", "lambda_val"],
+            step_map={"t1_age": 0.01, "lambda_val": 0.01},
+        )
+
+        optimized_r2 = oscillator.compute_oscillator_fit_r2(
+            log_days,
+            residuals,
+            optimized["t1_age"],
+            optimized["lambda_val"],
+            optimized["amp_factor_top"],
+            optimized["amp_factor_bottom"],
+            optimized["impulse_damping"],
+        )
+        baseline_r2 = oscillator.compute_oscillator_fit_r2(
+            log_days,
+            residuals,
+            initial_params["t1_age"],
+            initial_params["lambda_val"],
+            initial_params["amp_factor_top"],
+            initial_params["amp_factor_bottom"],
+            initial_params["impulse_damping"],
+        )
+
+        self.assertGreaterEqual(optimized_r2, baseline_r2)
+
 
 if __name__ == "__main__":
     unittest.main()

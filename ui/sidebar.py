@@ -357,6 +357,7 @@ def render_sidebar_panel(
                 c_text_main,
                 defaults_override=active_osc_defaults,
                 min_abs_day_for_fit=active_model.oscillator_min_abs_day,
+                parameter_bounds_override=active_model.oscillator_parameter_bounds,
             )
 
     return (

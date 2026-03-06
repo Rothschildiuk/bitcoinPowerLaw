@@ -8,6 +8,21 @@ from core.utils import calculate_r2_score, fancy_control, get_stable_trend_fit
 AUTO_FIT_MAX_PASSES = 2
 AUTO_FIT_GRID_POINTS = 9
 AUTO_FIT_SINGLE_GRID_POINTS = 41
+AUTO_FIT_VISIBLE_PASSES = 12
+DEFAULT_OSCILLATOR_PARAMETER_BOUNDS = {
+    "t1_age": (0.5, 3.0),
+    "lambda_val": (1.5, 5.0),
+    "amp_factor_top": (0.1, 10.0),
+    "amp_factor_bottom": (0.1, 10.0),
+    "impulse_damping": (0.0, 2.0),
+}
+
+
+def _resolve_oscillator_bounds(bounds_override=None):
+    bounds = dict(DEFAULT_OSCILLATOR_PARAMETER_BOUNDS)
+    if bounds_override:
+        bounds.update(bounds_override)
+    return bounds
 
 
 def fit_oscillator_component(
@@ -77,15 +92,16 @@ def compute_oscillator_fit_r2(
     return calculate_r2_score(residual_series, predicted_residuals) * 100.0
 
 
-def optimize_oscillator_parameters(log_days, residual_series, initial_params):
+def optimize_oscillator_parameters(
+    log_days,
+    residual_series,
+    initial_params,
+    *,
+    bounds_override=None,
+    parameter_order=None,
+):
     optimized_params = dict(initial_params)
-    bounds = {
-        "t1_age": (0.5, 3.0),
-        "lambda_val": (1.5, 5.0),
-        "amp_factor_top": (0.1, 10.0),
-        "amp_factor_bottom": (0.1, 10.0),
-        "impulse_damping": (0.0, 2.0),
-    }
+    bounds = _resolve_oscillator_bounds(bounds_override)
     spans = {
         "t1_age": 1.20,
         "lambda_val": 0.60,
@@ -93,7 +109,10 @@ def optimize_oscillator_parameters(log_days, residual_series, initial_params):
         "amp_factor_bottom": 1.60,
         "impulse_damping": 1.00,
     }
-    order = ["t1_age", "lambda_val", "amp_factor_top", "amp_factor_bottom", "impulse_damping"]
+    order = list(
+        parameter_order
+        or ["t1_age", "lambda_val", "amp_factor_top", "amp_factor_bottom", "impulse_damping"]
+    )
 
     best_r2 = compute_oscillator_fit_r2(
         log_days,
@@ -180,6 +199,47 @@ def optimize_single_oscillator_parameter(
     return best_value, best_r2
 
 
+def optimize_visible_oscillator_parameters(
+    log_days,
+    residual_series,
+    current_params,
+    *,
+    bounds_override=None,
+    parameter_order=None,
+    step_map=None,
+    passes=AUTO_FIT_VISIBLE_PASSES,
+):
+    params = dict(current_params)
+    bounds = _resolve_oscillator_bounds(bounds_override)
+    order = list(parameter_order or ["t1_age", "lambda_val"])
+    steps = dict(step_map or {})
+
+    for _ in range(max(1, int(passes))):
+        improved = False
+        for sweep_order in (order, list(reversed(order))):
+            for key in sweep_order:
+                min_value, max_value = bounds[key]
+                best_value, best_r2 = optimize_single_oscillator_parameter(
+                    log_days,
+                    residual_series,
+                    params,
+                    parameter_key=key,
+                    min_value=min_value,
+                    max_value=max_value,
+                    step_value=steps.get(key),
+                )
+                previous_value = float(params[key])
+                if not np.isfinite(best_r2):
+                    continue
+                params[key] = float(best_value)
+                if not np.isclose(previous_value, float(best_value)):
+                    improved = True
+        if not improved:
+            break
+
+    return params
+
+
 def build_autofit_signature(all_abs_days, all_log_close):
     if len(all_abs_days) == 0:
         return ("empty",)
@@ -247,9 +307,15 @@ oscillator_func_manual = build_oscillator_curve
 
 # --- SIDEBAR RENDERER ---
 def render_sidebar(
-    all_abs_days, all_log_close, text_color, defaults_override=None, min_abs_day_for_fit=None
+    all_abs_days,
+    all_log_close,
+    text_color,
+    defaults_override=None,
+    min_abs_day_for_fit=None,
+    parameter_bounds_override=None,
 ):
     defaults = dict(defaults_override or OSC_DEFAULTS)
+    parameter_bounds = _resolve_oscillator_bounds(parameter_bounds_override)
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
@@ -309,6 +375,28 @@ def render_sidebar(
         clipped_best = min(max_value, max(min_value, float(best_value)))
         st.session_state[parameter_key] = round(clipped_best, precision)
 
+    def auto_fit_visible_parameters():
+        if not has_fit_data:
+            return
+
+        current_params = {
+            "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
+            "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
+            "amp_factor_top": float(defaults["amp_factor_top"]),
+            "amp_factor_bottom": float(defaults["amp_factor_bottom"]),
+            "impulse_damping": float(defaults["impulse_damping"]),
+        }
+        optimized = optimize_visible_oscillator_parameters(
+            log_days,
+            residual_series,
+            current_params,
+            bounds_override=parameter_bounds,
+            parameter_order=["t1_age", "lambda_val"],
+            step_map={"t1_age": 0.01, "lambda_val": 0.01},
+        )
+        st.session_state["t1_age"] = round(float(optimized["t1_age"]), 2)
+        st.session_state["lambda_val"] = round(float(optimized["lambda_val"]), 2)
+
     def render_oscillator_control(title, key, step, min_v, max_v):
         st.markdown(f"**{title}**")
         fancy_control(
@@ -323,8 +411,10 @@ def render_sidebar(
             auto_fit_label="AF",
         )
 
-    render_oscillator_control("1st Cycle Age", "t1_age", 0.01, 0.5, 3.0)
-    render_oscillator_control("Lambda", "lambda_val", 0.01, 1.5, 5.0)
+    t1_min, t1_max = parameter_bounds["t1_age"]
+    lambda_min, lambda_max = parameter_bounds["lambda_val"]
+    render_oscillator_control("1st Cycle Age", "t1_age", 0.01, t1_min, t1_max)
+    render_oscillator_control("Lambda", "lambda_val", 0.01, lambda_min, lambda_max)
     # Keep advanced amplitude/damping parameters fixed to defaults in LogPeriodic sidebar.
     st.session_state["amp_factor_top"] = float(defaults["amp_factor_top"])
     st.session_state["amp_factor_bottom"] = float(defaults["amp_factor_bottom"])
@@ -348,4 +438,5 @@ def render_sidebar(
         unsafe_allow_html=True,
     )
 
+    st.button("Auto-fit model", use_container_width=True, on_click=auto_fit_visible_parameters)
     st.button("Reset parameters", use_container_width=True, on_click=reset_oscillator_params)

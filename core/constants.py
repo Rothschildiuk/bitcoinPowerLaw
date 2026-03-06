@@ -35,21 +35,21 @@ POWERLAW_SLOPE_MIN = 1.0
 POWERLAW_SLOPE_MAX = 15.0
 OSC_DEFAULTS = {
     "lambda_val": 2.01,
-    "t1_age": 2.489,
+    "t1_age": 2.49,
     "amp_factor_top": 1.00,
     "amp_factor_bottom": 0.78,
     "impulse_damping": 1.72,
 }
 OSC_DEFAULTS_DIFFICULTY = {
-    "lambda_val": 4.72,
-    "t1_age": 1.70,
+    "lambda_val": 5.26,
+    "t1_age": 1.53,
     "amp_factor_top": 0.69,
     "amp_factor_bottom": 0.78,
     "impulse_damping": 0.25,
 }
 OSC_DEFAULTS_HASHRATE = {
-    "lambda_val": 4.71,
-    "t1_age": 1.69,
+    "lambda_val": 5.32,
+    "t1_age": 1.51,
     "amp_factor_top": 0.68,
     "amp_factor_bottom": 0.74,
     "impulse_damping": 0.11,

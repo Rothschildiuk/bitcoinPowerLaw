@@ -15,7 +15,7 @@ help:
 	@echo "  make format   - run black formatter"
 	@echo "  make check    - run black --check"
 	@echo "  make test     - run pytest test suite"
-	@echo "  make update-defaults - recompute and rewrite hardcoded PowerLaw defaults"
+	@echo "  make update-defaults - recompute and rewrite PowerLaw and LogPeriodic defaults"
 	@echo "  make clean    - remove Python cache folders"
 
 install:
