@@ -27,6 +27,8 @@ from core.constants import (
     DEFAULT_LIGHTNING_NODES_B,
     DEFAULT_LIQUID_BTC_A,
     DEFAULT_LIQUID_BTC_B,
+    DEFAULT_LIQUID_TRANSACTIONS_A,
+    DEFAULT_LIQUID_TRANSACTIONS_B,
     DEFAULT_DIFFICULTY_A,
     DEFAULT_DIFFICULTY_B,
     DEFAULT_REVENUE_A,
@@ -49,6 +51,8 @@ from core.constants import (
     KEY_B_LIGHTNING_NODES,
     KEY_A_LIQUID_BTC,
     KEY_B_LIQUID_BTC,
+    KEY_A_LIQUID_TRANSACTIONS,
+    KEY_B_LIQUID_TRANSACTIONS,
     KEY_A_DIFFICULTY,
     KEY_B_DIFFICULTY,
     KEY_A_REVENUE,
@@ -77,6 +81,7 @@ from core.constants import (
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
     POWERLAW_SERIES_LIQUID_BTC,
+    POWERLAW_SERIES_LIQUID_TRANSACTIONS,
     TIME_LOG,
 )
 from core.utils import calculate_r2_score, get_stable_trend_fit
@@ -87,6 +92,7 @@ from services.price_service import (
     load_prepared_lightning_capacity_data,
     load_prepared_lightning_nodes_data,
     load_prepared_liquid_btc_data,
+    load_prepared_liquid_transactions_data,
     load_prepared_miner_revenue_data,
     load_prepared_price_data,
 )
@@ -148,6 +154,10 @@ def initialize_app_session_state(absolute_days=None, log_prices=None):
         st.session_state[KEY_A_LIQUID_BTC] = DEFAULT_LIQUID_BTC_A
     if KEY_B_LIQUID_BTC not in st.session_state:
         st.session_state[KEY_B_LIQUID_BTC] = DEFAULT_LIQUID_BTC_B
+    if KEY_A_LIQUID_TRANSACTIONS not in st.session_state:
+        st.session_state[KEY_A_LIQUID_TRANSACTIONS] = DEFAULT_LIQUID_TRANSACTIONS_A
+    if KEY_B_LIQUID_TRANSACTIONS not in st.session_state:
+        st.session_state[KEY_B_LIQUID_TRANSACTIONS] = DEFAULT_LIQUID_TRANSACTIONS_B
     if KEY_A not in st.session_state:
         st.session_state[KEY_A] = st.session_state[KEY_A_PRICE]
     if KEY_B not in st.session_state:
@@ -309,7 +319,7 @@ def render_portfolio_view(
     c_border,
     c_hover_text,
 ):
-    display_currency_decimals = 0
+    display_currency_decimals = int(currency_decimals)
 
     def format_portfolio_money(value):
         return f"{currency_prefix}{value:,.{display_currency_decimals}f}{currency_suffix}"
@@ -374,7 +384,14 @@ def render_portfolio_view(
         font=dict(color=pl_text_color),
         paper_bgcolor=pl_bg_color,
         plot_bgcolor=pl_bg_color,
-        xaxis=dict(gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color)),
+        xaxis=dict(
+            gridcolor=pl_grid_color,
+            tickfont=dict(color=pl_text_color),
+            range=[
+                portfolio_display_df["Date"].min() - pd.Timedelta(days=90),
+                portfolio_display_df["Date"].max(),
+            ],
+        ),
         yaxis=dict(gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color)),
         hoverlabel=dict(
             bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
@@ -478,6 +495,12 @@ except Exception as e:
     st.error(f"Error loading Liquid BTC data: {e}")
     st.stop()
 
+try:
+    raw_liquid_transactions_df = load_prepared_liquid_transactions_data()
+except Exception as e:
+    st.error(f"Error loading Liquid transactions data: {e}")
+    st.stop()
+
 if KEY_CURRENCY_SELECTOR not in st.session_state:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
 
@@ -495,6 +518,10 @@ raw_lightning_capacity_df = raw_lightning_capacity_df[raw_lightning_capacity_df[
 raw_lightning_capacity_df["LogClose"] = np.log10(raw_lightning_capacity_df["Close"])
 raw_liquid_btc_df = raw_liquid_btc_df[raw_liquid_btc_df["Close"] > 0].copy()
 raw_liquid_btc_df["LogClose"] = np.log10(raw_liquid_btc_df["Close"])
+raw_liquid_transactions_df = raw_liquid_transactions_df[
+    raw_liquid_transactions_df["Close"] > 0
+].copy()
+raw_liquid_transactions_df["LogClose"] = np.log10(raw_liquid_transactions_df["Close"])
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
@@ -518,6 +545,8 @@ lightning_capacity_absolute_days = raw_lightning_capacity_df["AbsDays"].values
 lightning_capacity_log_close = raw_lightning_capacity_df["LogClose"].values
 liquid_btc_absolute_days = raw_liquid_btc_df["AbsDays"].values
 liquid_btc_log_close = raw_liquid_btc_df["LogClose"].values
+liquid_transactions_absolute_days = raw_liquid_transactions_df["AbsDays"].values
+liquid_transactions_log_close = raw_liquid_transactions_df["LogClose"].values
 
 # --- THEME + STATE ---
 initialize_app_session_state(price_absolute_days, price_log_close)
@@ -561,6 +590,8 @@ c_border = theme["c_border"]
     lightning_capacity_log_close,
     liquid_btc_absolute_days,
     liquid_btc_log_close,
+    liquid_transactions_absolute_days,
+    liquid_transactions_log_close,
     c_text_main,
     APP_VERSION,
     FORECAST_HORIZON_MIN,
@@ -593,6 +624,7 @@ if (
         POWERLAW_SERIES_LIGHTNING_NODES,
         POWERLAW_SERIES_LIGHTNING_CAPACITY,
         POWERLAW_SERIES_LIQUID_BTC,
+        POWERLAW_SERIES_LIQUID_TRANSACTIONS,
     ]
     and currency != CURRENCY_DOLLAR
 ):
@@ -608,6 +640,7 @@ if not (
         POWERLAW_SERIES_LIGHTNING_NODES,
         POWERLAW_SERIES_LIGHTNING_CAPACITY,
         POWERLAW_SERIES_LIQUID_BTC,
+        POWERLAW_SERIES_LIQUID_TRANSACTIONS,
     ]
 ) and currency != st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR):
     st.rerun()
@@ -683,6 +716,16 @@ elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIQUID_BTC:
     target_series_name = "Liquid BTC balance"
     target_series_unit = "BTC"
     currency = CURRENCY_DOLLAR
+elif mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIQUID_TRANSACTIONS:
+    raw_df = raw_liquid_transactions_df.copy()
+    active_abs_days = liquid_transactions_absolute_days
+    active_a_key = KEY_A_LIQUID_TRANSACTIONS
+    active_b_key = KEY_B_LIQUID_TRANSACTIONS
+    active_default_a = DEFAULT_LIQUID_TRANSACTIONS_A
+    active_default_b = DEFAULT_LIQUID_TRANSACTIONS_B
+    target_series_name = "Liquid transactions"
+    target_series_unit = "Transactions/week"
+    currency = CURRENCY_DOLLAR
 elif mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
     raw_df = raw_difficulty_df.copy()
     active_abs_days = difficulty_absolute_days
@@ -755,6 +798,7 @@ if (
         POWERLAW_SERIES_DIFFICULTY,
         POWERLAW_SERIES_HASHRATE,
         POWERLAW_SERIES_LIGHTNING_NODES,
+        POWERLAW_SERIES_LIQUID_TRANSACTIONS,
     ]
 ) or (
     mode == MODE_LOGPERIODIC
@@ -766,6 +810,8 @@ if mode == MODE_POWERLAW and powerlaw_series in [
     POWERLAW_SERIES_LIQUID_BTC,
 ]:
     currency_context = {"prefix": "", "suffix": " BTC", "decimals": 3, "unit": "BTC"}
+if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIQUID_TRANSACTIONS:
+    currency_context = {"prefix": "", "suffix": "", "decimals": 0, "unit": "RAW"}
 currency_prefix = currency_context["prefix"]
 currency_suffix = currency_context["suffix"]
 currency_decimals = int(currency_context["decimals"])
@@ -923,6 +969,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
                 POWERLAW_SERIES_LIGHTNING_NODES,
                 POWERLAW_SERIES_LIGHTNING_CAPACITY,
                 POWERLAW_SERIES_LIQUID_BTC,
+                POWERLAW_SERIES_LIQUID_TRANSACTIONS,
             ]
         ),
         osc_visible_start_abs_day=(

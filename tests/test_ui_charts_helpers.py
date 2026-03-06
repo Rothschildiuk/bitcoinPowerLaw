@@ -3,7 +3,11 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from ui.charts import _resolve_log_time_axis, _resolve_powerlaw_y_range
+from ui.charts import (
+    _resolve_log_time_axis,
+    _resolve_powerlaw_y_range,
+    _resolve_time_axis_start_date,
+)
 
 
 class TestUIChartsHelpers(unittest.TestCase):
@@ -70,6 +74,21 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(len(tick_days), len(tick_labels))
         self.assertTrue(all(day > 0 for day in tick_days))
         self.assertIn("2014", tick_labels)
+        expected_start_day = max(
+            1.0,
+            float((_resolve_time_axis_start_date(df_display) - current_gen_date).days),
+        )
+        self.assertEqual(x_range[0], np.log10(expected_start_day))
+
+    def test_resolve_time_axis_start_date_adds_three_month_padding(self):
+        df_display = pd.DataFrame(
+            {"Days": [100.0, 200.0]},
+            index=pd.to_datetime(["2015-06-15", "2016-06-15"]),
+        )
+
+        start_date = _resolve_time_axis_start_date(df_display)
+
+        self.assertEqual(start_date, pd.Timestamp("2015-03-17"))
 
 
 if __name__ == "__main__":

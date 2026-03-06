@@ -16,6 +16,12 @@ HALVING_DATES = [
     pd.Timestamp("2020-05-11"),
     pd.Timestamp("2024-04-20"),
 ]
+TIME_AXIS_LEADING_PADDING_DAYS = 90
+
+
+def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS):
+    first_data_date = pd.Timestamp(df_display.index.min())
+    return first_data_date - pd.Timedelta(days=int(padding_days))
 
 
 def _resolve_powerlaw_y_range(
@@ -63,10 +69,11 @@ def _resolve_powerlaw_y_range(
 
 
 def _resolve_log_time_axis(df_display, current_gen_date, view_max, m_dates):
-    range_start_day = max(1.0, float(df_display["Days"].min()))
+    padded_start_date = _resolve_time_axis_start_date(df_display)
+    range_start_day = max(1.0, float((padded_start_date - current_gen_date).days))
     range_end_day = max(float(view_max), range_start_day + 1.0)
 
-    start_year = int(df_display.index.min().year)
+    start_year = int(padded_start_date.year)
     end_year = int(max(df_display.index.max().year, m_dates[-1].year))
     tick_days = []
     tick_labels = []
@@ -285,7 +292,9 @@ def render_main_model_chart(
     else:
         osc_mask = np.ones(len(df_display), dtype=bool)
         if osc_visible_start_abs_day is not None:
-            osc_mask = df_display["AbsDays"].to_numpy(dtype=float) >= float(osc_visible_start_abs_day)
+            osc_mask = df_display["AbsDays"].to_numpy(dtype=float) >= float(
+                osc_visible_start_abs_day
+            )
 
         osc_x_vals = np.asarray(plot_x_osc)[osc_mask]
         osc_y_vals = df_display["Res"].to_numpy(dtype=float)[osc_mask]
@@ -347,7 +356,7 @@ def render_main_model_chart(
             type="date",
             gridcolor=pl_grid_color,
             tickfont=tick_font,
-            range=[df_display.index.min(), m_dates[-1]],
+            range=[_resolve_time_axis_start_date(df_display), m_dates[-1]],
             hoverformat="%d.%m.%Y",
         )
 

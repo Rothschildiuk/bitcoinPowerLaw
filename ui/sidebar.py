@@ -24,6 +24,8 @@ from core.constants import (
     DEFAULT_LIGHTNING_NODES_B,
     DEFAULT_LIQUID_BTC_A,
     DEFAULT_LIQUID_BTC_B,
+    DEFAULT_LIQUID_TRANSACTIONS_A,
+    DEFAULT_LIQUID_TRANSACTIONS_B,
     OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
@@ -37,6 +39,7 @@ from core.constants import (
     KEY_A_LIGHTNING_CAPACITY,
     KEY_A_LIGHTNING_NODES,
     KEY_A_LIQUID_BTC,
+    KEY_A_LIQUID_TRANSACTIONS,
     KEY_A_REVENUE,
     KEY_B,
     KEY_BAND_METHOD,
@@ -48,6 +51,7 @@ from core.constants import (
     KEY_B_LIGHTNING_CAPACITY,
     KEY_B_LIGHTNING_NODES,
     KEY_B_LIQUID_BTC,
+    KEY_B_LIQUID_TRANSACTIONS,
     KEY_B_REVENUE,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
@@ -74,6 +78,7 @@ from core.constants import (
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
     POWERLAW_SERIES_LIQUID_BTC,
+    POWERLAW_SERIES_LIQUID_TRANSACTIONS,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
     TIME_LOG,
@@ -152,6 +157,8 @@ def render_sidebar_panel(
     lightning_capacity_log_close,
     liquid_btc_absolute_days,
     liquid_btc_log_close,
+    liquid_transactions_absolute_days,
+    liquid_transactions_log_close,
     c_text_main,
     app_version,
     forecast_horizon_min,
@@ -377,6 +384,13 @@ def render_sidebar_panel(
             b_key = KEY_B_LIQUID_BTC
             default_a = DEFAULT_LIQUID_BTC_A
             default_b = DEFAULT_LIQUID_BTC_B
+        if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_LIQUID_TRANSACTIONS:
+            model_abs_days = liquid_transactions_absolute_days
+            model_log_close = liquid_transactions_log_close
+            a_key = KEY_A_LIQUID_TRANSACTIONS
+            b_key = KEY_B_LIQUID_TRANSACTIONS
+            default_a = DEFAULT_LIQUID_TRANSACTIONS_A
+            default_b = DEFAULT_LIQUID_TRANSACTIONS_B
         if mode == MODE_LOGPERIODIC and logperiodic_series == POWERLAW_SERIES_DIFFICULTY:
             model_abs_days = difficulty_absolute_days
             model_log_close = difficulty_log_close
