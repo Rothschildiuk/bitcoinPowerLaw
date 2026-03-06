@@ -20,12 +20,14 @@ __pycache__/
 # Streamlit cache/settings
 .streamlit/
 .home/
+.codex/
 node_modules/
 
 # Local environment and logs
 .env
 .env.*
 *.log
+.playwright-cli/
 
 # Local data files
 *.csv
@@ -34,6 +36,7 @@ node_modules/
 *.json
 *.parquet
 output/data_cache/
+output/playwright/.npm-cache/
 output/playwright/artifacts/
 !package.json
 !package-lock.json
