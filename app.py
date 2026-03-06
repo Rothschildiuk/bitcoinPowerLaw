@@ -249,7 +249,7 @@ def render_portfolio_view(
 
     st.markdown("### Portfolio Growth (Fair Price / Power Law)")
     btc_amount = float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0))
-    forecast_unit = st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Month")
+    forecast_unit = st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Year")
     forecast_horizon = int(
         st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
     )

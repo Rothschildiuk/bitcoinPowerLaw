@@ -58,7 +58,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     st.markdown("**Forecast unit**")
     forecast_unit = st.radio(
         "Forecast unit",
-        ["Day", "Month", "Year"],
+        ["Year", "Month", "Day"],
         horizontal=True,
         key=KEY_PORTFOLIO_FORECAST_UNIT,
         label_visibility="collapsed",
