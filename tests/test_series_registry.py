@@ -3,10 +3,10 @@ import unittest
 from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
+    DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
-    OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS,
@@ -78,7 +78,7 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(difficulty_config.series_name, POWERLAW_SERIES_DIFFICULTY)
         self.assertEqual(
             difficulty_config.analysis_min_abs_day,
-            OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
+            DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
         )
         self.assertTrue(difficulty_config.lock_price_scale_to_log)
 

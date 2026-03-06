@@ -44,9 +44,9 @@ from core.constants import (
     KEY_B_LIQUID_TRANSACTIONS,
     KEY_B_PRICE,
     KEY_B_REVENUE,
+    DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
-    OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
     OSC_DEFAULTS,
     OSC_DEFAULTS_DIFFICULTY,
     OSC_DEFAULTS_HASHRATE,
@@ -130,7 +130,7 @@ _BASE_SERIES_CONFIGS = {
         logperiodic_enabled=True,
         lock_price_scale_to_log=True,
         show_halving_lines=True,
-        analysis_min_abs_day=OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
+        analysis_min_abs_day=DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
         oscillator_defaults=OSC_DEFAULTS_DIFFICULTY,
     ),
     POWERLAW_SERIES_HASHRATE: SeriesModelConfig(
@@ -148,7 +148,7 @@ _BASE_SERIES_CONFIGS = {
         logperiodic_enabled=True,
         lock_price_scale_to_log=True,
         show_halving_lines=True,
-        analysis_min_abs_day=OSCILLATOR_DIFF_HASH_START_ABS_DAYS,
+        analysis_min_abs_day=DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
         oscillator_defaults=OSC_DEFAULTS_HASHRATE,
     ),
     POWERLAW_SERIES_LIGHTNING_NODES: SeriesModelConfig(
