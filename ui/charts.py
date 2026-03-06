@@ -17,11 +17,18 @@ HALVING_DATES = [
     pd.Timestamp("2024-04-20"),
 ]
 TIME_AXIS_LEADING_PADDING_DAYS = 90
+MODEL_FORWARD_YEARS = 5
 
 
 def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS):
     first_data_date = pd.Timestamp(df_display.index.min())
     return first_data_date - pd.Timedelta(days=int(padding_days))
+
+
+def _resolve_model_view_max(df_display, current_gen_date, forward_years=MODEL_FORWARD_YEARS):
+    latest_data_date = pd.Timestamp(df_display.index.max()).normalize()
+    horizon_end_date = latest_data_date + pd.DateOffset(years=int(forward_years))
+    return max(1.0, float((horizon_end_date - current_gen_date).days))
 
 
 def _resolve_powerlaw_y_range(

@@ -5,6 +5,7 @@ import pandas as pd
 
 from ui.charts import (
     _resolve_log_time_axis,
+    _resolve_model_view_max,
     _resolve_powerlaw_y_range,
     _resolve_time_axis_start_date,
 )
@@ -89,6 +90,20 @@ class TestUIChartsHelpers(unittest.TestCase):
         start_date = _resolve_time_axis_start_date(df_display)
 
         self.assertEqual(start_date, pd.Timestamp("2015-03-17"))
+
+    def test_resolve_model_view_max_limits_horizon_to_five_years_after_latest_data(self):
+        current_gen_date = pd.Timestamp("2009-01-03")
+        df_display = pd.DataFrame(
+            {"Days": [100.0, 200.0]},
+            index=pd.to_datetime(["2025-03-05", "2026-03-05"]),
+        )
+
+        view_max = _resolve_model_view_max(df_display, current_gen_date)
+
+        self.assertEqual(
+            view_max,
+            float(((pd.Timestamp("2031-03-05") - current_gen_date).days)),
+        )
 
 
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ from services.price_service import (
     load_prepared_miner_revenue_data,
     load_prepared_price_data,
 )
-from ui.charts import render_main_model_chart
+from ui.charts import _resolve_model_view_max, render_main_model_chart
 from ui.kpi import render_model_kpis
 from ui.sidebar import render_sidebar_panel
 from ui.theme import apply_theme_css, get_theme
@@ -690,7 +690,7 @@ if mode == MODE_LOGPERIODIC:
         osc_amp, osc_omega, osc_phi, r2_combined = 0, 0, 0, current_r2
 
 # --- VIZ SETUP ---
-view_max = df_display["Days"].max() + 365 * 10
+view_max = _resolve_model_view_max(df_display, current_gen_date)
 
 # Use daily grid so unified hover has matching x-values across all traces.
 m_x, m_dates, m_log_d, m_fair_usd, m_dates_str = prepare_model_grid(
