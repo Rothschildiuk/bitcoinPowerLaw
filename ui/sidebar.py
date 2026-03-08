@@ -298,15 +298,19 @@ def render_sidebar_panel(
             band_method = BAND_METHOD_QUANTILE
 
         current_r2 = 0.0
-        a_min = POWERLAW_INTERCEPT_MIN
-        a_max = POWERLAW_INTERCEPT_MAX
-        b_min = POWERLAW_SLOPE_MIN
-        b_max = POWERLAW_SLOPE_MAX
         active_model = get_active_model_config(
             mode,
             powerlaw_series,
             logperiodic_series,
             selected_currency=currency,
+        )
+        a_min, a_max = active_model.powerlaw_intercept_bounds or (
+            POWERLAW_INTERCEPT_MIN,
+            POWERLAW_INTERCEPT_MAX,
+        )
+        b_min, b_max = active_model.powerlaw_slope_bounds or (
+            POWERLAW_SLOPE_MIN,
+            POWERLAW_SLOPE_MAX,
         )
         active_series_data = sidebar_series_data[active_model.series_name]
         model_abs_days = active_series_data["absolute_days"]

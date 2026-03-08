@@ -241,6 +241,15 @@ def _validate_prepared_liquid_transactions_data(data_df):
     )
 
 
+def _validate_prepared_filecoin_btc_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 100
+        and "Close" in data_df.columns
+        and data_df.index.min() <= pd.Timestamp("2020-01-01")
+    )
+
+
 def _extract_close_series(download_df):
     if download_df is None or download_df.empty:
         return pd.Series(dtype=float)
@@ -603,6 +612,27 @@ def load_prepared_lightning_nodes_data(lightning_data_url=BITCOIN_VISUALS_DAILY_
 @st.cache_data(ttl=3600)
 def load_prepared_lightning_capacity_data(lightning_data_url=BITCOIN_VISUALS_DAILY_CSV_URL):
     return _load_prepared_lightning_series("capacity_total", lightning_data_url)
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_filecoin_btc_data(start_date="2020-01-01"):
+    def fetch_filecoin_btc_data():
+        close_series = _safe_download_close_series("FIL-BTC", start_date)
+        if close_series.empty:
+            raise ValueError("Unable to load Filecoin/BTC history.")
+
+        points_df = close_series.to_frame(name="Close").reset_index()
+        points_df.columns = ["Date", "Close"]
+        return _normalize_chart_csv(points_df, "Close")
+
+    return _load_source_adapter(
+        DataFrameSourceAdapter(
+            cache_key="prepared_filecoin_btc_data",
+            refresh_seconds=FAST_REFRESH_SECONDS,
+            fetch_fn=fetch_filecoin_btc_data,
+            validator_fn=_validate_prepared_filecoin_btc_data,
+        )
+    )
 
 
 @st.cache_data(ttl=3600)

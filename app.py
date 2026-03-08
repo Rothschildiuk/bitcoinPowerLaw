@@ -36,6 +36,7 @@ from core.constants import (
     MODE_POWERLAW,
     OSC_DEFAULTS,
     POWERLAW_SERIES_DIFFICULTY,
+    POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
@@ -61,6 +62,7 @@ from core.utils import (
 from services.price_service import (
     build_currency_close_series,
     load_prepared_difficulty_data,
+    load_prepared_filecoin_btc_data,
     load_prepared_hashrate_data,
     load_prepared_lightning_capacity_data,
     load_prepared_lightning_nodes_data,
@@ -465,6 +467,12 @@ except Exception as e:
     st.error(f"Error loading Liquid transactions data: {e}")
     st.stop()
 
+try:
+    raw_filecoin_btc_df = load_prepared_filecoin_btc_data()
+except Exception as e:
+    st.error(f"Error loading Filecoin/BTC data: {e}")
+    st.stop()
+
 if KEY_CURRENCY_SELECTOR not in st.session_state:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
 
@@ -486,6 +494,8 @@ raw_liquid_transactions_df = raw_liquid_transactions_df[
     raw_liquid_transactions_df["Close"] > 0
 ].copy()
 raw_liquid_transactions_df["LogClose"] = np.log10(raw_liquid_transactions_df["Close"])
+raw_filecoin_btc_df = raw_filecoin_btc_df[raw_filecoin_btc_df["Close"] > 0].copy()
+raw_filecoin_btc_df["LogClose"] = np.log10(raw_filecoin_btc_df["Close"])
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
@@ -504,6 +514,7 @@ raw_series_frames = {
     POWERLAW_SERIES_LIGHTNING_CAPACITY: raw_lightning_capacity_df,
     POWERLAW_SERIES_LIQUID_BTC: raw_liquid_btc_df,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS: raw_liquid_transactions_df,
+    POWERLAW_SERIES_FILECOIN_BTC: raw_filecoin_btc_df,
 }
 sidebar_series_data = {
     POWERLAW_SERIES_PRICE: {
@@ -537,6 +548,10 @@ sidebar_series_data = {
     POWERLAW_SERIES_LIQUID_TRANSACTIONS: {
         "absolute_days": raw_liquid_transactions_df["AbsDays"].values,
         "log_close": raw_liquid_transactions_df["LogClose"].values,
+    },
+    POWERLAW_SERIES_FILECOIN_BTC: {
+        "absolute_days": raw_filecoin_btc_df["AbsDays"].values,
+        "log_close": raw_filecoin_btc_df["LogClose"].values,
     },
 }
 

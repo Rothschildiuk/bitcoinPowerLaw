@@ -10,6 +10,8 @@ from core.constants import (
     DEFAULT_DIFFICULTY_B,
     DEFAULT_EURO_A,
     DEFAULT_EURO_B,
+    DEFAULT_FILECOIN_BTC_A,
+    DEFAULT_FILECOIN_BTC_B,
     DEFAULT_GOLD_A,
     DEFAULT_GOLD_B,
     DEFAULT_HASHRATE_A,
@@ -26,6 +28,7 @@ from core.constants import (
     DEFAULT_REVENUE_B,
     KEY_A_DIFFICULTY,
     KEY_A_EURO,
+    KEY_A_FILECOIN_BTC,
     KEY_A_GOLD,
     KEY_A_HASHRATE,
     KEY_A_LIGHTNING_CAPACITY,
@@ -36,6 +39,7 @@ from core.constants import (
     KEY_A_REVENUE,
     KEY_B_DIFFICULTY,
     KEY_B_EURO,
+    KEY_B_FILECOIN_BTC,
     KEY_B_GOLD,
     KEY_B_HASHRATE,
     KEY_B_LIGHTNING_CAPACITY,
@@ -51,6 +55,7 @@ from core.constants import (
     OSC_DEFAULTS_DIFFICULTY,
     OSC_DEFAULTS_HASHRATE,
     POWERLAW_SERIES_DIFFICULTY,
+    POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
@@ -83,6 +88,8 @@ class SeriesModelConfig:
     oscillator_defaults: dict | None = None
     oscillator_min_abs_day: int | None = None
     oscillator_parameter_bounds: dict[str, tuple[float, float]] | None = None
+    powerlaw_intercept_bounds: tuple[float, float] | None = None
+    powerlaw_slope_bounds: tuple[float, float] | None = None
 
 
 _BASE_SERIES_CONFIGS = {
@@ -210,6 +217,21 @@ _BASE_SERIES_CONFIGS = {
         currency_unit="RAW",
         show_halving_lines=True,
     ),
+    POWERLAW_SERIES_FILECOIN_BTC: SeriesModelConfig(
+        series_name=POWERLAW_SERIES_FILECOIN_BTC,
+        a_key=KEY_A_FILECOIN_BTC,
+        b_key=KEY_B_FILECOIN_BTC,
+        default_a=DEFAULT_FILECOIN_BTC_A,
+        default_b=DEFAULT_FILECOIN_BTC_B,
+        target_series_name="Filecoin price",
+        target_series_unit="BTC",
+        currency_prefix="",
+        currency_suffix=" BTC",
+        currency_decimals=8,
+        currency_unit="BTC",
+        powerlaw_intercept_bounds=(20.0, 60.0),
+        powerlaw_slope_bounds=(-20.0, -1.0),
+    ),
 }
 
 _PRICE_CURRENCY_OVERRIDES = {
@@ -250,7 +272,7 @@ _PRICE_CURRENCY_OVERRIDES = {
 
 _POWERLAW_SERIES_GROUPS = [
     (
-        "Bitcoin network",
+        "Bitcoin Network",
         [
             POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_REVENUE,
@@ -270,6 +292,12 @@ _POWERLAW_SERIES_GROUPS = [
         [
             POWERLAW_SERIES_LIQUID_BTC,
             POWERLAW_SERIES_LIQUID_TRANSACTIONS,
+        ],
+    ),
+    (
+        "Altcoins",
+        [
+            POWERLAW_SERIES_FILECOIN_BTC,
         ],
     ),
 ]

@@ -185,6 +185,18 @@ class TestPriceService(unittest.TestCase):
         result = price_service.build_currency_close_series(raw_df, "EUR")
         self.assertListEqual(result.round(6).tolist(), [50.0, 60.0])
 
+    @patch("services.price_service._safe_download_close_series")
+    def test_load_prepared_filecoin_btc_data_normalizes_fil_btc_history(self, mock_download):
+        price_service.load_prepared_filecoin_btc_data.clear()
+        idx = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
+        mock_download.return_value = pd.Series([0.001, 0.0009, 0.0008], index=idx)
+
+        result = price_service.load_prepared_filecoin_btc_data("2020-01-01")
+
+        self.assertListEqual(result["Close"].round(7).tolist(), [0.001, 0.0009, 0.0008])
+        self.assertTrue((result["AbsDays"] > 0).all())
+        self.assertTrue((result["LogClose"] < 0).all())
+
     @patch("services.price_service.time.sleep")
     @patch("services.price_service.urllib.request.urlopen")
     def test_fetch_json_with_retry_retries_before_success(self, mock_urlopen, mock_sleep):
