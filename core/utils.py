@@ -1,6 +1,8 @@
 import numpy as np
 import streamlit as st
 
+from core.constants import POWERLAW_EXPONENT_MAX, POWERLAW_EXPONENT_MIN
+
 
 def calculate_r2_score(actual_values, predicted_values):
     residual_sum_squares = np.sum((actual_values - predicted_values) ** 2)
@@ -23,6 +25,33 @@ def get_stable_trend_fit(log_days, log_prices, intercept_a, slope_b, residual_th
         residual_series = log_prices - trend_log_prices
 
     return intercept_a, slope_b, trend_log_prices, residual_series
+
+
+def evaluate_powerlaw_values(
+    log_days,
+    intercept_a,
+    slope_b,
+    exponent_min=POWERLAW_EXPONENT_MIN,
+    exponent_max=POWERLAW_EXPONENT_MAX,
+):
+    exponents = intercept_a + slope_b * np.asarray(log_days, dtype=float)
+    clipped_exponents = np.clip(exponents, float(exponent_min), float(exponent_max))
+    values = np.power(10.0, clipped_exponents)
+    was_clipped = bool(np.any(~np.isclose(exponents, clipped_exponents)))
+    return values, clipped_exponents, was_clipped
+
+
+def powerlaw_parameters_are_unstable(
+    r2_score,
+    *,
+    was_clipped=False,
+    min_r2=0.0,
+):
+    if was_clipped:
+        return True
+    if not np.isfinite(r2_score):
+        return True
+    return float(r2_score) < float(min_r2)
 
 
 def inline_radio_control(
@@ -111,17 +140,18 @@ def fancy_control(
         if on_manual_change is not None:
             on_manual_change()
 
-    if c1.button("➖", key=f"{key}_m", disabled=disabled, on_click=on_minus):
-        pass
-    if c3.button("➕", key=f"{key}_p", disabled=disabled, on_click=on_plus):
-        pass
-    if has_auto_fit and c4.button(
-        auto_fit_label,
-        key=f"{key}_af",
-        disabled=disabled,
-        on_click=on_auto_fit,
-    ):
-        pass
+    minus_clicked = c1.button("➖", key=f"{key}_m", disabled=disabled)
+    plus_clicked = c3.button("➕", key=f"{key}_p", disabled=disabled)
+    auto_fit_clicked = (
+        c4.button(auto_fit_label, key=f"{key}_af", disabled=disabled) if has_auto_fit else False
+    )
+
+    if minus_clicked:
+        on_minus()
+    if plus_clicked:
+        on_plus()
+    if auto_fit_clicked and on_auto_fit is not None:
+        on_auto_fit()
 
     return c2.slider(
         key,

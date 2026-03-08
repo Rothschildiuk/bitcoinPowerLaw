@@ -1,6 +1,8 @@
 import numpy as np
 import streamlit as st
 
+from core.utils import evaluate_powerlaw_values
+
 
 def _kpi_card(col, label, value, delta=None, d_color=None):
     delta_html = (
@@ -35,7 +37,12 @@ def render_model_kpis(
         df_display["FairDisplay"].iloc[-1],
     )
     diff = ((l_p - l_f) / l_f) * 100
-    pot_target = 10 ** (a_active + b_active * np.log10(df_display["Days"].max()) + p97_5)
+    pot_target, _, _ = evaluate_powerlaw_values(
+        np.array([np.log10(df_display["Days"].max())]),
+        a_active + p97_5,
+        b_active,
+    )
+    pot_target = float(pot_target[0])
     pot = ((pot_target - l_p) / l_p) * 100
     below_fair_pct = float((df_display["Close"] < df_display["Fair"]).mean() * 100.0)
     above_fair_pct = float((df_display["Close"] > df_display["Fair"]).mean() * 100.0)

@@ -8,7 +8,12 @@ from core.power_law import (
     find_best_fit_params_for_offset,
     fit_powerlaw_regression,
 )
-from core.utils import calculate_r2_score, get_stable_trend_fit
+from core.utils import (
+    calculate_r2_score,
+    evaluate_powerlaw_values,
+    get_stable_trend_fit,
+    powerlaw_parameters_are_unstable,
+)
 
 
 class TestCoreUtilsAndPowerLaw(unittest.TestCase):
@@ -85,6 +90,22 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertEqual(slope, 5.5)
         self.assertEqual(r2, 0.98)
         self.assertEqual(mock_fit.call_args.args[2], 42)
+
+    def test_evaluate_powerlaw_values_clips_extreme_exponents(self):
+        values, exponents, was_clipped = evaluate_powerlaw_values(
+            np.array([1.0, 2.0, 3.0]),
+            intercept_a=250.0,
+            slope_b=40.0,
+        )
+
+        self.assertTrue(was_clipped)
+        self.assertTrue(np.all(np.isfinite(values)))
+        self.assertTrue(np.all(exponents <= 300.0))
+
+    def test_powerlaw_parameters_are_unstable_for_negative_r2_or_clipping(self):
+        self.assertTrue(powerlaw_parameters_are_unstable(-0.01))
+        self.assertTrue(powerlaw_parameters_are_unstable(0.5, was_clipped=True))
+        self.assertFalse(powerlaw_parameters_are_unstable(0.5, was_clipped=False))
 
 
 if __name__ == "__main__":

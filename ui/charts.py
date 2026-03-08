@@ -9,6 +9,7 @@ from core.constants import (
     MODE_POWERLAW,
     TIME_LOG,
 )
+from core.utils import evaluate_powerlaw_values
 
 HALVING_DATES = [
     pd.Timestamp("2012-11-28"),
@@ -53,8 +54,8 @@ def _resolve_powerlaw_y_range(
         if np.any(visible_mask):
             fair_vals = fair_vals[visible_mask]
 
-    lower_band = 10 ** (np.log10(fair_vals) + p2_5)
-    upper_band = 10 ** (np.log10(fair_vals) + p97_5)
+    lower_band, _, _ = evaluate_powerlaw_values(np.log10(fair_vals), p2_5, 1.0)
+    upper_band, _, _ = evaluate_powerlaw_values(np.log10(fair_vals), p97_5, 1.0)
 
     candidate = np.concatenate([btc_vals, lower_band, upper_band])
     candidate = candidate[np.isfinite(candidate)]
@@ -148,10 +149,10 @@ def render_main_model_chart(
         p16_5_name = "-1σ" if is_gaussian_band else "-1σ (16.5th percentile)"
         p2_5_name = "-2σ" if is_gaussian_band else "-2σ (2.5th percentile)"
 
-        p2_5_series = 10 ** (np.log10(m_fair_display) + p2_5)
-        p16_5_series = 10 ** (np.log10(m_fair_display) + p16_5)
-        p83_5_series = 10 ** (np.log10(m_fair_display) + p83_5)
-        p97_5_series = 10 ** (np.log10(m_fair_display) + p97_5)
+        p2_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p2_5, 1.0)
+        p16_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p16_5, 1.0)
+        p83_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p83_5, 1.0)
+        p97_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p97_5, 1.0)
 
         fig.add_trace(
             go.Scatter(

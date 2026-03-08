@@ -13,7 +13,7 @@ from core.constants import (
     POWERLAW_SLOPE_MIN,
 )
 from core.optimization_utils import optimize_single_scalar_parameter
-from core.utils import calculate_r2_score, fancy_control
+from core.utils import calculate_r2_score, evaluate_powerlaw_values, fancy_control
 
 # --- MATH CORE ---
 
@@ -133,6 +133,8 @@ def render_sidebar(
     b_key=KEY_B,
     default_a=DEFAULT_A,
     default_b=DEFAULT_B,
+    reset_a=None,
+    reset_b=None,
     a_min=POWERLAW_INTERCEPT_MIN,
     a_max=POWERLAW_INTERCEPT_MAX,
     b_min=POWERLAW_SLOPE_MIN,
@@ -145,6 +147,8 @@ def render_sidebar(
     opt_offset = 0
     opt_a = default_a
     opt_b = default_b
+    reset_a = default_a if reset_a is None else reset_a
+    reset_b = default_b if reset_b is None else reset_b
 
     if a_key not in st.session_state:
         st.session_state[a_key] = float(default_a)
@@ -153,8 +157,8 @@ def render_sidebar(
 
     def reset_powerlaw_params():
         st.session_state[KEY_GENESIS_OFFSET] = int(opt_offset)
-        st.session_state[a_key] = float(default_a)
-        st.session_state[b_key] = float(default_b)
+        st.session_state[a_key] = float(reset_a)
+        st.session_state[b_key] = float(reset_b)
 
     def auto_fit_intercept():
         best_a, _ = optimize_single_powerlaw_parameter(
@@ -227,6 +231,15 @@ def render_sidebar(
         float(st.session_state.get(a_key, opt_a)),
         float(st.session_state.get(b_key, opt_b)),
     )
+    _, _, params_were_clipped = evaluate_powerlaw_values(
+        np.log10(
+            np.maximum(
+                all_abs_days - int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)), 1.0
+            )
+        ),
+        float(st.session_state.get(a_key, opt_a)),
+        float(st.session_state.get(b_key, opt_b)),
+    )
 
     if callable(render_extra_controls):
         render_extra_controls()
@@ -236,6 +249,10 @@ def render_sidebar(
         f"PowerLaw R² = {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True,
     )
+    if display_r2 < 0 or params_were_clipped:
+        st.caption(
+            "Current A/B values are outside a stable operating range. Use Auto-fit model or Reset parameters."
+        )
 
     st.button("Auto-fit model", use_container_width=True, on_click=auto_fit_model)
     st.button("Reset parameters", use_container_width=True, on_click=reset_powerlaw_params)

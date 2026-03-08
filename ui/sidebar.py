@@ -24,6 +24,8 @@ from core.constants import (
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
+    PORTFOLIO_RESET_A,
+    PORTFOLIO_RESET_B,
     MODE_POWERLAW,
     POWERLAW_INTERCEPT_MAX,
     POWERLAW_INTERCEPT_MIN,
@@ -198,12 +200,14 @@ def render_sidebar_panel(
             logperiodic_series = POWERLAW_SERIES_PRICE
             st.session_state[KEY_LOGPERIODIC_SERIES] = logperiodic_series
         if mode == MODE_LOGPERIODIC:
+            st.markdown("**LogPeriodic series**")
             logperiodic_series = st.radio(
                 "LogPeriodic series",
                 logperiodic_series_options,
                 horizontal=True,
                 key=KEY_LOGPERIODIC_SERIES,
                 width="stretch",
+                label_visibility="collapsed",
             )
             if logperiodic_series is None:
                 logperiodic_series = st.session_state.get(
@@ -317,6 +321,8 @@ def render_sidebar_panel(
         default_b = active_model.default_b
 
         if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
+            reset_a = default_a if mode == MODE_POWERLAW else PORTFOLIO_RESET_A
+            reset_b = default_b if mode == MODE_POWERLAW else PORTFOLIO_RESET_B
             current_r2 = power_law.render_sidebar(
                 model_abs_days,
                 model_log_close,
@@ -334,6 +340,8 @@ def render_sidebar_panel(
                 b_key=b_key,
                 default_a=default_a,
                 default_b=default_b,
+                reset_a=reset_a,
+                reset_b=reset_b,
                 a_min=a_min,
                 a_max=a_max,
                 b_min=b_min,

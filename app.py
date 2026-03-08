@@ -32,6 +32,7 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_THEME_MODE,
     MODE_LOGPERIODIC,
+    MODE_PORTFOLIO,
     MODE_POWERLAW,
     OSC_DEFAULTS,
     POWERLAW_SERIES_DIFFICULTY,
@@ -51,6 +52,7 @@ from core.series_registry import (
     series_supports_currency_selector,
 )
 from core.utils import calculate_r2_score, get_stable_trend_fit
+from core.utils import evaluate_powerlaw_values, powerlaw_parameters_are_unstable
 from services.price_service import (
     build_currency_close_series,
     load_prepared_difficulty_data,
@@ -96,7 +98,12 @@ def initialize_app_session_state():
 def resolve_trend_parameters(display_df, active_mode, a_key, b_key, default_a, default_b):
     intercept_a = float(st.session_state.get(a_key, default_a))
     slope_b = float(st.session_state.get(b_key, default_b))
-    trend_log_prices = intercept_a + slope_b * display_df["LogD"].values
+    _, clipped_exponents, _ = evaluate_powerlaw_values(
+        display_df["LogD"].values,
+        intercept_a,
+        slope_b,
+    )
+    trend_log_prices = clipped_exponents
     residual_series = display_df["LogClose"].values - trend_log_prices
 
     # In oscillator mode, fallback to best-fit trend when session A/B is clearly invalid.
@@ -163,7 +170,7 @@ def prepare_model_grid(current_gen_date, a_active, b_active, view_max):
     m_x = np.arange(1.0, float(np.ceil(view_max)) + 1.0)
     m_dates = [current_gen_date + pd.Timedelta(days=float(d)) for d in m_x]
     m_log_d = np.log10(m_x)
-    m_fair_usd = 10 ** (a_active + b_active * m_log_d)
+    m_fair_usd, _, _ = evaluate_powerlaw_values(m_log_d, a_active, b_active)
     m_dates_str = [d.strftime("%d.%m.%Y") for d in m_dates]
     return m_x, m_dates, m_log_d, m_fair_usd, m_dates_str
 
@@ -204,7 +211,7 @@ def build_portfolio_projection(
         table_title = "Monthly growth table"
 
     period_days = np.maximum((date_index - current_gen_date).days.astype(float), 1.0)
-    period_fair_price = 10 ** (a_active + b_active * np.log10(period_days))
+    period_fair_price, _, _ = evaluate_powerlaw_values(np.log10(period_days), a_active, b_active)
     period_portfolio_value = period_fair_price * btc_amount
 
     portfolio_df = pd.DataFrame(
@@ -230,6 +237,8 @@ def render_portfolio_view(
     current_gen_date,
     a_active,
     b_active,
+    current_r2,
+    model_was_clipped,
     currency_prefix,
     currency_suffix,
     currency_decimals,
@@ -271,6 +280,15 @@ def render_portfolio_view(
 
     baseline_value = portfolio_df["PortfolioUSD"].iloc[0]
     last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
+    unstable_portfolio = powerlaw_parameters_are_unstable(
+        current_r2,
+        was_clipped=model_was_clipped,
+    )
+    if unstable_portfolio or last_value <= 0:
+        st.info(
+            "Portfolio projection needs a stable model fit. Click Auto-fit model to calculate fair-value metrics."
+        )
+        return
     total_growth_pct = (
         ((last_value - baseline_value) / baseline_value) * 100 if baseline_value > 0 else 0.0
     )
@@ -605,7 +623,11 @@ a_active, b_active, model_log_vals, residual_vals = resolve_trend_parameters(
 )
 df_display["ModelLog"] = model_log_vals
 df_display["Res"] = residual_vals
-df_display["Fair"] = 10 ** df_display["ModelLog"]
+df_display["Fair"], _, fair_was_clipped = evaluate_powerlaw_values(
+    df_display["ModelLog"].values,
+    0.0,
+    1.0,
+)
 
 currency_prefix = active_model.currency_prefix
 currency_suffix = active_model.currency_suffix
@@ -613,6 +635,13 @@ currency_decimals = int(active_model.currency_decimals)
 currency_unit = active_model.currency_unit
 df_display["CloseDisplay"] = df_display["Close"]
 df_display["FairDisplay"] = df_display["Fair"]
+
+if mode in [MODE_POWERLAW, MODE_PORTFOLIO] and powerlaw_parameters_are_unstable(
+    current_r2, was_clipped=fair_was_clipped
+):
+    st.warning(
+        "Current PowerLaw parameters are unstable for the selected series. Use Auto-fit model or Reset parameters."
+    )
 
 # Use a shared LogPeriodic R² mask so scoring follows the same visible segment.
 lp_r2_mask = np.ones(len(df_display), dtype=bool)
@@ -768,6 +797,8 @@ else:
         current_gen_date,
         a_active,
         b_active,
+        current_r2,
+        fair_was_clipped,
         currency_prefix,
         currency_suffix,
         currency_decimals,
