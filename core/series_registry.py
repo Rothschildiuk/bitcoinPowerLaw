@@ -266,7 +266,7 @@ _POWERLAW_SERIES_GROUPS = [
         ],
     ),
     (
-        "Liquid",
+        "Liquid Network",
         [
             POWERLAW_SERIES_LIQUID_BTC,
             POWERLAW_SERIES_LIQUID_TRANSACTIONS,

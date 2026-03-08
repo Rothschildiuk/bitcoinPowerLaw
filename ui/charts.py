@@ -154,6 +154,46 @@ def render_main_model_chart(
         p83_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p83_5, 1.0)
         p97_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p97_5, 1.0)
 
+        if is_log_time:
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_x_model,
+                    y=p97_5_series,
+                    mode="lines",
+                    line=dict(color="rgba(0,0,0,0)", width=0.1),
+                    name="",
+                    legendrank=0,
+                    showlegend=False,
+                    customdata=m_dates_str,
+                    hovertemplate="<b>📅 %{customdata}</b><extra></extra>",
+                )
+            )
+
+        main_series_label = f"{target_series_name} ({target_series_unit})"
+        btc_hover = (
+            (
+                f"<b>{main_series_label}</b>: "
+                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+            )
+            if is_log_time
+            else (
+                f"<b>{main_series_label}</b>: "
+                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_x_main,
+                y=df_display["CloseDisplay"],
+                mode="lines",
+                name=main_series_label,
+                legendrank=10,
+                line=dict(color=pl_btc_color, width=1.5),
+                customdata=df_display.index.strftime("%d.%m.%Y"),
+                hovertemplate=btc_hover,
+            )
+        )
+
         fig.add_trace(
             go.Scatter(
                 x=plot_x_model,
@@ -227,31 +267,6 @@ def render_main_model_chart(
                     f"<b>{p2_5_name}</b>: "
                     f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
-            )
-        )
-
-        main_series_label = f"{target_series_name} ({target_series_unit})"
-        btc_hover = (
-            (
-                f"📅 %{{customdata}}<br><b>{main_series_label}</b>: "
-                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-            )
-            if is_log_time
-            else (
-                f"<b>{main_series_label}</b>: "
-                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_main,
-                y=df_display["CloseDisplay"],
-                mode="lines",
-                name=main_series_label,
-                legendrank=10,
-                line=dict(color=pl_btc_color, width=1.5),
-                customdata=df_display.index.strftime("%d.%m.%Y"),
-                hovertemplate=btc_hover,
             )
         )
         if show_halving_lines:
@@ -384,7 +399,6 @@ def render_main_model_chart(
         paper_bgcolor=pl_bg_color,
         plot_bgcolor=pl_bg_color,
         hovermode="x unified",
-        xaxis_unifiedhovertitle_text=" ",
         hoverlabel=hover_label,
     )
     st.plotly_chart(

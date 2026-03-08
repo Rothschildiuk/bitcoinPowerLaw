@@ -50,7 +50,7 @@ class TestSeriesRegistry(unittest.TestCase):
         )
         self.assertEqual(
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_LIQUID_TRANSACTIONS),
-            "Liquid",
+            "Liquid Network",
         )
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin network"])
 
