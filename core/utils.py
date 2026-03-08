@@ -54,6 +54,30 @@ def powerlaw_parameters_are_unstable(
     return float(r2_score) < float(min_r2)
 
 
+def normalize_periodic_growth_rate(current_values, previous_values, elapsed_days, target_days):
+    current_arr = np.asarray(current_values, dtype=float)
+    previous_arr = np.asarray(previous_values, dtype=float)
+    elapsed_arr = np.asarray(elapsed_days, dtype=float)
+    normalized = np.full(current_arr.shape, np.nan, dtype=float)
+
+    valid_mask = (
+        np.isfinite(current_arr)
+        & np.isfinite(previous_arr)
+        & np.isfinite(elapsed_arr)
+        & (current_arr > 0.0)
+        & (previous_arr > 0.0)
+        & (elapsed_arr > 0.0)
+    )
+    if not np.any(valid_mask):
+        return normalized
+
+    gross_return = current_arr[valid_mask] / previous_arr[valid_mask]
+    normalized[valid_mask] = (
+        np.power(gross_return, float(target_days) / elapsed_arr[valid_mask]) - 1.0
+    ) * 100.0
+    return normalized
+
+
 def inline_radio_control(
     label, options, *, key=None, index=0, horizontal=True, columns_ratio=(1, 2.2)
 ):

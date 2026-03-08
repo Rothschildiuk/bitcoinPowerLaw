@@ -51,8 +51,13 @@ from core.series_registry import (
     iter_session_model_defaults,
     series_supports_currency_selector,
 )
-from core.utils import calculate_r2_score, get_stable_trend_fit
-from core.utils import evaluate_powerlaw_values, powerlaw_parameters_are_unstable
+from core.utils import (
+    calculate_r2_score,
+    evaluate_powerlaw_values,
+    get_stable_trend_fit,
+    normalize_periodic_growth_rate,
+    powerlaw_parameters_are_unstable,
+)
 from services.price_service import (
     build_currency_close_series,
     load_prepared_difficulty_data,
@@ -185,6 +190,8 @@ def build_portfolio_projection(
     forecast_unit,
     forecast_horizon,
 ):
+    average_month_days = 30.44
+
     # Anchor projections to a stable "current day" across environments.
     # If market data on a host is stale, use UTC today instead of lagging by the last data row.
     latest_data_day = pd.Timestamp(_df_index.max()).normalize()
@@ -222,7 +229,18 @@ def build_portfolio_projection(
         }
     )
     portfolio_df[change_usd_col] = portfolio_df["PortfolioUSD"].diff()
-    portfolio_df[change_pct_col] = portfolio_df["PortfolioUSD"].pct_change() * 100
+    if forecast_unit == "Month":
+        elapsed_days = portfolio_df["Date"].diff().dt.days.to_numpy(dtype=float)
+        previous_values = portfolio_df["PortfolioUSD"].shift(1).to_numpy(dtype=float)
+        current_values = portfolio_df["PortfolioUSD"].to_numpy(dtype=float)
+        portfolio_df[change_pct_col] = normalize_periodic_growth_rate(
+            current_values,
+            previous_values,
+            elapsed_days,
+            average_month_days,
+        )
+    else:
+        portfolio_df[change_pct_col] = portfolio_df["PortfolioUSD"].pct_change() * 100
 
     return portfolio_df, table_title, forecast_unit, change_usd_col, change_pct_col
 

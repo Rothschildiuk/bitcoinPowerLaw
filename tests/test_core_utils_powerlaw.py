@@ -12,6 +12,7 @@ from core.utils import (
     calculate_r2_score,
     evaluate_powerlaw_values,
     get_stable_trend_fit,
+    normalize_periodic_growth_rate,
     powerlaw_parameters_are_unstable,
 )
 
@@ -106,6 +107,24 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertTrue(powerlaw_parameters_are_unstable(-0.01))
         self.assertTrue(powerlaw_parameters_are_unstable(0.5, was_clipped=True))
         self.assertFalse(powerlaw_parameters_are_unstable(0.5, was_clipped=False))
+
+    def test_normalize_periodic_growth_rate_removes_month_length_variance(self):
+        previous_values = np.array([100.0, 100.0])
+        target_monthly_return = 0.03
+        current_values = np.array(
+            [
+                100.0 * ((1.0 + target_monthly_return) ** (28.0 / 30.44)),
+                100.0 * ((1.0 + target_monthly_return) ** (31.0 / 30.44)),
+            ]
+        )
+        normalized = normalize_periodic_growth_rate(
+            current_values,
+            previous_values,
+            np.array([28.0, 31.0]),
+            30.44,
+        )
+
+        self.assertTrue(np.allclose(normalized, np.array([3.0, 3.0]), atol=1e-9))
 
 
 if __name__ == "__main__":
