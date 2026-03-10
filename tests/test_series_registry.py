@@ -7,10 +7,13 @@ from core.constants import (
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
+    POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
+    POWERLAW_SERIES_LITECOIN_BTC,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS,
+    POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
 )
@@ -47,16 +50,25 @@ class TestSeriesRegistry(unittest.TestCase):
         group_map = get_powerlaw_series_group_map()
 
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_HASHRATE), "Bitcoin network"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_HASHRATE), "Bitcoin Network"
         )
         self.assertEqual(
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_LIQUID_TRANSACTIONS),
             "Liquid Network",
         )
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_FILECOIN_BTC), "Altcoins"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_FILECOIN_BTC), "Shitcoins"
         )
-        self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin network"])
+        self.assertEqual(
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_MONERO_BTC), "Shitcoins"
+        )
+        self.assertEqual(
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_LITECOIN_BTC), "Shitcoins"
+        )
+        self.assertEqual(
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_DOGECOIN_BTC), "Shitcoins"
+        )
+        self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
 
     def test_filecoin_btc_config_uses_negative_powerlaw_bounds(self):
         filecoin_config = get_active_model_config(
@@ -68,7 +80,7 @@ class TestSeriesRegistry(unittest.TestCase):
 
         self.assertEqual(filecoin_config.currency_unit, "BTC")
         self.assertEqual(filecoin_config.powerlaw_slope_bounds, (-20.0, -1.0))
-        self.assertEqual(filecoin_config.powerlaw_intercept_bounds, (20.0, 60.0))
+        self.assertEqual(filecoin_config.powerlaw_intercept_bounds, (20.0, 45.0))
         self.assertFalse(filecoin_config.supports_currency_selector)
 
     def test_price_series_config_tracks_selected_currency(self):

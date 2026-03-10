@@ -20,12 +20,16 @@ from core.constants import (  # noqa: E402
     OSC_DEFAULTS,
     OSC_DEFAULTS_DIFFICULTY,
     OSC_DEFAULTS_HASHRATE,
+    POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_DIFFICULTY,
+    POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
+    POWERLAW_SERIES_LITECOIN_BTC,
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
     POWERLAW_SERIES_LIQUID_BTC,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS,
+    POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
 )
@@ -35,13 +39,17 @@ from core.series_registry import get_active_model_config  # noqa: E402
 from core.utils import get_stable_trend_fit  # noqa: E402
 from services.price_service import (  # noqa: E402
     build_currency_close_series,
+    load_prepared_dogecoin_btc_data,
     load_prepared_difficulty_data,
+    load_prepared_filecoin_btc_data,
     load_prepared_hashrate_data,
+    load_prepared_litecoin_btc_data,
     load_prepared_lightning_capacity_data,
     load_prepared_lightning_nodes_data,
     load_prepared_liquid_btc_data,
     load_prepared_liquid_transactions_data,
     load_prepared_miner_revenue_data,
+    load_prepared_monero_btc_data,
     load_prepared_price_data,
 )
 
@@ -78,6 +86,15 @@ DEFAULT_CASES = [
         "DEFAULT_LIQUID_TRANSACTIONS_A",
         "DEFAULT_LIQUID_TRANSACTIONS_B",
     ),
+    (POWERLAW_SERIES_FILECOIN_BTC, CURRENCY_DOLLAR, "DEFAULT_FILECOIN_BTC_A", "DEFAULT_FILECOIN_BTC_B"),
+    (POWERLAW_SERIES_MONERO_BTC, CURRENCY_DOLLAR, "DEFAULT_MONERO_BTC_A", "DEFAULT_MONERO_BTC_B"),
+    (POWERLAW_SERIES_LITECOIN_BTC, CURRENCY_DOLLAR, "DEFAULT_LITECOIN_BTC_A", "DEFAULT_LITECOIN_BTC_B"),
+    (
+        POWERLAW_SERIES_DOGECOIN_BTC,
+        CURRENCY_DOLLAR,
+        "DEFAULT_DOGECOIN_BTC_A",
+        "DEFAULT_DOGECOIN_BTC_B",
+    ),
 ]
 
 OSCILLATOR_DEFAULT_CASES = [
@@ -112,6 +129,10 @@ def _load_series_frames():
         POWERLAW_SERIES_LIGHTNING_CAPACITY: load_prepared_lightning_capacity_data(),
         POWERLAW_SERIES_LIQUID_BTC: load_prepared_liquid_btc_data(),
         POWERLAW_SERIES_LIQUID_TRANSACTIONS: load_prepared_liquid_transactions_data(),
+        POWERLAW_SERIES_FILECOIN_BTC: load_prepared_filecoin_btc_data(),
+        POWERLAW_SERIES_MONERO_BTC: load_prepared_monero_btc_data(),
+        POWERLAW_SERIES_LITECOIN_BTC: load_prepared_litecoin_btc_data(),
+        POWERLAW_SERIES_DOGECOIN_BTC: load_prepared_dogecoin_btc_data(),
     }
 
 
