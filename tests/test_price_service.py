@@ -252,8 +252,9 @@ class TestPriceService(unittest.TestCase):
 
     @patch("services.price_service._safe_download_cryptocompare_histoday")
     @patch("services.price_service._safe_download_crypto_btc_via_usd")
+    @patch("services.price_service._safe_download_crypto_btc_via_coinlore")
     def test_load_prepared_filecoin_btc_data_normalizes_fil_btc_history(
-        self, mock_cross_download, mock_direct_download
+        self, mock_coinlore_download, mock_cross_download, mock_direct_download
     ):
         price_service.load_prepared_filecoin_btc_data.clear()
         idx = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
@@ -263,6 +264,7 @@ class TestPriceService(unittest.TestCase):
 
         self.assertEqual(mock_direct_download.call_args[0], ("FIL", "BTC"))
         mock_cross_download.assert_not_called()
+        mock_coinlore_download.assert_not_called()
         self.assertListEqual(result["Close"].round(7).tolist(), [0.001, 0.0009, 0.0008])
         self.assertTrue((result["AbsDays"] > 0).all())
         self.assertTrue((result["LogClose"] < 0).all())
@@ -292,6 +294,29 @@ class TestPriceService(unittest.TestCase):
             ["2014-05-21", "2014-05-22", "2014-05-23"],
         )
         self.assertListEqual(result["Close"].round(4).tolist(), [0.0065, 0.0071, 0.0082])
+
+    @patch("services.price_service._safe_download_cryptocompare_histoday")
+    @patch("services.price_service._safe_download_crypto_btc_via_usd")
+    @patch("services.price_service._safe_download_crypto_btc_via_coinlore")
+    def test_load_prepared_filecoin_btc_data_falls_back_to_coinlore(
+        self,
+        mock_coinlore_download,
+        mock_cross_download,
+        mock_direct_download,
+    ):
+        price_service.load_prepared_filecoin_btc_data.clear()
+        mock_direct_download.return_value = pd.Series(dtype=float)
+        mock_cross_download.return_value = pd.Series(dtype=float)
+        idx = pd.to_datetime(["2020-10-15", "2020-10-16"])
+        mock_coinlore_download.return_value = pd.Series([0.0021, 0.0022], index=idx)
+
+        result = price_service.load_prepared_filecoin_btc_data("2020-01-01", source="live")
+
+        self.assertEqual(mock_direct_download.call_args[0], ("FIL", "BTC"))
+        self.assertEqual(mock_cross_download.call_args[0], ("FIL", "2020-01-01"))
+        self.assertEqual(mock_coinlore_download.call_args[0], ("FIL", "2020-01-01"))
+        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2020-10-15", "2020-10-16"])
+        self.assertListEqual(result["Close"].round(4).tolist(), [0.0021, 0.0022])
 
     @patch("services.price_service._safe_download_cryptocompare_histoday")
     def test_safe_download_crypto_btc_via_usd_derives_ratio_from_usd_pairs(self, mock_download):

@@ -39,6 +39,12 @@ FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
 COINLORE_MONERO_START_DATE = "2014-05-21"
+COINLORE_CRYPTO_META = {
+    "FIL": {"slug": "filecoin", "start_date": "2017-12-13"},
+    "XMR": {"slug": "monero", "start_date": COINLORE_MONERO_START_DATE},
+    "LTC": {"slug": "litecoin", "start_date": "2013-04-28"},
+    "DOGE": {"slug": "dogecoin", "start_date": "2013-12-15"},
+}
 
 
 @dataclass(frozen=True)
@@ -567,8 +573,9 @@ def _safe_download_cryptocompare_histoday(fsym, tsym):
     return close_series.astype(float)
 
 
-def _safe_download_coinlore_monero_usd(start_date=COINLORE_MONERO_START_DATE, end_date=None):
-    cache_key = "coinlore_monero_usd"
+def _safe_download_coinlore_crypto_usd(coin_slug, cache_key, start_date, end_date=None):
+    if not coin_slug:
+        return pd.Series(dtype=float)
 
     def fetch_coinlore_frame():
         start_ts = int(pd.Timestamp(start_date).timestamp())
@@ -576,12 +583,12 @@ def _safe_download_coinlore_monero_usd(start_date=COINLORE_MONERO_START_DATE, en
             pd.Timestamp(end_date or pd.Timestamp.utcnow().normalize()).timestamp()
         )
         url = (
-            "https://www.coinlore.com/coin/monero/historical-data"
+            f"https://www.coinlore.com/coin/{coin_slug}/historical-data"
             f"/{start_ts}/{end_ts}"
         )
         payload_text = _fetch_text_with_retry(url, retries=3, timeout=20)
         if not payload_text:
-            raise ValueError("Unable to load CoinLore history for Monero/USD.")
+            raise ValueError(f"Unable to load CoinLore history for {coin_slug}.")
 
         row_pattern = re.compile(
             r'<tr class="txtr"><td class="nwt txtl font-bold">\s*(.*?)</td>'
@@ -593,7 +600,7 @@ def _safe_download_coinlore_monero_usd(start_date=COINLORE_MONERO_START_DATE, en
         )
         rows = row_pattern.findall(payload_text)
         if not rows:
-            raise ValueError("CoinLore returned no rows for Monero/USD.")
+            raise ValueError(f"CoinLore returned no rows for {coin_slug}.")
 
         history_df = pd.DataFrame(rows, columns=["Date", "Open", "High", "Low", "Close"])
         history_df["Date"] = pd.to_datetime(history_df["Date"], errors="coerce")
@@ -605,7 +612,7 @@ def _safe_download_coinlore_monero_usd(start_date=COINLORE_MONERO_START_DATE, en
         history_df = history_df.dropna(subset=["Date", "Close"]).sort_values("Date")
         history_df = history_df[history_df["Close"] > 0]
         if history_df.empty:
-            raise ValueError("CoinLore returned only non-positive rows for Monero/USD.")
+            raise ValueError(f"CoinLore returned only non-positive rows for {coin_slug}.")
 
         return history_df[["Date", "Close"]].copy()
 
@@ -637,6 +644,15 @@ def _safe_download_coinlore_monero_usd(start_date=COINLORE_MONERO_START_DATE, en
     close_series = history_df.groupby("Date", as_index=True)["Close"].last()
     close_series.index = pd.to_datetime(close_series.index)
     return close_series.astype(float)
+
+
+def _safe_download_coinlore_monero_usd(start_date=COINLORE_MONERO_START_DATE, end_date=None):
+    return _safe_download_coinlore_crypto_usd(
+        "monero",
+        "coinlore_monero_usd",
+        start_date,
+        end_date=end_date,
+    )
 
 
 def _derive_crypto_btc_from_usd_series(crypto_usd, btc_usd, start_date):
@@ -679,6 +695,28 @@ def _safe_download_monero_btc_via_coinlore(start_date):
     btc_usd = pd.to_numeric(btc_price_df["Close"], errors="coerce").dropna()
     btc_usd.index = pd.to_datetime(btc_usd.index)
     return _derive_crypto_btc_from_usd_series(monero_usd, btc_usd, start_date)
+
+
+def _safe_download_crypto_btc_via_coinlore(fsym, start_date):
+    meta = COINLORE_CRYPTO_META.get(str(fsym).upper())
+    if meta is None:
+        return pd.Series(dtype=float)
+
+    crypto_usd = _safe_download_coinlore_crypto_usd(
+        meta["slug"],
+        f"coinlore_{str(fsym).lower()}_usd",
+        meta["start_date"],
+    )
+    if crypto_usd.empty:
+        return pd.Series(dtype=float)
+
+    btc_price_df = load_prepared_price_data(source="auto")
+    if btc_price_df is None or btc_price_df.empty or "Close" not in btc_price_df.columns:
+        return pd.Series(dtype=float)
+
+    btc_usd = pd.to_numeric(btc_price_df["Close"], errors="coerce").dropna()
+    btc_usd.index = pd.to_datetime(btc_usd.index)
+    return _derive_crypto_btc_from_usd_series(crypto_usd, btc_usd, start_date)
 
 
 def _safe_download_btc_tail_from_coingecko(start_date):
@@ -965,6 +1003,8 @@ def _fetch_prepared_crypto_btc_data(fsym, start_date, label):
         close_series = close_series[close_series.index >= pd.Timestamp(start_date)]
     if close_series.empty:
         close_series = _safe_download_crypto_btc_via_usd(fsym, start_date)
+    if close_series.empty:
+        close_series = _safe_download_crypto_btc_via_coinlore(fsym, start_date)
     if close_series.empty:
         raise ValueError(f"Unable to load {label} history.")
 
