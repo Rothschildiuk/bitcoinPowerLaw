@@ -591,10 +591,10 @@ def _safe_download_coinlore_crypto_usd(coin_slug, cache_key, start_date, end_dat
             raise ValueError(f"Unable to load CoinLore history for {coin_slug}.")
 
         row_pattern = re.compile(
-            r'<tr class="txtr"><td class="nwt txtl font-bold">\s*(.*?)</td>'
-            r'<td class="nwt">\$(.*?)</td>'
-            r'<td class="nwt">\$(.*?)</td>'
-            r'<td class="nwt">\$(.*?)</td>'
+            r'<tr class="txtr">\s*<td class="nwt txtl font-bold">\s*(.*?)\s*</td>\s*'
+            r'<td class="nwt">\$(.*?)</td>\s*'
+            r'<td class="nwt">\$(.*?)</td>\s*'
+            r'<td class="nwt">\$(.*?)</td>\s*'
             r'<td class="nwt">\$(.*?)</td>',
             re.DOTALL,
         )

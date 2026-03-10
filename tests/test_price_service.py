@@ -239,6 +239,29 @@ class TestPriceService(unittest.TestCase):
         self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2014-05-21", "2014-05-22"])
         self.assertListEqual(result.tolist(), [1.6, 2.1])
 
+    @patch("services.price_service._fetch_text_with_retry")
+    def test_safe_download_coinlore_crypto_usd_allows_whitespace_between_cells(self, mock_fetch_text):
+        mock_fetch_text.return_value = """
+        <table id="ohlc"><tbody>
+        <tr class="txtr">
+          <td class="nwt txtl font-bold">  December 31, 2015  </td>
+          <td class="nwt">$0.000151</td>
+          <td class="nwt">$0.000157</td>
+          <td class="nwt">$0.000147</td>
+          <td class="nwt">$0.000151</td>
+        </tr>
+        </tbody></table>
+        """
+
+        result = price_service._safe_download_coinlore_crypto_usd(
+            "dogecoin",
+            "coinlore_doge_test",
+            "2013-12-15",
+        )
+
+        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2015-12-31"])
+        self.assertListEqual(result.tolist(), [0.000151])
+
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_eur(self, mock_load_reference_series):
         idx = pd.to_datetime(["2024-01-01", "2024-01-02"])
