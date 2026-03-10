@@ -26,11 +26,15 @@ class TestPriceService(unittest.TestCase):
     def setUp(self):
         self._temp_dir = TemporaryDirectory()
         self._cache_dir = Path(self._temp_dir.name)
+        self._snapshot_dir = self._cache_dir / "snapshots"
         self._cache_patch = patch.object(price_service, "LOCAL_DATA_CACHE_DIR", self._cache_dir)
+        self._snapshot_patch = patch.object(price_service, "SNAPSHOT_DATA_DIR", self._snapshot_dir)
         self._cache_patch.start()
+        self._snapshot_patch.start()
 
     def tearDown(self):
         self._cache_patch.stop()
+        self._snapshot_patch.stop()
         self._temp_dir.cleanup()
 
     def test_load_or_refresh_dataframe_cache_uses_fresh_local_snapshot(self):
@@ -111,9 +115,39 @@ class TestPriceService(unittest.TestCase):
         self.assertIsInstance(restored_df.index, pd.RangeIndex)
         self.assertListEqual(restored_df["day"].tolist(), ["2024-01-01", "2024-01-02"])
 
+    def test_write_and_read_snapshot_dataframe_preserves_date_index(self):
+        snapshot_df = pd.DataFrame(
+            {"Close": [100.0, 101.0]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-02"]),
+        )
+
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+        restored_df = price_service._read_snapshot_dataframe("prepared_price_data")
+
+        self.assertListEqual(restored_df["Close"].tolist(), [100.0, 101.0])
+        self.assertListEqual(
+            restored_df.index.strftime("%Y-%m-%d").tolist(),
+            ["2024-01-01", "2024-01-02"],
+        )
+
     def test_extract_close_series_handles_empty_input(self):
         series = price_service._extract_close_series(pd.DataFrame())
         self.assertTrue(series.empty)
+
+    def test_load_snapshot_or_live_prefers_snapshot_over_live_fetch(self):
+        snapshot_df = pd.DataFrame(
+            {"Close": [42.0], "AbsDays": [1], "LogClose": [1.623249]},
+            index=pd.to_datetime(["2009-01-04"]),
+        )
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+
+        result = price_service._load_snapshot_or_live(
+            "prepared_price_data",
+            lambda data_df: True,
+            lambda: self.fail("live loader should not run when snapshot is valid"),
+        )
+
+        self.assertEqual(float(result.iloc[0]["Close"]), 42.0)
 
     def test_extract_close_series_uses_first_close_column_for_multiindex_like_shape(self):
         index = pd.to_datetime(["2024-01-01", "2024-01-02"])
@@ -174,6 +208,37 @@ class TestPriceService(unittest.TestCase):
             ["2009-01-03", "2009-01-04"],
         )
 
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_safe_download_cryptocompare_histoday_parses_daily_close_series(self, mock_fetch_json):
+        mock_fetch_json.return_value = {
+            "Response": "Success",
+            "Data": {
+                "Data": [
+                    {"time": 1704067200, "close": 0.5},
+                    {"time": 1704153600, "close": 0.6},
+                ]
+            },
+        }
+
+        result = price_service._safe_download_cryptocompare_histoday("XMR", "USD")
+
+        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2024-01-01", "2024-01-02"])
+        self.assertListEqual(result.tolist(), [0.5, 0.6])
+
+    @patch("services.price_service._fetch_text_with_retry")
+    def test_safe_download_coinlore_monero_usd_parses_daily_close_series(self, mock_fetch_text):
+        mock_fetch_text.return_value = """
+        <table id="ohlc"><tbody>
+        <tr class="txtr"><td class="nwt txtl font-bold"> May 22, 2014</td><td class="nwt">$1.59</td><td class="nwt">$2.19</td><td class="nwt">$1.36</td><td class="nwt">$2.10</td></tr>
+        <tr class="txtr"><td class="nwt txtl font-bold"> May 21, 2014</td><td class="nwt">$2.47</td><td class="nwt">$2.65</td><td class="nwt">$1.23</td><td class="nwt">$1.60</td></tr>
+        </tbody></table>
+        """
+
+        result = price_service._safe_download_coinlore_monero_usd()
+
+        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2014-05-21", "2014-05-22"])
+        self.assertListEqual(result.tolist(), [1.6, 2.1])
+
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_eur(self, mock_load_reference_series):
         idx = pd.to_datetime(["2024-01-01", "2024-01-02"])
@@ -185,17 +250,107 @@ class TestPriceService(unittest.TestCase):
         result = price_service.build_currency_close_series(raw_df, "EUR")
         self.assertListEqual(result.round(6).tolist(), [50.0, 60.0])
 
-    @patch("services.price_service._safe_download_close_series")
-    def test_load_prepared_filecoin_btc_data_normalizes_fil_btc_history(self, mock_download):
+    @patch("services.price_service._safe_download_cryptocompare_histoday")
+    @patch("services.price_service._safe_download_crypto_btc_via_usd")
+    def test_load_prepared_filecoin_btc_data_normalizes_fil_btc_history(
+        self, mock_cross_download, mock_direct_download
+    ):
         price_service.load_prepared_filecoin_btc_data.clear()
         idx = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
-        mock_download.return_value = pd.Series([0.001, 0.0009, 0.0008], index=idx)
+        mock_direct_download.return_value = pd.Series([0.001, 0.0009, 0.0008], index=idx)
 
         result = price_service.load_prepared_filecoin_btc_data("2020-01-01")
 
+        self.assertEqual(mock_direct_download.call_args[0], ("FIL", "BTC"))
+        mock_cross_download.assert_not_called()
         self.assertListEqual(result["Close"].round(7).tolist(), [0.001, 0.0009, 0.0008])
         self.assertTrue((result["AbsDays"] > 0).all())
         self.assertTrue((result["LogClose"] < 0).all())
+
+    @patch("services.price_service._safe_download_cryptocompare_histoday")
+    @patch("services.price_service._safe_download_crypto_btc_via_usd")
+    @patch("services.price_service._safe_download_monero_btc_via_coinlore")
+    def test_load_prepared_monero_btc_data_falls_back_to_coinlore(
+        self,
+        mock_coinlore_download,
+        mock_cross_download,
+        mock_direct_download,
+    ):
+        price_service.load_prepared_monero_btc_data.clear()
+        mock_direct_download.return_value = pd.Series(dtype=float)
+        mock_cross_download.return_value = pd.Series(dtype=float)
+        idx = pd.to_datetime(["2014-05-21", "2014-05-22", "2014-05-23"])
+        mock_coinlore_download.return_value = pd.Series([0.0065, 0.0071, 0.0082], index=idx)
+
+        result = price_service.load_prepared_monero_btc_data("2014-01-01", source="live")
+
+        self.assertEqual(mock_direct_download.call_args[0], ("XMR", "BTC"))
+        self.assertEqual(mock_cross_download.call_args[0], ("XMR", "2014-01-01"))
+        self.assertEqual(mock_coinlore_download.call_args[0], ("2014-01-01",))
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2014-05-21", "2014-05-22", "2014-05-23"],
+        )
+        self.assertListEqual(result["Close"].round(4).tolist(), [0.0065, 0.0071, 0.0082])
+
+    @patch("services.price_service._safe_download_cryptocompare_histoday")
+    def test_safe_download_crypto_btc_via_usd_derives_ratio_from_usd_pairs(self, mock_download):
+        def fake_download(fsym, tsym):
+            if (fsym, tsym) == ("DOGE", "USD"):
+                return pd.Series(
+                    [0.10, 0.20],
+                    index=pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                )
+            if (fsym, tsym) == ("BTC", "USD"):
+                return pd.Series(
+                    [50_000.0, 40_000.0],
+                    index=pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                )
+            self.fail(f"Unexpected pair: {(fsym, tsym)}")
+
+        mock_download.side_effect = fake_download
+
+        result = price_service._safe_download_crypto_btc_via_usd("DOGE", "2024-01-01")
+
+        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2024-01-01", "2024-01-02"])
+        self.assertListEqual(result.round(8).tolist(), [0.000002, 0.000005])
+
+    @patch("services.price_service._safe_download_cryptocompare_histoday")
+    @patch("services.price_service._safe_download_crypto_btc_via_usd")
+    def test_load_prepared_dogecoin_btc_data_uses_usd_cross_source(
+        self, mock_cross_download, mock_direct_download
+    ):
+        price_service.load_prepared_dogecoin_btc_data.clear()
+        mock_direct_download.return_value = pd.Series(dtype=float)
+        idx = pd.to_datetime(["2014-02-01", "2014-02-02", "2014-02-03"])
+        mock_cross_download.return_value = pd.Series(
+            [0.00000018, 0.00000019, 0.00000021],
+            index=idx,
+        )
+
+        result = price_service.load_prepared_dogecoin_btc_data("2014-01-01")
+
+        self.assertEqual(mock_direct_download.call_args[0], ("DOGE", "BTC"))
+        self.assertEqual(mock_cross_download.call_args[0], ("DOGE", "2014-01-01"))
+        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2014-02-01", "2014-02-02", "2014-02-03"])
+        self.assertListEqual(result["Close"].round(8).tolist(), [0.00000018, 0.00000019, 0.00000021])
+        self.assertTrue((result["LogClose"] < 0).all())
+
+    @patch("services.price_service._safe_download_cryptocompare_histoday")
+    @patch("services.price_service._safe_download_crypto_btc_via_usd")
+    def test_load_prepared_dogecoin_btc_data_falls_back_to_usd_cross_when_direct_btc_empty(
+        self, mock_cross_download, mock_direct_download
+    ):
+        price_service.load_prepared_dogecoin_btc_data.clear()
+        mock_direct_download.return_value = pd.Series(dtype=float)
+        idx = pd.to_datetime(["2014-02-01", "2014-02-02"])
+        mock_cross_download.return_value = pd.Series([0.00000018, 0.00000019], index=idx)
+
+        result = price_service.load_prepared_dogecoin_btc_data("2014-01-01")
+
+        self.assertEqual(mock_direct_download.call_args[0], ("DOGE", "BTC"))
+        self.assertEqual(mock_cross_download.call_args[0], ("DOGE", "2014-01-01"))
+        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2014-02-01", "2014-02-02"])
 
     @patch("services.price_service.time.sleep")
     @patch("services.price_service.urllib.request.urlopen")

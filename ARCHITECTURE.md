@@ -23,7 +23,7 @@ This project is a Streamlit app for exploring Bitcoin-style power law and log-pe
 - `core/series_registry.py`: canonical series metadata and grouping
 - `core/power_law.py`: regression helpers and PowerLaw sidebar controls
 - `core/oscillator.py`: oscillator fitting, LogPeriodic sidebar controls, and auto-fit logic
-- `services/price_service.py`: external data loaders, normalization, disk cache
+- `services/price_service.py`: snapshot-first data loaders, normalization, and maintenance cache
 - `ui/sidebar.py`: mode/series/parameter selection
 - `ui/charts.py`: Plotly chart assembly and axis helpers
 - `ui/kpi.py`: fair value and history-share KPI cards
@@ -31,6 +31,7 @@ This project is a Streamlit app for exploring Bitcoin-style power law and log-pe
 
 ## Design Rules
 - Keep raw external data loading inside `services/price_service.py`.
+- Prefer checked-in snapshot datasets for runtime reads; use network fetches through maintenance scripts instead of per-page-load refreshes.
 - Keep series-specific behavior inside `core/series_registry.py`.
 - Prefer wiring from registry instead of adding new `if/elif` branches in `app.py`.
 - Keep display filtering and analysis filtering aligned between sidebar and main chart.

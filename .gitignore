@@ -35,6 +35,10 @@ node_modules/
 *.db
 *.json
 *.parquet
+!data/
+!data/snapshots/
+!data/snapshots/*.csv
+!data/snapshots/README.md
 output/data_cache/
 output/playwright/.npm-cache/
 output/playwright/artifacts/

@@ -7,6 +7,7 @@ Prepared datasets are loaded through `services/price_service.py`. The module nor
 - `LogClose`
 
 Most prepared datasets are cached on disk under `output/data_cache/`.
+Checked-in runtime snapshots are stored under `data/snapshots/`.
 
 ## Main Sources
 
@@ -23,6 +24,14 @@ Most prepared datasets are cached on disk under `output/data_cache/`.
   - `EURUSD=X`
   - `GC=F`
   - fallback `XAUUSD=X`
+
+### Shitcoins BTC Pairs
+- History source: CryptoCompare daily history in `USD`, converted to `BTC` via `BTC/USD`
+- Covered series:
+  - Filecoin / BTC
+  - Monero / BTC
+  - Litecoin / BTC
+  - Dogecoin / BTC
 
 ### Miner Revenue / Difficulty / Hashrate
 - Source: Blockchain.com CSV chart endpoints
@@ -50,6 +59,14 @@ Most prepared datasets are cached on disk under `output/data_cache/`.
 - Cache schema version is used to invalidate stale serialization/layout assumptions.
 - If refresh fails and a valid cached snapshot exists, the app serves cached data.
 - Cache files are local runtime artifacts and are intentionally ignored by git.
+
+## Snapshot Model
+- Runtime-preferred datasets live in `data/snapshots/`.
+- The Streamlit app reads these checked-in snapshots first to avoid external fetches on page load.
+- Refresh workflow:
+  - `make update-data-snapshots`
+  - `venv/bin/python scripts/update_data_snapshots.py`
+- Snapshot refresh is an explicit maintenance step and can be run periodically instead of per-request.
 
 ## Refresh Intervals
 - Fast series: 1 hour

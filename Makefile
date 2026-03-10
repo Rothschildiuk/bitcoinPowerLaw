@@ -6,7 +6,7 @@ BLACK := $(VENV)/bin/black
 BLACK_CONFIG := --config config/pyproject.toml
 BLACK_TARGETS := app.py core services tests ui
 
-.PHONY: help install run format check test clean update-defaults
+.PHONY: help install run format check test clean update-defaults update-data-snapshots
 
 help:
 	@echo "Targets:"
@@ -16,6 +16,7 @@ help:
 	@echo "  make check    - run black --check"
 	@echo "  make test     - run pytest test suite"
 	@echo "  make update-defaults - recompute and rewrite PowerLaw and LogPeriodic defaults"
+	@echo "  make update-data-snapshots - refresh checked-in daily snapshot CSV files"
 	@echo "  make clean    - remove Python cache folders"
 
 install:
@@ -36,6 +37,9 @@ test:
 
 update-defaults:
 	$(PY) scripts/update_powerlaw_defaults.py
+
+update-data-snapshots:
+	$(PY) scripts/update_data_snapshots.py
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
