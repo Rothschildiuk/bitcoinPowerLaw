@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 
 from services import price_service
@@ -36,6 +37,15 @@ class TestPriceService(unittest.TestCase):
         self._cache_patch.stop()
         self._snapshot_patch.stop()
         self._temp_dir.cleanup()
+
+    def _make_valid_prepared_price_snapshot(self, last_date="2020-01-02", last_close=7100.0):
+        date_index = pd.date_range(end=pd.Timestamp(last_date), periods=5000, freq="D")
+        close_values = pd.Series(range(len(date_index)), index=date_index, dtype=float) + 1.0
+        close_values.iloc[-1] = float(last_close)
+        snapshot_df = pd.DataFrame({"Close": close_values}, index=date_index)
+        snapshot_df["AbsDays"] = (snapshot_df.index - price_service.GENESIS_DATE).days
+        snapshot_df["LogClose"] = np.log10(snapshot_df["Close"])
+        return snapshot_df
 
     def test_load_or_refresh_dataframe_cache_uses_fresh_local_snapshot(self):
         cached_df = pd.DataFrame(
@@ -148,6 +158,87 @@ class TestPriceService(unittest.TestCase):
         )
 
         self.assertEqual(float(result.iloc[0]["Close"]), 42.0)
+
+    @patch("services.price_service.pd.read_csv")
+    def test_load_prepared_price_data_live_source_bypasses_valid_snapshot(self, mock_read_csv):
+        price_service.load_prepared_price_data.clear()
+        snapshot_df = self._make_valid_prepared_price_snapshot()
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "Date": ["2011-01-01", "2011-01-02"],
+                "Price": [10.0, 11.0],
+            }
+        )
+
+        result = price_service.load_prepared_price_data(
+            price_history_url="unused.csv",
+            stale_after_days=None,
+            source="live",
+        )
+
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["2011-01-01", "2011-01-02"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [10.0, 11.0])
+
+    @patch("services.price_service._load_source_adapter")
+    @patch("services.price_service._safe_download_btc_tail_from_coincap")
+    @patch("services.price_service._safe_download_btc_tail_from_coingecko")
+    @patch("services.price_service._safe_download_close_series")
+    def test_load_prepared_price_data_auto_appends_live_tail_to_snapshot(
+        self,
+        mock_safe_download,
+        mock_cg_tail,
+        mock_cc_tail,
+        mock_load_source_adapter,
+    ):
+        price_service.load_prepared_price_data.clear()
+        snapshot_df = self._make_valid_prepared_price_snapshot()
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+        mock_safe_download.return_value = pd.Series(
+            [7200.0],
+            index=pd.to_datetime(["2020-01-03"]),
+        )
+        mock_cg_tail.return_value = pd.Series(dtype=float)
+        mock_cc_tail.return_value = pd.Series(dtype=float)
+        mock_load_source_adapter.side_effect = AssertionError(
+            "full live loader should not run when snapshot is valid"
+        )
+
+        result = price_service.load_prepared_price_data(stale_after_days=0, source="auto")
+
+        self.assertEqual(result.index.max(), pd.Timestamp("2020-01-03"))
+        self.assertEqual(float(result.loc[pd.Timestamp("2020-01-02"), "Close"]), 7100.0)
+        self.assertEqual(float(result.loc[pd.Timestamp("2020-01-03"), "Close"]), 7200.0)
+        self.assertEqual(mock_safe_download.call_args[0], ("BTC-USD", "2020-01-03"))
+
+    @patch("services.price_service._load_source_adapter")
+    @patch("services.price_service._safe_download_btc_tail_from_coincap")
+    @patch("services.price_service._safe_download_btc_tail_from_coingecko")
+    @patch("services.price_service._safe_download_close_series")
+    def test_load_prepared_price_data_auto_returns_snapshot_when_tail_refresh_fails(
+        self,
+        mock_safe_download,
+        mock_cg_tail,
+        mock_cc_tail,
+        mock_load_source_adapter,
+    ):
+        price_service.load_prepared_price_data.clear()
+        snapshot_df = self._make_valid_prepared_price_snapshot()
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+        mock_safe_download.return_value = pd.Series(dtype=float)
+        mock_cg_tail.return_value = pd.Series(dtype=float)
+        mock_cc_tail.return_value = pd.Series(dtype=float)
+        mock_load_source_adapter.side_effect = AssertionError(
+            "full live loader should not run when snapshot is valid"
+        )
+
+        result = price_service.load_prepared_price_data(stale_after_days=0, source="auto")
+
+        self.assertEqual(result.index.max(), pd.Timestamp("2020-01-02"))
+        self.assertEqual(float(result.loc[pd.Timestamp("2020-01-02"), "Close"]), 7100.0)
 
     def test_extract_close_series_uses_first_close_column_for_multiindex_like_shape(self):
         index = pd.to_datetime(["2024-01-01", "2024-01-02"])

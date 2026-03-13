@@ -1,6 +1,6 @@
 {
   "name": "powerlaw",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Gemini CLI bootstrap for PowerLaw",
   "scripts": {
     "gemini": "mkdir -p .home && HOME=\"$PWD/.home\" gemini",

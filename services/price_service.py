@@ -345,6 +345,37 @@ def _validate_prepared_dogecoin_btc_data(data_df):
     )
 
 
+def _append_btc_live_tail(base_df, *, stale_after_days):
+    if base_df is None or base_df.empty:
+        return base_df
+
+    full_df = base_df.copy()
+    full_df.index = pd.to_datetime(full_df.index)
+    full_df = full_df.sort_index()
+    if stale_after_days is None:
+        return full_df
+
+    latest_base_date = full_df.index.max()
+    today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    if (today - latest_base_date.normalize()).days <= int(stale_after_days):
+        return full_df
+
+    tail_start = (latest_base_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    btc_tail = _safe_download_close_series("BTC-USD", tail_start)
+    if btc_tail.empty:
+        btc_tail = _safe_download_btc_tail_from_coingecko(tail_start)
+    if btc_tail.empty:
+        btc_tail = _safe_download_btc_tail_from_coincap(tail_start)
+    if btc_tail.empty:
+        return full_df
+
+    tail_df = btc_tail.to_frame(name="Close")
+    tail_df.index.name = "Date"
+    full_df = pd.concat([full_df[["Close"]], tail_df], axis=0)
+    full_df = full_df[~full_df.index.duplicated(keep="last")].sort_index()
+    return full_df
+
+
 def _extract_close_series(download_df):
     if download_df is None or download_df.empty:
         return pd.Series(dtype=float)
@@ -803,7 +834,8 @@ def load_reference_series(start_date, source="auto"):
                 fetch_fn=fetch_reference_frame,
                 validator_fn=_validate_reference_frame,
             )
-        )
+        ),
+        source=source,
     )
     eur_usd = (
         pd.to_numeric(reference_df["EURUSD"], errors="coerce").dropna()
@@ -840,7 +872,7 @@ def build_currency_close_series(raw_df, selected_currency):
 
 
 @st.cache_data(ttl=3600)
-def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=3, source="auto"):
+def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=0, source="auto"):
     def fetch_price_data():
         full_df = pd.read_csv(price_history_url)
         full_df["Date"] = pd.to_datetime(full_df["Date"])
@@ -848,34 +880,23 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
         full_df.rename(columns={"Price": "Close"}, inplace=True)
         full_df["Close"] = pd.to_numeric(full_df["Close"], errors="coerce")
         full_df = full_df.dropna(subset=["Close"]).sort_index()
-
-        latest_csv_date = full_df.index.max()
-        today = pd.Timestamp.utcnow().tz_localize(None).normalize()
-        if stale_after_days is not None and (today - latest_csv_date.normalize()).days > int(
-            stale_after_days
-        ):
-            btc_tail = _safe_download_close_series(
-                "BTC-USD",
-                (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
-            )
-            if btc_tail.empty:
-                btc_tail = _safe_download_btc_tail_from_coingecko(
-                    (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                )
-            if btc_tail.empty:
-                btc_tail = _safe_download_btc_tail_from_coincap(
-                    (latest_csv_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                )
-            if not btc_tail.empty:
-                tail_df = btc_tail.to_frame(name="Close")
-                tail_df.index.name = "Date"
-                full_df = pd.concat([full_df[["Close"]], tail_df], axis=0)
-                full_df = full_df[~full_df.index.duplicated(keep="last")].sort_index()
-
+        full_df = _append_btc_live_tail(full_df, stale_after_days=stale_after_days)
         full_df = full_df[full_df["Close"] > 0]
         full_df["AbsDays"] = (full_df.index - GENESIS_DATE).days
         full_df["LogClose"] = np.log10(full_df["Close"])
         return full_df
+
+    if source == "auto":
+        snapshot_df = _read_snapshot_dataframe("prepared_price_data")
+        if snapshot_df is not None and _validate_prepared_price_data(snapshot_df):
+            merged_df = _append_btc_live_tail(
+                snapshot_df[["Close"]].copy(),
+                stale_after_days=stale_after_days,
+            )
+            merged_df = merged_df[merged_df["Close"] > 0]
+            merged_df["AbsDays"] = (merged_df.index - GENESIS_DATE).days
+            merged_df["LogClose"] = np.log10(merged_df["Close"])
+            return merged_df
 
     return _load_snapshot_or_live(
         "prepared_price_data",
@@ -887,7 +908,8 @@ def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_
                 fetch_fn=fetch_price_data,
                 validator_fn=_validate_prepared_price_data,
             )
-        )
+        ),
+        source=source,
     )
 
 
@@ -899,6 +921,7 @@ def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL, 
         lambda: _load_source_adapter(
             _build_blockchain_chart_adapter("prepared_miner_revenue_data", revenue_history_url)
         ),
+        source=source,
     )
 
 
@@ -910,6 +933,7 @@ def load_prepared_difficulty_data(difficulty_history_url=DIFFICULTY_CSV_URL, sou
         lambda: _load_source_adapter(
             _build_blockchain_chart_adapter("prepared_difficulty_data", difficulty_history_url)
         ),
+        source=source,
     )
 
 
@@ -921,6 +945,7 @@ def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL, source="a
         lambda: _load_source_adapter(
             _build_blockchain_chart_adapter("prepared_hashrate_data", hashrate_history_url)
         ),
+        source=source,
     )
 
 
@@ -942,7 +967,8 @@ def load_bitcoin_visuals_daily_data(data_url=BITCOIN_VISUALS_DAILY_CSV_URL, sour
                 fetch_fn=fetch_daily_data,
                 validator_fn=_validate_bitcoin_visuals_daily_data,
             )
-        )
+        ),
+        source=source,
     )
 
 
@@ -964,6 +990,7 @@ def load_prepared_lightning_nodes_data(lightning_data_url=BITCOIN_VISUALS_DAILY_
         lambda: _load_prepared_lightning_series(
             "nodes_with_channels", lightning_data_url, source=source
         ),
+        source=source,
     )
 
 
@@ -975,6 +1002,7 @@ def load_prepared_lightning_capacity_data(
         "prepared_lightning_capacity_data",
         _validate_prepared_chart_data,
         lambda: _load_prepared_lightning_series("capacity_total", lightning_data_url, source=source),
+        source=source,
     )
 
 
@@ -993,7 +1021,8 @@ def load_prepared_filecoin_btc_data(start_date="2020-01-01", source="auto"):
                 fetch_fn=fetch_filecoin_btc_data,
                 validator_fn=_validate_prepared_filecoin_btc_data,
             )
-        )
+        ),
+        source=source,
     )
 
 
@@ -1049,7 +1078,8 @@ def load_prepared_monero_btc_data(start_date="2014-01-01", source="auto"):
                 fetch_fn=fetch_monero_btc_data,
                 validator_fn=_validate_prepared_monero_btc_data,
             )
-        )
+        ),
+        source=source,
     )
 
 
@@ -1077,7 +1107,8 @@ def load_prepared_litecoin_btc_data(start_date="2013-01-01", source="auto"):
                 fetch_fn=fetch_litecoin_btc_data,
                 validator_fn=_validate_prepared_litecoin_btc_data,
             )
-        )
+        ),
+        source=source,
     )
 
 
@@ -1105,7 +1136,8 @@ def load_prepared_dogecoin_btc_data(start_date="2014-01-01", source="auto"):
                 fetch_fn=fetch_dogecoin_btc_data,
                 validator_fn=_validate_prepared_dogecoin_btc_data,
             )
-        )
+        ),
+        source=source,
     )
 
 
@@ -1181,7 +1213,8 @@ def load_prepared_liquid_btc_data(
                 fetch_fn=fetch_liquid_btc_data,
                 validator_fn=_validate_prepared_liquid_btc_data,
             )
-        )
+        ),
+        source=source,
     )
 
 
@@ -1215,5 +1248,6 @@ def load_prepared_liquid_transactions_data(liquid_charts_data_url=LIQUID_CHARTS_
                 fetch_fn=fetch_liquid_transactions_data,
                 validator_fn=_validate_prepared_liquid_transactions_data,
             )
-        )
+        ),
+        source=source,
     )
