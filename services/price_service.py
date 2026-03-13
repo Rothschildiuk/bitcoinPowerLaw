@@ -250,9 +250,18 @@ def _load_snapshot_or_live(snapshot_key, validator_fn, live_loader, *, source="a
     if source not in {"auto", "snapshot", "live"}:
         raise ValueError(f"Unsupported source mode: {source}")
 
+    snapshot_df = None
     if source in {"auto", "snapshot"}:
         snapshot_df = _read_snapshot_dataframe(snapshot_key)
         if snapshot_df is not None and validator_fn(snapshot_df):
+            if source == "snapshot":
+                return snapshot_df
+            try:
+                live_df = live_loader()
+            except Exception:
+                return snapshot_df
+            if live_df is not None and validator_fn(live_df):
+                return live_df
             return snapshot_df
         if source == "snapshot":
             raise ValueError(f"Local snapshot is missing or invalid: {snapshot_key}")

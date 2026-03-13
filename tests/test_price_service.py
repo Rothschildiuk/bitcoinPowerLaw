@@ -144,7 +144,26 @@ class TestPriceService(unittest.TestCase):
         series = price_service._extract_close_series(pd.DataFrame())
         self.assertTrue(series.empty)
 
-    def test_load_snapshot_or_live_prefers_snapshot_over_live_fetch(self):
+    def test_load_snapshot_or_live_auto_prefers_live_over_snapshot_when_available(self):
+        snapshot_df = pd.DataFrame(
+            {"Close": [42.0], "AbsDays": [1], "LogClose": [1.623249]},
+            index=pd.to_datetime(["2009-01-04"]),
+        )
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+        live_df = pd.DataFrame(
+            {"Close": [84.0], "AbsDays": [2], "LogClose": [1.924279]},
+            index=pd.to_datetime(["2009-01-05"]),
+        )
+
+        result = price_service._load_snapshot_or_live(
+            "prepared_price_data",
+            lambda data_df: True,
+            lambda: live_df,
+        )
+
+        self.assertEqual(float(result.iloc[0]["Close"]), 84.0)
+
+    def test_load_snapshot_or_live_auto_falls_back_to_snapshot_on_live_error(self):
         snapshot_df = pd.DataFrame(
             {"Close": [42.0], "AbsDays": [1], "LogClose": [1.623249]},
             index=pd.to_datetime(["2009-01-04"]),
@@ -154,7 +173,7 @@ class TestPriceService(unittest.TestCase):
         result = price_service._load_snapshot_or_live(
             "prepared_price_data",
             lambda data_df: True,
-            lambda: self.fail("live loader should not run when snapshot is valid"),
+            lambda: (_ for _ in ()).throw(RuntimeError("network down")),
         )
 
         self.assertEqual(float(result.iloc[0]["Close"]), 42.0)
