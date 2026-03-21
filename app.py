@@ -30,6 +30,7 @@ from core.constants import (
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_UNIT,
+    KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
     KEY_THEME_MODE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -57,6 +58,7 @@ from core.series_registry import (
 )
 from core.utils import (
     calculate_r2_score,
+    calculate_monthly_buy_portfolio_values,
     evaluate_powerlaw_values,
     get_stable_trend_fit,
     normalize_periodic_growth_rate,
@@ -195,6 +197,7 @@ def build_portfolio_projection(
     a_active,
     b_active,
     btc_amount,
+    monthly_buy_amount,
     forecast_unit,
     forecast_horizon,
 ):
@@ -228,12 +231,27 @@ def build_portfolio_projection(
     period_days = np.maximum((date_index - current_gen_date).days.astype(float), 1.0)
     period_fair_price, _, _ = evaluate_powerlaw_values(np.log10(period_days), a_active, b_active)
     period_portfolio_value = period_fair_price * btc_amount
+    dca_btc_holdings, dca_portfolio_value, dca_invested_capital = (
+        calculate_monthly_buy_portfolio_values(
+            date_index=date_index,
+            current_gen_date=current_gen_date,
+            fair_prices=period_fair_price,
+            intercept_a=a_active,
+            slope_b=b_active,
+            initial_btc_amount=btc_amount,
+            monthly_buy_amount=monthly_buy_amount,
+            purchase_anchor_day=anchor_day,
+        )
+    )
 
     portfolio_df = pd.DataFrame(
         {
             "Date": date_index,
             "FairPriceUSD": period_fair_price,
             "PortfolioUSD": period_portfolio_value,
+            "DcaBTC": dca_btc_holdings,
+            "DcaPortfolioUSD": dca_portfolio_value,
+            "DcaInvestedCapitalUSD": dca_invested_capital,
         }
     )
     portfolio_df[change_usd_col] = portfolio_df["PortfolioUSD"].diff()
@@ -284,6 +302,7 @@ def render_portfolio_view(
 
     st.markdown("### Portfolio Growth (Fair Price / Power Law)")
     btc_amount = float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0))
+    monthly_buy_amount = float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0.0))
     forecast_unit = st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Year")
     forecast_horizon = int(
         st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
@@ -295,6 +314,7 @@ def render_portfolio_view(
             a_active,
             b_active,
             btc_amount,
+            monthly_buy_amount,
             forecast_unit,
             forecast_horizon,
         )
@@ -302,15 +322,23 @@ def render_portfolio_view(
     portfolio_display_df = portfolio_df.iloc[1:].copy()
     portfolio_display_df["FairPriceDisplay"] = portfolio_display_df["FairPriceUSD"]
     portfolio_display_df["PortfolioDisplay"] = portfolio_display_df["PortfolioUSD"]
+    portfolio_display_df["DcaPortfolioDisplay"] = portfolio_display_df["DcaPortfolioUSD"]
+    portfolio_display_df["DcaBTCDisplay"] = portfolio_display_df["DcaBTC"]
+    portfolio_display_df["DcaInvestedCapitalDisplay"] = portfolio_display_df[
+        "DcaInvestedCapitalUSD"
+    ]
     portfolio_display_df["ChangeDisplay"] = portfolio_display_df[change_usd_col]
+    dca_enabled = monthly_buy_amount > 0.0
 
     baseline_value = portfolio_df["PortfolioUSD"].iloc[0]
     last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
+    last_dca_value = portfolio_display_df["DcaPortfolioDisplay"].iloc[-1]
+    last_dca_invested_capital = portfolio_display_df["DcaInvestedCapitalDisplay"].iloc[-1]
     unstable_portfolio = powerlaw_parameters_are_unstable(
         current_r2,
         was_clipped=model_was_clipped,
     )
-    if unstable_portfolio or last_value <= 0:
+    if unstable_portfolio:
         st.info(
             "Portfolio projection needs a stable model fit. Click Auto-fit model to calculate fair-value metrics."
         )
@@ -320,15 +348,28 @@ def render_portfolio_view(
     )
 
     g1, g2, g3 = st.columns(3)
-    g1.metric(
-        "Current Fair Price",
-        format_portfolio_money(df_display["FairDisplay"].iloc[-1]),
-    )
-    g2.metric(
-        "Portfolio (end of horizon)",
-        format_portfolio_money(portfolio_display_df["PortfolioDisplay"].iloc[-1]),
-    )
-    g3.metric("Total Growth", f"{total_growth_pct:+.1f}%")
+    g1.metric("Current Fair Price", format_portfolio_money(df_display["FairDisplay"].iloc[-1]))
+    if dca_enabled:
+        g2.metric(
+            "Hold-only portfolio",
+            format_portfolio_money(portfolio_display_df["PortfolioDisplay"].iloc[-1]),
+            delta=f"{total_growth_pct:+.1f}%",
+        )
+        g3.metric(
+            "With monthly buys",
+            format_portfolio_money(last_dca_value),
+            delta=format_portfolio_money(last_dca_value - last_value),
+        )
+        st.caption(f"Invested cash by horizon: {format_portfolio_money(last_dca_invested_capital)}")
+        st.caption(
+            "Experimental scenario: monthly buys start from the next calendar month and use the current selected currency."
+        )
+    else:
+        g2.metric(
+            "Portfolio (end of horizon)",
+            format_portfolio_money(portfolio_display_df["PortfolioDisplay"].iloc[-1]),
+        )
+        g3.metric("Total Growth", f"{total_growth_pct:+.1f}%")
 
     portfolio_fig = go.Figure()
     portfolio_fig.add_trace(
@@ -344,6 +385,33 @@ def render_portfolio_view(
             ),
         )
     )
+    if dca_enabled:
+        portfolio_fig.add_trace(
+            go.Scatter(
+                x=portfolio_display_df["Date"],
+                y=portfolio_display_df["DcaPortfolioDisplay"],
+                mode="lines+markers",
+                name="Portfolio with monthly buys",
+                line=dict(color="#14b8a6", width=2),
+                hovertemplate=(
+                    "<b>%{x|%d.%m.%Y}</b><br>Portfolio + monthly buys: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        portfolio_fig.add_trace(
+            go.Scatter(
+                x=portfolio_display_df["Date"],
+                y=portfolio_display_df["DcaInvestedCapitalDisplay"],
+                mode="lines+markers",
+                name="Cumulative invested cash",
+                line=dict(color="#8b5cf6", width=2, dash="dash"),
+                hovertemplate=(
+                    "<b>%{x|%d.%m.%Y}</b><br>Invested cash: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
     portfolio_fig.update_layout(
         height=320,
         margin=dict(t=10, b=0, l=50, r=20),
@@ -389,6 +457,9 @@ def render_portfolio_view(
         columns={
             "FairPriceDisplay": f"Fair Price ({currency_unit})",
             "PortfolioDisplay": f"Portfolio ({currency_unit})",
+            "DcaPortfolioDisplay": f"Portfolio + monthly buys ({currency_unit})",
+            "DcaInvestedCapitalDisplay": f"Invested cash ({currency_unit})",
+            "DcaBTCDisplay": "BTC after monthly buys",
             "ChangeDisplay": period_change_usd_label,
             change_pct_col: period_change_pct_label,
         }
@@ -397,23 +468,29 @@ def render_portfolio_view(
         "Date",
         f"Fair Price ({currency_unit})",
         f"Portfolio ({currency_unit})",
-        period_change_usd_label,
-        period_change_pct_label,
     ]
+    if dca_enabled:
+        display_columns.extend(
+            [
+                f"Portfolio + monthly buys ({currency_unit})",
+                f"Invested cash ({currency_unit})",
+                "BTC after monthly buys",
+            ]
+        )
+    display_columns.extend([period_change_usd_label, period_change_pct_label])
     table_df = table_df[display_columns]
     money_fmt = f"{currency_prefix}{{:,.{display_currency_decimals}f}}{currency_suffix}"
-    st.dataframe(
-        table_df.style.format(
-            {
-                f"Fair Price ({currency_unit})": money_fmt,
-                f"Portfolio ({currency_unit})": money_fmt,
-                period_change_usd_label: money_fmt,
-                period_change_pct_label: "{:+.2f}%",
-            }
-        ),
-        width="stretch",
-        hide_index=True,
-    )
+    style_format = {
+        f"Fair Price ({currency_unit})": money_fmt,
+        f"Portfolio ({currency_unit})": money_fmt,
+        period_change_usd_label: money_fmt,
+        period_change_pct_label: "{:+.2f}%",
+    }
+    if dca_enabled:
+        style_format[f"Portfolio + monthly buys ({currency_unit})"] = money_fmt
+        style_format[f"Invested cash ({currency_unit})"] = money_fmt
+        style_format["BTC after monthly buys"] = "{:,.6f}"
+    st.dataframe(table_df.style.format(style_format), width="stretch", hide_index=True)
 
 
 # --- Page Configuration ---

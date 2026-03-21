@@ -1,12 +1,15 @@
 VENV := venv
 PY := $(VENV)/bin/python
-PIP := $(VENV)/bin/pip
-STREAMLIT := $(VENV)/bin/streamlit
-BLACK := $(VENV)/bin/black
+PIP := $(PY) -m pip
+STREAMLIT := $(PY) -m streamlit
+BLACK := $(PY) -m black
 BLACK_CONFIG := --config config/pyproject.toml
 BLACK_TARGETS := app.py core services tests ui
 
 .PHONY: help install run format check test clean update-defaults update-data-snapshots
+
+$(PY):
+	python3 -m venv $(VENV)
 
 help:
 	@echo "Targets:"
@@ -19,26 +22,26 @@ help:
 	@echo "  make update-data-snapshots - refresh checked-in daily snapshot CSV files"
 	@echo "  make clean    - remove Python cache folders"
 
-install:
+install: $(PY)
 	$(PIP) install -U pip
 	$(PIP) install -r config/requirements.txt
 
-run:
+run: $(PY)
 	$(STREAMLIT) run app.py
 
-format:
+format: $(PY)
 	$(BLACK) $(BLACK_CONFIG) $(BLACK_TARGETS)
 
-check:
+check: $(PY)
 	$(BLACK) $(BLACK_CONFIG) --check $(BLACK_TARGETS)
 
-test:
+test: $(PY)
 	$(PY) -m pytest -q
 
-update-defaults:
+update-defaults: $(PY)
 	$(PY) scripts/update_powerlaw_defaults.py
 
-update-data-snapshots:
+update-data-snapshots: $(PY)
 	$(PY) scripts/update_data_snapshots.py
 
 clean:

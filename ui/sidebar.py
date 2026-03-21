@@ -21,6 +21,7 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY,
     KEY_PORTFOLIO_FORECAST_UNIT,
+    KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -57,6 +58,17 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         key=KEY_PORTFOLIO_BTC_AMOUNT,
         label_visibility="collapsed",
     )
+    st.markdown("**Experimental: monthly buy amount**")
+    st.number_input(
+        "Experimental: monthly buy amount",
+        min_value=0,
+        value=int(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0)),
+        step=10,
+        format="%d",
+        key=KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
+        label_visibility="collapsed",
+    )
+    st.caption("Adds a second portfolio line using fixed monthly buys in the current currency.")
     st.markdown("**Forecast unit**")
     forecast_unit = st.radio(
         "Forecast unit",

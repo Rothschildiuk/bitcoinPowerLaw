@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import streamlit as st
 
 from core.constants import POWERLAW_EXPONENT_MAX, POWERLAW_EXPONENT_MIN
@@ -76,6 +77,74 @@ def normalize_periodic_growth_rate(current_values, previous_values, elapsed_days
         np.power(gross_return, float(target_days) / elapsed_arr[valid_mask]) - 1.0
     ) * 100.0
     return normalized
+
+
+def calculate_monthly_buy_portfolio_values(
+    date_index,
+    current_gen_date,
+    fair_prices,
+    intercept_a,
+    slope_b,
+    initial_btc_amount,
+    monthly_buy_amount,
+    purchase_anchor_day,
+):
+    projection_dates = pd.to_datetime(date_index)
+    fair_price_arr = np.asarray(fair_prices, dtype=float)
+    total_btc = np.full(fair_price_arr.shape, float(initial_btc_amount), dtype=float)
+    invested_capital = np.zeros(fair_price_arr.shape, dtype=float)
+
+    if (
+        projection_dates.empty
+        or float(monthly_buy_amount) <= 0.0
+        or fair_price_arr.size == 0
+        or not np.any(np.isfinite(fair_price_arr) & (fair_price_arr > 0.0))
+    ):
+        return total_btc, fair_price_arr * total_btc, invested_capital
+
+    purchase_start = pd.Timestamp(purchase_anchor_day).to_period("M").to_timestamp()
+    if purchase_start < pd.Timestamp(purchase_anchor_day).normalize():
+        purchase_start += pd.offsets.MonthBegin(1)
+
+    purchase_end = pd.Timestamp(projection_dates.max()).normalize()
+    purchase_dates = pd.date_range(start=purchase_start, end=purchase_end, freq="MS")
+    if purchase_dates.empty:
+        return total_btc, fair_price_arr * total_btc, invested_capital
+
+    purchase_days = np.maximum((purchase_dates - current_gen_date).days.astype(float), 1.0)
+    purchase_prices, _, _ = evaluate_powerlaw_values(
+        np.log10(purchase_days),
+        intercept_a,
+        slope_b,
+    )
+    valid_purchase_mask = np.isfinite(purchase_prices) & (purchase_prices > 0.0)
+    if not np.any(valid_purchase_mask):
+        return total_btc, fair_price_arr * total_btc, invested_capital
+
+    valid_purchase_dates = purchase_dates[valid_purchase_mask]
+    purchased_btc = float(monthly_buy_amount) / purchase_prices[valid_purchase_mask]
+    cumulative_btc = np.cumsum(purchased_btc)
+    cumulative_invested_capital = np.cumsum(
+        np.full(valid_purchase_dates.shape, float(monthly_buy_amount), dtype=float)
+    )
+    purchase_positions = (
+        np.searchsorted(
+            valid_purchase_dates.to_numpy(dtype="datetime64[ns]"),
+            projection_dates.to_numpy(dtype="datetime64[ns]"),
+            side="right",
+        )
+        - 1
+    )
+
+    additional_btc = np.zeros_like(total_btc)
+    applicable_mask = purchase_positions >= 0
+    additional_btc[applicable_mask] = cumulative_btc[purchase_positions[applicable_mask]]
+    invested_capital[applicable_mask] = cumulative_invested_capital[
+        purchase_positions[applicable_mask]
+    ]
+    total_btc = total_btc + additional_btc
+
+    return total_btc, fair_price_arr * total_btc, invested_capital
 
 
 def inline_radio_control(

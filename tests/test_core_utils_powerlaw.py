@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 
 from core.power_law import (
     calculate_r2_for_manual_params,
@@ -10,6 +11,7 @@ from core.power_law import (
 )
 from core.utils import (
     calculate_r2_score,
+    calculate_monthly_buy_portfolio_values,
     evaluate_powerlaw_values,
     get_stable_trend_fit,
     normalize_periodic_growth_rate,
@@ -125,6 +127,63 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         )
 
         self.assertTrue(np.allclose(normalized, np.array([3.0, 3.0]), atol=1e-9))
+
+    def test_calculate_monthly_buy_portfolio_values_keeps_hold_only_when_disabled(self):
+        date_index = pd.to_datetime(["2026-01-15", "2026-02-15", "2026-03-15"])
+        fair_prices = np.array([100.0, 110.0, 120.0], dtype=float)
+
+        btc_holdings, portfolio_values, invested_capital = calculate_monthly_buy_portfolio_values(
+            date_index=date_index,
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            fair_prices=fair_prices,
+            intercept_a=2.0,
+            slope_b=0.0,
+            initial_btc_amount=2.0,
+            monthly_buy_amount=0.0,
+            purchase_anchor_day=pd.Timestamp("2026-01-15"),
+        )
+
+        self.assertTrue(np.allclose(btc_holdings, np.array([2.0, 2.0, 2.0])))
+        self.assertTrue(np.allclose(portfolio_values, fair_prices * 2.0))
+        self.assertTrue(np.allclose(invested_capital, np.array([0.0, 0.0, 0.0])))
+
+    def test_calculate_monthly_buy_portfolio_values_adds_btc_from_next_month(self):
+        date_index = pd.to_datetime(["2026-01-15", "2026-02-15", "2026-03-15", "2026-04-15"])
+        fair_prices = np.full(4, 100.0, dtype=float)
+
+        btc_holdings, portfolio_values, invested_capital = calculate_monthly_buy_portfolio_values(
+            date_index=date_index,
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            fair_prices=fair_prices,
+            intercept_a=2.0,
+            slope_b=0.0,
+            initial_btc_amount=2.0,
+            monthly_buy_amount=100.0,
+            purchase_anchor_day=pd.Timestamp("2026-01-15"),
+        )
+
+        self.assertTrue(np.allclose(btc_holdings, np.array([2.0, 3.0, 4.0, 5.0])))
+        self.assertTrue(np.allclose(portfolio_values, np.array([200.0, 300.0, 400.0, 500.0])))
+        self.assertTrue(np.allclose(invested_capital, np.array([0.0, 100.0, 200.0, 300.0])))
+
+    def test_calculate_monthly_buy_portfolio_values_supports_zero_initial_btc(self):
+        date_index = pd.to_datetime(["2026-01-15", "2026-02-15", "2026-03-15"])
+        fair_prices = np.full(3, 100.0, dtype=float)
+
+        btc_holdings, portfolio_values, invested_capital = calculate_monthly_buy_portfolio_values(
+            date_index=date_index,
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            fair_prices=fair_prices,
+            intercept_a=2.0,
+            slope_b=0.0,
+            initial_btc_amount=0.0,
+            monthly_buy_amount=100.0,
+            purchase_anchor_day=pd.Timestamp("2026-01-15"),
+        )
+
+        self.assertTrue(np.allclose(btc_holdings, np.array([0.0, 1.0, 2.0])))
+        self.assertTrue(np.allclose(portfolio_values, np.array([0.0, 100.0, 200.0])))
+        self.assertTrue(np.allclose(invested_capital, np.array([0.0, 100.0, 200.0])))
 
 
 if __name__ == "__main__":
