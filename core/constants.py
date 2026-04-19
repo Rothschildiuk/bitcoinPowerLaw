@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-07-18")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(

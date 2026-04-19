@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ui.charts import (
+    _main_chart_plotly_config,
     _resolve_log_time_axis,
     _resolve_model_view_max,
     _resolve_powerlaw_y_range,
@@ -12,6 +13,23 @@ from ui.charts import (
 
 
 class TestUIChartsHelpers(unittest.TestCase):
+    def test_main_chart_config_adds_spike_lines_toggle(self):
+        config = _main_chart_plotly_config()
+
+        self.assertTrue(config["displayModeBar"])
+        modebar_buttons = [
+            button for button_group in config["modeBarButtons"] for button in button_group
+        ]
+        self.assertIn("toggleSpikelines", modebar_buttons)
+        self.assertLess(
+            modebar_buttons.index("pan2d"),
+            modebar_buttons.index("toggleSpikelines"),
+        )
+        self.assertLess(
+            modebar_buttons.index("toggleSpikelines"),
+            modebar_buttons.index("zoomIn2d"),
+        )
+
     def test_resolve_powerlaw_y_range_log_includes_padding_and_positive_bounds(self):
         df_display = pd.DataFrame(
             {

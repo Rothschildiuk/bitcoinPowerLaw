@@ -21,6 +21,17 @@ TIME_AXIS_LEADING_PADDING_DAYS = 90
 MODEL_FORWARD_YEARS = 5
 
 
+def _main_chart_plotly_config():
+    return {
+        "displayModeBar": True,
+        "modeBarButtons": [
+            ["toImage"],
+            ["zoom2d", "pan2d", "toggleSpikelines"],
+            ["zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"],
+        ],
+    }
+
+
 def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS):
     first_data_date = pd.Timestamp(df_display.index.min())
     return first_data_date - pd.Timedelta(days=int(padding_days))
@@ -383,6 +394,17 @@ def render_main_model_chart(
             hoverformat="%d.%m.%Y",
         )
 
+    spike_axis_style = dict(
+        showspikes=False,
+        spikecolor=pl_legend_color,
+        spikedash="dot",
+        spikemode="across",
+        spikesnap="cursor",
+        spikethickness=1,
+    )
+    fig.update_xaxes(**spike_axis_style)
+    fig.update_yaxes(**spike_axis_style)
+
     fig.update_layout(
         height=600,
         margin=dict(t=30, b=10, l=50, r=20),
@@ -405,6 +427,6 @@ def render_main_model_chart(
         fig,
         width="stretch",
         theme=None,
-        config={"displayModeBar": True},
+        config=_main_chart_plotly_config(),
         key=chart_key,
     )
