@@ -162,6 +162,10 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertFalse(m2_config.supports_currency_selector)
         self.assertTrue(m2_config.lock_price_scale_to_log)
         self.assertEqual(m2_config.model_origin_abs_day, US_M2_MODEL_ORIGIN_ABS_DAYS)
+        self.assertLessEqual(m2_config.powerlaw_intercept_bounds[0], m2_config.default_a)
+        self.assertGreaterEqual(m2_config.powerlaw_intercept_bounds[1], m2_config.default_a)
+        self.assertLessEqual(m2_config.powerlaw_slope_bounds[0], m2_config.default_b)
+        self.assertGreaterEqual(m2_config.powerlaw_slope_bounds[1], m2_config.default_b)
 
     def test_russian_m2_config_uses_cbr_trillion_rub_units(self):
         m2_config = get_active_model_config(
@@ -179,6 +183,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertTrue(m2_config.lock_price_scale_to_log)
         self.assertEqual(m2_config.model_origin_abs_day, RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS)
         self.assertLessEqual(m2_config.powerlaw_intercept_bounds[0], m2_config.default_a)
+        self.assertGreaterEqual(m2_config.powerlaw_intercept_bounds[1], m2_config.default_a)
+        self.assertLessEqual(m2_config.powerlaw_slope_bounds[0], m2_config.default_b)
         self.assertGreaterEqual(m2_config.powerlaw_slope_bounds[1], m2_config.default_b)
 
     def test_session_defaults_include_price_and_series_specific_models(self):

@@ -318,8 +318,8 @@ _BASE_SERIES_CONFIGS = {
         currency_decimals=0,
         currency_unit="Billions USD",
         lock_price_scale_to_log=True,
-        powerlaw_intercept_bounds=(0.0, 8.0),
-        powerlaw_slope_bounds=(-2.0, 2.0),
+        powerlaw_intercept_bounds=(-10.0, 10.0),
+        powerlaw_slope_bounds=(-3.0, 3.0),
         model_origin_abs_day=US_M2_MODEL_ORIGIN_ABS_DAYS,
     ),
     POWERLAW_SERIES_RUSSIAN_M2: SeriesModelConfig(
