@@ -335,6 +335,7 @@ def render_sidebar_panel(
         b_key = active_model.b_key
         default_a = active_model.default_a
         default_b = active_model.default_b
+        model_origin_abs_day = active_model.model_origin_abs_day
 
         if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
             reset_a = default_a if mode == MODE_POWERLAW else PORTFOLIO_RESET_A
@@ -362,6 +363,7 @@ def render_sidebar_panel(
                 a_max=a_max,
                 b_min=b_min,
                 b_max=b_max,
+                genesis_offset_days=model_origin_abs_day,
             )
         else:
             # Keep legacy A/B keys aligned before rendering LogPeriodic controls,

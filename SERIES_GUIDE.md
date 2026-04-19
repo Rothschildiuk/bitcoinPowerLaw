@@ -34,6 +34,7 @@ Each series config defines:
 
 ### Fiat Money
 - U.S. M2
+- Russian M2
 
 ## Special Handling
 
@@ -61,7 +62,17 @@ Each series config defines:
 - Displayed in billions of U.S. dollars
 - Monthly data, no currency conversion
 - Forces log price scale
+- PowerLaw time is counted from the U.S. M2 row start, not from Bitcoin genesis
 - M2 is used instead of M3/M4 because it is the current official broad Fed/FRED money stock series.
+
+### Russian M2
+- Uses Bank of Russia monetary aggregates as the primary source
+- Falls back to FRED `MYAGM2RUM189N` if the CBR workbook is unavailable
+- Displayed in trillions of Russian rubles
+- Monthly data, no currency conversion
+- Forces log price scale
+- PowerLaw time is counted from the Russian M2 row start, not from Bitcoin genesis
+- M2 is used because it is the broad official local-currency aggregate with a current CBR-published history.
 
 ## When Adding a New Series
 1. Add defaults and keys in `core/constants.py`

@@ -318,6 +318,47 @@ class TestPriceService(unittest.TestCase):
             ["2009-01-03", "2009-01-04"],
         )
 
+    @patch("services.price_service.pd.read_excel")
+    def test_fetch_cbr_russian_m2_data_parses_monthly_trillion_rub(self, mock_read_excel):
+        workbook_rows = [[None, "Dec 1992", "Jan 1993", "Feb 1993"]]
+        workbook_rows.extend([[f"Unused {row}", None, None, None] for row in range(12)])
+        workbook_rows.append(["Monetary aggregate М2", 1000.0, 2000.0, 3000.0])
+        mock_read_excel.return_value = pd.DataFrame(workbook_rows)
+
+        result = price_service._fetch_cbr_russian_m2_data("unused.xlsx")
+
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["1992-12-01", "1993-01-01", "1993-02-01"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [1.0, 2.0, 3.0])
+        self.assertTrue((result["AbsDays"] < 0).all())
+        self.assertListEqual(result["LogClose"].round(6).tolist(), [0.0, 0.30103, 0.477121])
+
+    @patch("services.price_service.pd.read_csv")
+    @patch("services.price_service.pd.read_excel")
+    def test_load_prepared_russian_m2_data_falls_back_to_fred(self, mock_read_excel, mock_read_csv):
+        price_service.load_prepared_russian_m2_data.clear()
+        mock_read_excel.side_effect = ValueError("CBR unavailable")
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "observation_date": ["1996-12-01", "1997-01-01", "1997-02-01"],
+                "MYAGM2RUM189N": [1_000_000_000_000.0, 2_000_000_000_000.0, 3_000_000_000_000.0],
+            }
+        )
+
+        result = price_service.load_prepared_russian_m2_data(
+            cbr_history_url="unused.xlsx",
+            fred_fallback_url="unused.csv",
+            source="live",
+        )
+
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["1996-12-01", "1997-01-01", "1997-02-01"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [1.0, 2.0, 3.0])
+
     @patch("services.price_service._fetch_json_with_retry")
     def test_safe_download_cryptocompare_histoday_parses_daily_close_series(self, mock_fetch_json):
         mock_fetch_json.return_value = {

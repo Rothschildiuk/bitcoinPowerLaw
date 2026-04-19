@@ -48,6 +48,7 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
     TIME_LOG,
 )
@@ -79,6 +80,7 @@ from services.price_service import (
     load_prepared_miner_revenue_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
+    load_prepared_russian_m2_data,
     load_prepared_us_m2_data,
 )
 from ui.charts import _resolve_model_view_max, render_main_model_chart
@@ -582,6 +584,12 @@ except Exception as e:
     st.error(f"Error loading U.S. M2 data: {e}")
     st.stop()
 
+try:
+    raw_russian_m2_df = load_prepared_russian_m2_data()
+except Exception as e:
+    st.error(f"Error loading Russian M2 data: {e}")
+    st.stop()
+
 if KEY_CURRENCY_SELECTOR not in st.session_state:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
 
@@ -613,6 +621,8 @@ raw_dogecoin_btc_df = raw_dogecoin_btc_df[raw_dogecoin_btc_df["Close"] > 0].copy
 raw_dogecoin_btc_df["LogClose"] = np.log10(raw_dogecoin_btc_df["Close"])
 raw_us_m2_df = raw_us_m2_df[raw_us_m2_df["Close"] > 0].copy()
 raw_us_m2_df["LogClose"] = np.log10(raw_us_m2_df["Close"])
+raw_russian_m2_df = raw_russian_m2_df[raw_russian_m2_df["Close"] > 0].copy()
+raw_russian_m2_df["LogClose"] = np.log10(raw_russian_m2_df["Close"])
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
@@ -636,6 +646,7 @@ raw_series_frames = {
     POWERLAW_SERIES_LITECOIN_BTC: raw_litecoin_btc_df,
     POWERLAW_SERIES_DOGECOIN_BTC: raw_dogecoin_btc_df,
     POWERLAW_SERIES_US_M2: raw_us_m2_df,
+    POWERLAW_SERIES_RUSSIAN_M2: raw_russian_m2_df,
 }
 sidebar_series_data = {
     POWERLAW_SERIES_PRICE: {
@@ -689,6 +700,10 @@ sidebar_series_data = {
     POWERLAW_SERIES_US_M2: {
         "absolute_days": raw_us_m2_df["AbsDays"].values,
         "log_close": raw_us_m2_df["LogClose"].values,
+    },
+    POWERLAW_SERIES_RUSSIAN_M2: {
+        "absolute_days": raw_russian_m2_df["AbsDays"].values,
+        "log_close": raw_russian_m2_df["LogClose"].values,
     },
 }
 
@@ -751,9 +766,14 @@ if (
     st.rerun()
 
 # --- MAIN CALCULATIONS ---
-genesis_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, 0))
-current_gen_date = GENESIS_DATE + pd.Timedelta(days=genesis_offset)
 active_model = get_active_model_config(mode, powerlaw_series, logperiodic_series, currency)
+session_genesis_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, 0))
+genesis_offset = (
+    int(active_model.model_origin_abs_day)
+    if active_model.model_origin_abs_day is not None
+    else session_genesis_offset
+)
+current_gen_date = GENESIS_DATE + pd.Timedelta(days=genesis_offset)
 if active_model.supports_currency_selector:
     raw_df = raw_df_usd.copy()
     raw_df["Close"] = build_currency_close_series(raw_df_usd, currency)

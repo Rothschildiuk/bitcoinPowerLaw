@@ -22,6 +22,7 @@ from services.price_service import (  # noqa: E402
     load_prepared_miner_revenue_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
+    load_prepared_russian_m2_data,
     load_prepared_us_m2_data,
     load_reference_series,
     write_snapshot_dataframe,
@@ -49,6 +50,7 @@ def _build_snapshot_jobs():
         "prepared_litecoin_btc_data": lambda: load_prepared_litecoin_btc_data(source="live"),
         "prepared_dogecoin_btc_data": lambda: load_prepared_dogecoin_btc_data(source="live"),
         "prepared_us_m2_data": lambda: load_prepared_us_m2_data(source="live"),
+        "prepared_russian_m2_data": lambda: load_prepared_russian_m2_data(source="live"),
     }
 
 

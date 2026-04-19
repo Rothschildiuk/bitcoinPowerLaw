@@ -60,6 +60,15 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
 - Frequency: monthly
 - The app uses M2 because it is the broadest current official Federal Reserve money stock aggregate published through H.6/FRED. M3 was discontinued by the Federal Reserve in 2006, and broader M4/Divisia aggregates require third-party methodology.
 
+### Russian M2 Money Supply
+- Primary source: Bank of Russia monetary aggregates workbook
+- URL: `https://www.cbr.ru/vfs/eng/statistics/credit_statistics/monetary_agg_e.xlsx`
+- Fallback source: FRED CSV endpoint for `MYAGM2RUM189N`
+- Fallback URL: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=MYAGM2RUM189N`
+- Unit: trillions of Russian rubles
+- Frequency: monthly
+- The app uses national M2 because it is the broad local-currency aggregate with the longest official current row available from CBR. The FRED row is shorter and is kept only as a resilience fallback.
+
 ## Cache Model
 - Disk cache dir: `output/data_cache/`
 - Cache metadata is stored as `.meta.json` alongside cached CSV files.

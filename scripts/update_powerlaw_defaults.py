@@ -32,6 +32,7 @@ from core.constants import (  # noqa: E402
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
 )
 from core import oscillator  # noqa: E402
@@ -52,6 +53,7 @@ from services.price_service import (  # noqa: E402
     load_prepared_miner_revenue_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
+    load_prepared_russian_m2_data,
     load_prepared_us_m2_data,
 )
 
@@ -108,6 +110,12 @@ DEFAULT_CASES = [
         "DEFAULT_DOGECOIN_BTC_B",
     ),
     (POWERLAW_SERIES_US_M2, CURRENCY_DOLLAR, "DEFAULT_US_M2_A", "DEFAULT_US_M2_B"),
+    (
+        POWERLAW_SERIES_RUSSIAN_M2,
+        CURRENCY_DOLLAR,
+        "DEFAULT_RUSSIAN_M2_A",
+        "DEFAULT_RUSSIAN_M2_B",
+    ),
 ]
 
 OSCILLATOR_DEFAULT_CASES = [
@@ -147,6 +155,7 @@ def _load_series_frames():
         POWERLAW_SERIES_LITECOIN_BTC: load_prepared_litecoin_btc_data(),
         POWERLAW_SERIES_DOGECOIN_BTC: load_prepared_dogecoin_btc_data(),
         POWERLAW_SERIES_US_M2: load_prepared_us_m2_data(),
+        POWERLAW_SERIES_RUSSIAN_M2: load_prepared_russian_m2_data(),
     }
 
 
@@ -205,10 +214,14 @@ def compute_default_updates():
 
     for series_name, currency, a_name, b_name in DEFAULT_CASES:
         fit_df = _prepare_fit_frame(series_name, currency, series_frames)
+        config = get_active_model_config(MODE_POWERLAW, series_name, series_name, currency)
+        genesis_offset = (
+            int(config.model_origin_abs_day) if config.model_origin_abs_day is not None else 0
+        )
         slope_b, intercept_a, r2_value = fit_powerlaw_regression(
             fit_df["AbsDays"].values,
             fit_df["LogClose"].values,
-            0,
+            genesis_offset,
         )
         replacements[a_name] = f"{intercept_a:.3f}"
         replacements[b_name] = f"{slope_b:.3f}"

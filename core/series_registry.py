@@ -32,6 +32,8 @@ from core.constants import (
     DEFAULT_MONERO_BTC_B,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
+    DEFAULT_RUSSIAN_M2_A,
+    DEFAULT_RUSSIAN_M2_B,
     DEFAULT_US_M2_A,
     DEFAULT_US_M2_B,
     KEY_A_DOGECOIN_BTC,
@@ -48,6 +50,7 @@ from core.constants import (
     KEY_A_MONERO_BTC,
     KEY_A_PRICE,
     KEY_A_REVENUE,
+    KEY_A_RUSSIAN_M2,
     KEY_A_US_M2,
     KEY_B_DOGECOIN_BTC,
     KEY_B_DIFFICULTY,
@@ -63,6 +66,7 @@ from core.constants import (
     KEY_B_MONERO_BTC,
     KEY_B_PRICE,
     KEY_B_REVENUE,
+    KEY_B_RUSSIAN_M2,
     KEY_B_US_M2,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     MODE_LOGPERIODIC,
@@ -82,7 +86,10 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
+    RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS,
+    US_M2_MODEL_ORIGIN_ABS_DAYS,
 )
 
 
@@ -110,6 +117,7 @@ class SeriesModelConfig:
     oscillator_parameter_bounds: dict[str, tuple[float, float]] | None = None
     powerlaw_intercept_bounds: tuple[float, float] | None = None
     powerlaw_slope_bounds: tuple[float, float] | None = None
+    model_origin_abs_day: int | None = None
 
 
 _BASE_SERIES_CONFIGS = {
@@ -312,6 +320,24 @@ _BASE_SERIES_CONFIGS = {
         lock_price_scale_to_log=True,
         powerlaw_intercept_bounds=(0.0, 8.0),
         powerlaw_slope_bounds=(-2.0, 2.0),
+        model_origin_abs_day=US_M2_MODEL_ORIGIN_ABS_DAYS,
+    ),
+    POWERLAW_SERIES_RUSSIAN_M2: SeriesModelConfig(
+        series_name=POWERLAW_SERIES_RUSSIAN_M2,
+        a_key=KEY_A_RUSSIAN_M2,
+        b_key=KEY_B_RUSSIAN_M2,
+        default_a=DEFAULT_RUSSIAN_M2_A,
+        default_b=DEFAULT_RUSSIAN_M2_B,
+        target_series_name="Russian M2 money supply",
+        target_series_unit="Trillion RUB",
+        currency_prefix="₽",
+        currency_suffix="T",
+        currency_decimals=2,
+        currency_unit="Trillion RUB",
+        lock_price_scale_to_log=True,
+        powerlaw_intercept_bounds=(-10.0, 5.0),
+        powerlaw_slope_bounds=(-2.0, 3.0),
+        model_origin_abs_day=RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS,
     ),
 }
 
@@ -388,6 +414,7 @@ _POWERLAW_SERIES_GROUPS = [
         "Fiat Money",
         [
             POWERLAW_SERIES_US_M2,
+            POWERLAW_SERIES_RUSSIAN_M2,
         ],
     ),
 ]

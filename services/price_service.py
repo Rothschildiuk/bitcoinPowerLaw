@@ -33,6 +33,10 @@ LIQUID_RESERVES_URL = "https://liquid.network/api/v1/liquid/reserves"
 LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month"
 LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
 FRED_M2SL_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL"
+CBR_MONETARY_AGGREGATES_XLSX_URL = (
+    "https://www.cbr.ru/vfs/eng/statistics/credit_statistics/monetary_agg_e.xlsx"
+)
+FRED_RUSSIAN_M2_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MYAGM2RUM189N"
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
 SNAPSHOT_DATA_DIR = Path("data/snapshots")
 LOCAL_CACHE_SCHEMA_VERSION = 4
@@ -364,6 +368,15 @@ def _validate_prepared_us_m2_data(data_df):
     )
 
 
+def _validate_prepared_russian_m2_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 300
+        and "Close" in data_df.columns
+        and data_df.index.min() <= pd.Timestamp("1992-12-01")
+    )
+
+
 def _append_btc_live_tail(base_df, *, stale_after_days):
     if base_df is None or base_df.empty:
         return base_df
@@ -476,6 +489,56 @@ def _build_blockchain_chart_adapter(cache_key, source_url):
         validator_fn=_validate_prepared_chart_data,
         read_csv_kwargs={"header": None, "names": ["Timestamp", "Value"]},
     )
+
+
+def _parse_cbr_month_label(raw_label):
+    label = re.sub(r"\s+", " ", str(raw_label).replace(",", " ")).strip()
+    for date_format in ("%b %Y", "%B %Y"):
+        parsed = pd.to_datetime(label, format=date_format, errors="coerce")
+        if not pd.isna(parsed):
+            return parsed
+    return pd.to_datetime(label, errors="coerce")
+
+
+def _normalize_prepared_close_frame(date_values, close_values):
+    prepared_df = pd.DataFrame({"Date": date_values, "Close": close_values})
+    prepared_df["Date"] = pd.to_datetime(prepared_df["Date"], errors="coerce")
+    prepared_df["Close"] = pd.to_numeric(prepared_df["Close"], errors="coerce")
+    prepared_df = prepared_df.dropna(subset=["Date", "Close"])
+    prepared_df = prepared_df[prepared_df["Close"] > 0]
+    prepared_df = prepared_df.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+    prepared_df = prepared_df.set_index("Date")
+    prepared_df["AbsDays"] = (prepared_df.index - GENESIS_DATE).days
+    prepared_df["LogClose"] = np.log10(prepared_df["Close"])
+    return prepared_df
+
+
+def _fetch_cbr_russian_m2_data(source_url=CBR_MONETARY_AGGREGATES_XLSX_URL):
+    workbook_df = pd.read_excel(source_url, sheet_name="Monetary aggregates", header=None)
+    row_labels = workbook_df.iloc[:, 0].astype(str).str.replace("М", "M", regex=False)
+    m2_rows = row_labels[row_labels == "Monetary aggregate M2"].index
+    if len(m2_rows) == 0:
+        raise ValueError("CBR monetary aggregates workbook is missing Russian M2 row.")
+
+    date_values = [_parse_cbr_month_label(value) for value in workbook_df.iloc[0, 1:]]
+    # CBR workbook values are in billions of rubles; display this app series in trillion RUB.
+    close_values = pd.to_numeric(workbook_df.iloc[int(m2_rows[0]), 1:], errors="coerce") / 1000.0
+    prepared_df = _normalize_prepared_close_frame(date_values, close_values.to_numpy())
+    if prepared_df.empty:
+        raise ValueError("CBR monetary aggregates workbook returned no Russian M2 rows.")
+    return prepared_df
+
+
+def _fetch_fred_russian_m2_data(source_url=FRED_RUSSIAN_M2_CSV_URL):
+    fred_df = pd.read_csv(source_url)
+    if "observation_date" not in fred_df.columns or "MYAGM2RUM189N" not in fred_df.columns:
+        raise ValueError("FRED Russian M2 payload is missing required columns.")
+    # FRED values are in national currency units; display this app series in trillion RUB.
+    close_values = pd.to_numeric(fred_df["MYAGM2RUM189N"], errors="coerce") / 1_000_000_000_000.0
+    prepared_df = _normalize_prepared_close_frame(fred_df["observation_date"], close_values)
+    if prepared_df.empty:
+        raise ValueError("FRED Russian M2 returned no usable rows.")
+    return prepared_df
 
 
 def _safe_download_close_series(symbol, start_date):
@@ -977,6 +1040,33 @@ def load_prepared_us_m2_data(m2_history_url=FRED_M2SL_CSV_URL, source="auto"):
                 m2_history_url,
                 refresh_seconds=REFERENCE_REFRESH_SECONDS,
                 validator_fn=_validate_prepared_us_m2_data,
+            )
+        ),
+        source=source,
+    )
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_russian_m2_data(
+    cbr_history_url=CBR_MONETARY_AGGREGATES_XLSX_URL,
+    fred_fallback_url=FRED_RUSSIAN_M2_CSV_URL,
+    source="auto",
+):
+    def fetch_russian_m2_data():
+        try:
+            return _fetch_cbr_russian_m2_data(cbr_history_url)
+        except Exception:
+            return _fetch_fred_russian_m2_data(fred_fallback_url)
+
+    return _load_snapshot_or_live(
+        "prepared_russian_m2_data",
+        _validate_prepared_russian_m2_data,
+        lambda: _load_source_adapter(
+            DataFrameSourceAdapter(
+                cache_key="prepared_russian_m2_data",
+                refresh_seconds=REFERENCE_REFRESH_SECONDS,
+                fetch_fn=fetch_russian_m2_data,
+                validator_fn=_validate_prepared_russian_m2_data,
             )
         ),
         source=source,

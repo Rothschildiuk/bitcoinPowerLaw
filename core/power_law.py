@@ -139,12 +139,13 @@ def render_sidebar(
     a_max=POWERLAW_INTERCEPT_MAX,
     b_min=POWERLAW_SLOPE_MIN,
     b_max=POWERLAW_SLOPE_MAX,
+    genesis_offset_days=None,
 ):
     # Initialize defaults if needed
     if KEY_GENESIS_OFFSET not in st.session_state:
         st.session_state[KEY_GENESIS_OFFSET] = 0
 
-    opt_offset = 0
+    opt_offset = 0 if genesis_offset_days is None else int(genesis_offset_days)
     opt_a = default_a
     opt_b = default_b
     reset_a = default_a if reset_a is None else reset_a
@@ -155,8 +156,14 @@ def render_sidebar(
     if b_key not in st.session_state:
         st.session_state[b_key] = float(default_b)
 
+    def current_offset():
+        if genesis_offset_days is not None:
+            return int(genesis_offset_days)
+        return int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset))
+
     def reset_powerlaw_params():
-        st.session_state[KEY_GENESIS_OFFSET] = int(opt_offset)
+        if genesis_offset_days is None:
+            st.session_state[KEY_GENESIS_OFFSET] = int(opt_offset)
         st.session_state[a_key] = float(reset_a)
         st.session_state[b_key] = float(reset_b)
 
@@ -164,7 +171,7 @@ def render_sidebar(
         best_a, _ = optimize_single_powerlaw_parameter(
             all_abs_days,
             all_log_close,
-            int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
+            current_offset(),
             float(st.session_state.get(a_key, opt_a)),
             float(st.session_state.get(b_key, opt_b)),
             "A",
@@ -179,7 +186,7 @@ def render_sidebar(
         best_b, _ = optimize_single_powerlaw_parameter(
             all_abs_days,
             all_log_close,
-            int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
+            current_offset(),
             float(st.session_state.get(a_key, opt_a)),
             float(st.session_state.get(b_key, opt_b)),
             "B",
@@ -191,11 +198,10 @@ def render_sidebar(
         st.session_state[b_key] = float(best_b)
 
     def auto_fit_model():
-        current_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset))
         _, best_a, best_b, _ = find_best_fit_params_for_offset(
             all_abs_days,
             all_log_close,
-            current_offset,
+            current_offset(),
         )
         if best_a == 0.0 and best_b == 0.0:
             return
@@ -227,14 +233,15 @@ def render_sidebar(
     display_r2 = calculate_r2_for_manual_params(
         all_abs_days,
         all_log_close,
-        int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)),
+        current_offset(),
         float(st.session_state.get(a_key, opt_a)),
         float(st.session_state.get(b_key, opt_b)),
     )
     _, _, params_were_clipped = evaluate_powerlaw_values(
         np.log10(
             np.maximum(
-                all_abs_days - int(st.session_state.get(KEY_GENESIS_OFFSET, opt_offset)), 1.0
+                all_abs_days - current_offset(),
+                1.0,
             )
         ),
         float(st.session_state.get(a_key, opt_a)),

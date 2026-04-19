@@ -4,6 +4,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
+    RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
@@ -16,7 +17,9 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
+    US_M2_MODEL_ORIGIN_ABS_DAYS,
 )
 from core.series_registry import (
     get_active_model_config,
@@ -70,8 +73,12 @@ class TestSeriesRegistry(unittest.TestCase):
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_DOGECOIN_BTC), "Shitcoins"
         )
         self.assertEqual(get_powerlaw_series_group_for_series(POWERLAW_SERIES_US_M2), "Fiat Money")
+        self.assertEqual(
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_RUSSIAN_M2), "Fiat Money"
+        )
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
+        self.assertIn(POWERLAW_SERIES_RUSSIAN_M2, group_map["Fiat Money"])
 
     def test_filecoin_btc_config_uses_negative_powerlaw_bounds(self):
         filecoin_config = get_active_model_config(
@@ -154,6 +161,25 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(m2_config.currency_suffix, "B")
         self.assertFalse(m2_config.supports_currency_selector)
         self.assertTrue(m2_config.lock_price_scale_to_log)
+        self.assertEqual(m2_config.model_origin_abs_day, US_M2_MODEL_ORIGIN_ABS_DAYS)
+
+    def test_russian_m2_config_uses_cbr_trillion_rub_units(self):
+        m2_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_RUSSIAN_M2,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(m2_config.target_series_name, "Russian M2 money supply")
+        self.assertEqual(m2_config.target_series_unit, "Trillion RUB")
+        self.assertEqual(m2_config.currency_prefix, "₽")
+        self.assertEqual(m2_config.currency_suffix, "T")
+        self.assertFalse(m2_config.supports_currency_selector)
+        self.assertTrue(m2_config.lock_price_scale_to_log)
+        self.assertEqual(m2_config.model_origin_abs_day, RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS)
+        self.assertLessEqual(m2_config.powerlaw_intercept_bounds[0], m2_config.default_a)
+        self.assertGreaterEqual(m2_config.powerlaw_slope_bounds[1], m2_config.default_b)
 
     def test_session_defaults_include_price_and_series_specific_models(self):
         defaults = dict(iter_session_model_defaults())
@@ -166,6 +192,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn("B_liquid_transactions", defaults)
         self.assertIn("A_us_m2", defaults)
         self.assertIn("B_us_m2", defaults)
+        self.assertIn("A_russian_m2", defaults)
+        self.assertIn("B_russian_m2", defaults)
 
 
 if __name__ == "__main__":
