@@ -32,6 +32,7 @@ from core.constants import (  # noqa: E402
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_US_M2,
 )
 from core import oscillator  # noqa: E402
 from core.power_law import fit_powerlaw_regression  # noqa: E402
@@ -51,6 +52,7 @@ from services.price_service import (  # noqa: E402
     load_prepared_miner_revenue_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
+    load_prepared_us_m2_data,
 )
 
 CONSTANTS_PATH = REPO_ROOT / "core" / "constants.py"
@@ -86,15 +88,26 @@ DEFAULT_CASES = [
         "DEFAULT_LIQUID_TRANSACTIONS_A",
         "DEFAULT_LIQUID_TRANSACTIONS_B",
     ),
-    (POWERLAW_SERIES_FILECOIN_BTC, CURRENCY_DOLLAR, "DEFAULT_FILECOIN_BTC_A", "DEFAULT_FILECOIN_BTC_B"),
+    (
+        POWERLAW_SERIES_FILECOIN_BTC,
+        CURRENCY_DOLLAR,
+        "DEFAULT_FILECOIN_BTC_A",
+        "DEFAULT_FILECOIN_BTC_B",
+    ),
     (POWERLAW_SERIES_MONERO_BTC, CURRENCY_DOLLAR, "DEFAULT_MONERO_BTC_A", "DEFAULT_MONERO_BTC_B"),
-    (POWERLAW_SERIES_LITECOIN_BTC, CURRENCY_DOLLAR, "DEFAULT_LITECOIN_BTC_A", "DEFAULT_LITECOIN_BTC_B"),
+    (
+        POWERLAW_SERIES_LITECOIN_BTC,
+        CURRENCY_DOLLAR,
+        "DEFAULT_LITECOIN_BTC_A",
+        "DEFAULT_LITECOIN_BTC_B",
+    ),
     (
         POWERLAW_SERIES_DOGECOIN_BTC,
         CURRENCY_DOLLAR,
         "DEFAULT_DOGECOIN_BTC_A",
         "DEFAULT_DOGECOIN_BTC_B",
     ),
+    (POWERLAW_SERIES_US_M2, CURRENCY_DOLLAR, "DEFAULT_US_M2_A", "DEFAULT_US_M2_B"),
 ]
 
 OSCILLATOR_DEFAULT_CASES = [
@@ -133,6 +146,7 @@ def _load_series_frames():
         POWERLAW_SERIES_MONERO_BTC: load_prepared_monero_btc_data(),
         POWERLAW_SERIES_LITECOIN_BTC: load_prepared_litecoin_btc_data(),
         POWERLAW_SERIES_DOGECOIN_BTC: load_prepared_dogecoin_btc_data(),
+        POWERLAW_SERIES_US_M2: load_prepared_us_m2_data(),
     }
 
 

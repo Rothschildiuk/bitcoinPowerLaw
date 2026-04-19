@@ -48,6 +48,7 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_US_M2,
     TIME_LOG,
 )
 from core.series_registry import (
@@ -78,6 +79,7 @@ from services.price_service import (
     load_prepared_miner_revenue_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
+    load_prepared_us_m2_data,
 )
 from ui.charts import _resolve_model_view_max, render_main_model_chart
 from ui.kpi import render_model_kpis
@@ -574,6 +576,12 @@ except Exception as e:
     st.error(f"Error loading Dogecoin/BTC data: {e}")
     st.stop()
 
+try:
+    raw_us_m2_df = load_prepared_us_m2_data()
+except Exception as e:
+    st.error(f"Error loading U.S. M2 data: {e}")
+    st.stop()
+
 if KEY_CURRENCY_SELECTOR not in st.session_state:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
 
@@ -603,6 +611,8 @@ raw_litecoin_btc_df = raw_litecoin_btc_df[raw_litecoin_btc_df["Close"] > 0].copy
 raw_litecoin_btc_df["LogClose"] = np.log10(raw_litecoin_btc_df["Close"])
 raw_dogecoin_btc_df = raw_dogecoin_btc_df[raw_dogecoin_btc_df["Close"] > 0].copy()
 raw_dogecoin_btc_df["LogClose"] = np.log10(raw_dogecoin_btc_df["Close"])
+raw_us_m2_df = raw_us_m2_df[raw_us_m2_df["Close"] > 0].copy()
+raw_us_m2_df["LogClose"] = np.log10(raw_us_m2_df["Close"])
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
@@ -625,6 +635,7 @@ raw_series_frames = {
     POWERLAW_SERIES_MONERO_BTC: raw_monero_btc_df,
     POWERLAW_SERIES_LITECOIN_BTC: raw_litecoin_btc_df,
     POWERLAW_SERIES_DOGECOIN_BTC: raw_dogecoin_btc_df,
+    POWERLAW_SERIES_US_M2: raw_us_m2_df,
 }
 sidebar_series_data = {
     POWERLAW_SERIES_PRICE: {
@@ -674,6 +685,10 @@ sidebar_series_data = {
     POWERLAW_SERIES_DOGECOIN_BTC: {
         "absolute_days": raw_dogecoin_btc_df["AbsDays"].values,
         "log_close": raw_dogecoin_btc_df["LogClose"].values,
+    },
+    POWERLAW_SERIES_US_M2: {
+        "absolute_days": raw_us_m2_df["AbsDays"].values,
+        "log_close": raw_us_m2_df["LogClose"].values,
     },
 }
 

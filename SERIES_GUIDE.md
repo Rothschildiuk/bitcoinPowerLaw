@@ -32,6 +32,9 @@ Each series config defines:
 - Liquid BTC
 - Liquid transactions
 
+### Fiat Money
+- U.S. M2
+
 ## Special Handling
 
 ### Bitcoin
@@ -52,6 +55,13 @@ Each series config defines:
 
 ### Liquid Transactions / Lightning Nodes
 - Raw unit display, no currency conversion
+
+### U.S. M2
+- Uses FRED `M2SL`
+- Displayed in billions of U.S. dollars
+- Monthly data, no currency conversion
+- Forces log price scale
+- M2 is used instead of M3/M4 because it is the current official broad Fed/FRED money stock series.
 
 ## When Adding a New Series
 1. Add defaults and keys in `core/constants.py`

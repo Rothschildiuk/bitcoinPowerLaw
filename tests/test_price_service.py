@@ -332,7 +332,9 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service._safe_download_cryptocompare_histoday("XMR", "USD")
 
-        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2024-01-01", "2024-01-02"])
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(), ["2024-01-01", "2024-01-02"]
+        )
         self.assertListEqual(result.tolist(), [0.5, 0.6])
 
     @patch("services.price_service._fetch_text_with_retry")
@@ -346,11 +348,15 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service._safe_download_coinlore_monero_usd()
 
-        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2014-05-21", "2014-05-22"])
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(), ["2014-05-21", "2014-05-22"]
+        )
         self.assertListEqual(result.tolist(), [1.6, 2.1])
 
     @patch("services.price_service._fetch_text_with_retry")
-    def test_safe_download_coinlore_crypto_usd_allows_whitespace_between_cells(self, mock_fetch_text):
+    def test_safe_download_coinlore_crypto_usd_allows_whitespace_between_cells(
+        self, mock_fetch_text
+    ):
         mock_fetch_text.return_value = """
         <table id="ohlc"><tbody>
         <tr class="txtr">
@@ -448,7 +454,9 @@ class TestPriceService(unittest.TestCase):
         self.assertEqual(mock_direct_download.call_args[0], ("FIL", "BTC"))
         self.assertEqual(mock_cross_download.call_args[0], ("FIL", "2020-01-01"))
         self.assertEqual(mock_coinlore_download.call_args[0], ("FIL", "2020-01-01"))
-        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2020-10-15", "2020-10-16"])
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(), ["2020-10-15", "2020-10-16"]
+        )
         self.assertListEqual(result["Close"].round(4).tolist(), [0.0021, 0.0022])
 
     @patch("services.price_service._safe_download_cryptocompare_histoday")
@@ -470,7 +478,9 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service._safe_download_crypto_btc_via_usd("DOGE", "2024-01-01")
 
-        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2024-01-01", "2024-01-02"])
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(), ["2024-01-01", "2024-01-02"]
+        )
         self.assertListEqual(result.round(8).tolist(), [0.000002, 0.000005])
 
     @patch("services.price_service._safe_download_cryptocompare_histoday")
@@ -490,8 +500,12 @@ class TestPriceService(unittest.TestCase):
 
         self.assertEqual(mock_direct_download.call_args[0], ("DOGE", "BTC"))
         self.assertEqual(mock_cross_download.call_args[0], ("DOGE", "2014-01-01"))
-        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2014-02-01", "2014-02-02", "2014-02-03"])
-        self.assertListEqual(result["Close"].round(8).tolist(), [0.00000018, 0.00000019, 0.00000021])
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(), ["2014-02-01", "2014-02-02", "2014-02-03"]
+        )
+        self.assertListEqual(
+            result["Close"].round(8).tolist(), [0.00000018, 0.00000019, 0.00000021]
+        )
         self.assertTrue((result["LogClose"] < 0).all())
 
     @patch("services.price_service._safe_download_cryptocompare_histoday")
@@ -508,7 +522,9 @@ class TestPriceService(unittest.TestCase):
 
         self.assertEqual(mock_direct_download.call_args[0], ("DOGE", "BTC"))
         self.assertEqual(mock_cross_download.call_args[0], ("DOGE", "2014-01-01"))
-        self.assertListEqual(result.index.strftime("%Y-%m-%d").tolist(), ["2014-02-01", "2014-02-02"])
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(), ["2014-02-01", "2014-02-02"]
+        )
 
     @patch("services.price_service.time.sleep")
     @patch("services.price_service.urllib.request.urlopen")
@@ -668,6 +684,26 @@ class TestPriceService(unittest.TestCase):
             ["2009-12-31", "2010-01-01", "2020-01-02"],
         )
         self.assertListEqual(result["Close"].tolist(), [90_000_000.0, 100_000_000.0, 120_000_000.0])
+
+    @patch("services.price_service.pd.read_csv")
+    def test_load_prepared_us_m2_data_parses_fred_m2sl_csv(self, mock_read_csv):
+        price_service.load_prepared_us_m2_data.clear()
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "observation_date": ["1959-01-01", "2009-01-01", "2009-02-01"],
+                "M2SL": [286.6, 8315.4, 8339.7],
+            }
+        )
+
+        result = price_service.load_prepared_us_m2_data("unused.csv", source="live")
+
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            ["1959-01-01", "2009-01-01", "2009-02-01"],
+        )
+        self.assertListEqual(result["Close"].tolist(), [286.6, 8315.4, 8339.7])
+        self.assertIn("AbsDays", result.columns)
+        self.assertIn("LogClose", result.columns)
 
     @patch("services.price_service.load_bitcoin_visuals_daily_data")
     def test_load_prepared_lightning_nodes_data_parses_day_and_nodes(self, mock_load_daily):

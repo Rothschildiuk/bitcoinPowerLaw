@@ -16,6 +16,7 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_US_M2,
 )
 from core.series_registry import (
     get_active_model_config,
@@ -68,7 +69,9 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_DOGECOIN_BTC), "Shitcoins"
         )
+        self.assertEqual(get_powerlaw_series_group_for_series(POWERLAW_SERIES_US_M2), "Fiat Money")
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
+        self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
 
     def test_filecoin_btc_config_uses_negative_powerlaw_bounds(self):
         filecoin_config = get_active_model_config(
@@ -138,6 +141,20 @@ class TestSeriesRegistry(unittest.TestCase):
             )
         )
 
+    def test_us_m2_config_uses_fred_billions_units(self):
+        m2_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_US_M2,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(m2_config.target_series_name, "U.S. M2 money supply")
+        self.assertEqual(m2_config.target_series_unit, "Billions USD")
+        self.assertEqual(m2_config.currency_suffix, "B")
+        self.assertFalse(m2_config.supports_currency_selector)
+        self.assertTrue(m2_config.lock_price_scale_to_log)
+
     def test_session_defaults_include_price_and_series_specific_models(self):
         defaults = dict(iter_session_model_defaults())
 
@@ -147,6 +164,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn("B_euro", defaults)
         self.assertIn("A_liquid_transactions", defaults)
         self.assertIn("B_liquid_transactions", defaults)
+        self.assertIn("A_us_m2", defaults)
+        self.assertIn("B_us_m2", defaults)
 
 
 if __name__ == "__main__":

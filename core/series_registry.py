@@ -32,6 +32,8 @@ from core.constants import (
     DEFAULT_MONERO_BTC_B,
     DEFAULT_REVENUE_A,
     DEFAULT_REVENUE_B,
+    DEFAULT_US_M2_A,
+    DEFAULT_US_M2_B,
     KEY_A_DOGECOIN_BTC,
     KEY_A_DIFFICULTY,
     KEY_A_EURO,
@@ -46,6 +48,7 @@ from core.constants import (
     KEY_A_MONERO_BTC,
     KEY_A_PRICE,
     KEY_A_REVENUE,
+    KEY_A_US_M2,
     KEY_B_DOGECOIN_BTC,
     KEY_B_DIFFICULTY,
     KEY_B_EURO,
@@ -60,6 +63,7 @@ from core.constants import (
     KEY_B_MONERO_BTC,
     KEY_B_PRICE,
     KEY_B_REVENUE,
+    KEY_B_US_M2,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -78,6 +82,7 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
+    POWERLAW_SERIES_US_M2,
 )
 
 
@@ -292,6 +297,22 @@ _BASE_SERIES_CONFIGS = {
         powerlaw_intercept_bounds=(-20.0, 45.0),
         powerlaw_slope_bounds=(-10.0, 5.0),
     ),
+    POWERLAW_SERIES_US_M2: SeriesModelConfig(
+        series_name=POWERLAW_SERIES_US_M2,
+        a_key=KEY_A_US_M2,
+        b_key=KEY_B_US_M2,
+        default_a=DEFAULT_US_M2_A,
+        default_b=DEFAULT_US_M2_B,
+        target_series_name="U.S. M2 money supply",
+        target_series_unit="Billions USD",
+        currency_prefix="$",
+        currency_suffix="B",
+        currency_decimals=0,
+        currency_unit="Billions USD",
+        lock_price_scale_to_log=True,
+        powerlaw_intercept_bounds=(0.0, 8.0),
+        powerlaw_slope_bounds=(-2.0, 2.0),
+    ),
 }
 
 _PRICE_CURRENCY_OVERRIDES = {
@@ -361,6 +382,12 @@ _POWERLAW_SERIES_GROUPS = [
             POWERLAW_SERIES_MONERO_BTC,
             POWERLAW_SERIES_LITECOIN_BTC,
             POWERLAW_SERIES_DOGECOIN_BTC,
+        ],
+    ),
+    (
+        "Fiat Money",
+        [
+            POWERLAW_SERIES_US_M2,
         ],
     ),
 ]

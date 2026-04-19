@@ -53,6 +53,13 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
   - Liquid BTC
   - Liquid transactions
 
+### U.S. M2 Money Supply
+- Source: FRED CSV endpoint for `M2SL`
+- URL: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL`
+- Unit: billions of U.S. dollars
+- Frequency: monthly
+- The app uses M2 because it is the broadest current official Federal Reserve money stock aggregate published through H.6/FRED. M3 was discontinued by the Federal Reserve in 2006, and broader M4/Divisia aggregates require third-party methodology.
+
 ## Cache Model
 - Disk cache dir: `output/data_cache/`
 - Cache metadata is stored as `.meta.json` alongside cached CSV files.

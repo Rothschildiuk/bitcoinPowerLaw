@@ -32,6 +32,7 @@ BITCOIN_VISUALS_DAILY_CSV_URL = "https://bitcoinvisuals.com/static/data/data_dai
 LIQUID_RESERVES_URL = "https://liquid.network/api/v1/liquid/reserves"
 LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month"
 LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
+FRED_M2SL_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL"
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
 SNAPSHOT_DATA_DIR = Path("data/snapshots")
 LOCAL_CACHE_SCHEMA_VERSION = 4
@@ -354,6 +355,15 @@ def _validate_prepared_dogecoin_btc_data(data_df):
     )
 
 
+def _validate_prepared_us_m2_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 500
+        and "Close" in data_df.columns
+        and data_df.index.min() <= pd.Timestamp("1959-01-01")
+    )
+
+
 def _append_btc_live_tail(base_df, *, stale_after_days):
     if base_df is None or base_df.empty:
         return base_df
@@ -572,9 +582,9 @@ def _safe_download_cryptocompare_histoday(fsym, tsym):
         if "time" not in history_df.columns or "close" not in history_df.columns:
             raise ValueError(f"CryptoCompare payload is missing columns for {fsym}/{tsym}.")
 
-        history_df["Date"] = pd.to_datetime(
-            history_df["time"], unit="s", utc=True
-        ).dt.tz_localize(None)
+        history_df["Date"] = pd.to_datetime(history_df["time"], unit="s", utc=True).dt.tz_localize(
+            None
+        )
         history_df["Close"] = pd.to_numeric(history_df["close"], errors="coerce")
         history_df = history_df.dropna(subset=["Date", "Close"]).sort_values("Date")
         history_df = history_df[history_df["Close"] > 0]
@@ -619,13 +629,8 @@ def _safe_download_coinlore_crypto_usd(coin_slug, cache_key, start_date, end_dat
 
     def fetch_coinlore_frame():
         start_ts = int(pd.Timestamp(start_date).timestamp())
-        end_ts = int(
-            pd.Timestamp(end_date or pd.Timestamp.utcnow().normalize()).timestamp()
-        )
-        url = (
-            f"https://www.coinlore.com/coin/{coin_slug}/historical-data"
-            f"/{start_ts}/{end_ts}"
-        )
+        end_ts = int(pd.Timestamp(end_date or pd.Timestamp.utcnow().normalize()).timestamp())
+        url = f"https://www.coinlore.com/coin/{coin_slug}/historical-data" f"/{start_ts}/{end_ts}"
         payload_text = _fetch_text_with_retry(url, retries=3, timeout=20)
         if not payload_text:
             raise ValueError(f"Unable to load CoinLore history for {coin_slug}.")
@@ -645,9 +650,10 @@ def _safe_download_coinlore_crypto_usd(coin_slug, cache_key, start_date, end_dat
         history_df = pd.DataFrame(rows, columns=["Date", "Open", "High", "Low", "Close"])
         history_df["Date"] = pd.to_datetime(history_df["Date"], errors="coerce")
         history_df["Close"] = (
-            history_df["Close"].astype(str).str.replace(",", "", regex=False).pipe(
-                pd.to_numeric, errors="coerce"
-            )
+            history_df["Close"]
+            .astype(str)
+            .str.replace(",", "", regex=False)
+            .pipe(pd.to_numeric, errors="coerce")
         )
         history_df = history_df.dropna(subset=["Date", "Close"]).sort_values("Date")
         history_df = history_df[history_df["Close"] > 0]
@@ -881,7 +887,9 @@ def build_currency_close_series(raw_df, selected_currency):
 
 
 @st.cache_data(ttl=3600)
-def load_prepared_price_data(price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=0, source="auto"):
+def load_prepared_price_data(
+    price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=0, source="auto"
+):
     def fetch_price_data():
         full_df = pd.read_csv(price_history_url)
         full_df["Date"] = pd.to_datetime(full_df["Date"])
@@ -959,6 +967,23 @@ def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL, source="a
 
 
 @st.cache_data(ttl=3600)
+def load_prepared_us_m2_data(m2_history_url=FRED_M2SL_CSV_URL, source="auto"):
+    return _load_snapshot_or_live(
+        "prepared_us_m2_data",
+        _validate_prepared_us_m2_data,
+        lambda: _load_source_adapter(
+            _build_normalized_csv_adapter(
+                "prepared_us_m2_data",
+                m2_history_url,
+                refresh_seconds=REFERENCE_REFRESH_SECONDS,
+                validator_fn=_validate_prepared_us_m2_data,
+            )
+        ),
+        source=source,
+    )
+
+
+@st.cache_data(ttl=3600)
 def load_bitcoin_visuals_daily_data(data_url=BITCOIN_VISUALS_DAILY_CSV_URL, source="auto"):
     def fetch_daily_data():
         data_df = _fetch_csv_with_retry(data_url)
@@ -981,7 +1006,9 @@ def load_bitcoin_visuals_daily_data(data_url=BITCOIN_VISUALS_DAILY_CSV_URL, sour
     )
 
 
-def _load_prepared_lightning_series(value_column_name, data_url=BITCOIN_VISUALS_DAILY_CSV_URL, *, source="auto"):
+def _load_prepared_lightning_series(
+    value_column_name, data_url=BITCOIN_VISUALS_DAILY_CSV_URL, *, source="auto"
+):
     daily_df = load_bitcoin_visuals_daily_data(data_url, source=source)
     if "day" not in daily_df.columns or value_column_name not in daily_df.columns:
         raise ValueError(f"Missing required columns for Lightning series: day, {value_column_name}")
@@ -992,7 +1019,9 @@ def _load_prepared_lightning_series(value_column_name, data_url=BITCOIN_VISUALS_
 
 
 @st.cache_data(ttl=3600)
-def load_prepared_lightning_nodes_data(lightning_data_url=BITCOIN_VISUALS_DAILY_CSV_URL, source="auto"):
+def load_prepared_lightning_nodes_data(
+    lightning_data_url=BITCOIN_VISUALS_DAILY_CSV_URL, source="auto"
+):
     return _load_snapshot_or_live(
         "prepared_lightning_nodes_data",
         _validate_prepared_chart_data,
@@ -1010,7 +1039,9 @@ def load_prepared_lightning_capacity_data(
     return _load_snapshot_or_live(
         "prepared_lightning_capacity_data",
         _validate_prepared_chart_data,
-        lambda: _load_prepared_lightning_series("capacity_total", lightning_data_url, source=source),
+        lambda: _load_prepared_lightning_series(
+            "capacity_total", lightning_data_url, source=source
+        ),
         source=source,
     )
 
@@ -1128,7 +1159,11 @@ def load_prepared_dogecoin_btc_data(start_date="2014-01-01", source="auto"):
             return _fetch_prepared_crypto_btc_data("DOGE", start_date, "Dogecoin/BTC")
         except Exception:
             cached_df = _load_cached_dataframe_snapshot(
-                ["prepared_dogecoin_btc_data_v3", "prepared_dogecoin_btc_data_v2", "prepared_dogecoin_btc_data"],
+                [
+                    "prepared_dogecoin_btc_data_v3",
+                    "prepared_dogecoin_btc_data_v2",
+                    "prepared_dogecoin_btc_data",
+                ],
                 validator_fn=_validate_prepared_chart_data,
             )
             if cached_df is not None:
@@ -1228,7 +1263,9 @@ def load_prepared_liquid_btc_data(
 
 
 @st.cache_data(ttl=3600)
-def load_prepared_liquid_transactions_data(liquid_charts_data_url=LIQUID_CHARTS_DATA_URL, source="auto"):
+def load_prepared_liquid_transactions_data(
+    liquid_charts_data_url=LIQUID_CHARTS_DATA_URL, source="auto"
+):
     def fetch_liquid_transactions_data():
         payload = _fetch_json_with_retry(liquid_charts_data_url)
         if not isinstance(payload, dict) or "data" not in payload:
