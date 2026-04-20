@@ -42,6 +42,7 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
 - Derived prepared series:
   - Lightning nodes
   - Lightning capacity
+- Model origin: first checked-in Lightning snapshot row (`2018-01-19`), consistent with early 2018 mainnet usage and before the first `lnd` mainnet beta release on `2018-03-15`.
 
 ### Liquid
 - Official reserves:
@@ -52,6 +53,8 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
 - Derived prepared series:
   - Liquid BTC
   - Liquid transactions
+- Network reference: Blockstream says the Liquid blockchain went live on `2018-09-27`.
+- Model origins follow the first checked-in rows instead of the later launch reference when the source provides earlier aggregate rows: Liquid BTC starts at `2018-09-01`; Liquid transactions starts at `2018-09-24`.
 
 ### U.S. M2 Money Supply
 - Source: FRED CSV endpoint for `M2SL`

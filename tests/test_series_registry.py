@@ -4,6 +4,8 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
+    LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
+    LIQUID_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -13,6 +15,9 @@ from core.constants import (
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_LITECOIN_BTC,
+    POWERLAW_SERIES_LIGHTNING_CAPACITY,
+    POWERLAW_SERIES_LIGHTNING_NODES,
+    POWERLAW_SERIES_LIQUID_BTC,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS,
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
@@ -36,6 +41,14 @@ from core.series_registry import (
 
 
 class TestSeriesRegistry(unittest.TestCase):
+    def assert_default_params_are_within_powerlaw_bounds(self, config):
+        self.assertIsNotNone(config.powerlaw_intercept_bounds)
+        self.assertIsNotNone(config.powerlaw_slope_bounds)
+        self.assertLessEqual(config.powerlaw_intercept_bounds[0], config.default_a)
+        self.assertGreaterEqual(config.powerlaw_intercept_bounds[1], config.default_a)
+        self.assertLessEqual(config.powerlaw_slope_bounds[0], config.default_b)
+        self.assertGreaterEqual(config.powerlaw_slope_bounds[1], config.default_b)
+
     def test_options_follow_registry_capabilities(self):
         self.assertIn(POWERLAW_SERIES_REVENUE, get_powerlaw_series_options())
         self.assertIn(POWERLAW_SERIES_LIQUID_TRANSACTIONS, get_powerlaw_series_options())
@@ -161,16 +174,43 @@ class TestSeriesRegistry(unittest.TestCase):
             liquid_config.model_origin_abs_day,
             LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
         )
-        self.assertLessEqual(
-            liquid_config.powerlaw_intercept_bounds[0],
-            liquid_config.default_a,
+        self.assert_default_params_are_within_powerlaw_bounds(liquid_config)
+
+    def test_lightning_and_liquid_btc_use_own_model_origins(self):
+        lightning_nodes_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_LIGHTNING_NODES,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
         )
-        self.assertGreaterEqual(
-            liquid_config.powerlaw_intercept_bounds[1],
-            liquid_config.default_a,
+        lightning_btc_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_LIGHTNING_CAPACITY,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
         )
-        self.assertLessEqual(liquid_config.powerlaw_slope_bounds[0], liquid_config.default_b)
-        self.assertGreaterEqual(liquid_config.powerlaw_slope_bounds[1], liquid_config.default_b)
+        liquid_btc_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_LIQUID_BTC,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(
+            lightning_nodes_config.model_origin_abs_day,
+            LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
+        )
+        self.assertEqual(
+            lightning_btc_config.model_origin_abs_day,
+            LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
+        )
+        self.assertEqual(
+            liquid_btc_config.model_origin_abs_day,
+            LIQUID_BTC_MODEL_ORIGIN_ABS_DAYS,
+        )
+        self.assert_default_params_are_within_powerlaw_bounds(lightning_nodes_config)
+        self.assert_default_params_are_within_powerlaw_bounds(lightning_btc_config)
+        self.assert_default_params_are_within_powerlaw_bounds(liquid_btc_config)
 
     def test_us_m2_config_uses_fred_billions_units(self):
         m2_config = get_active_model_config(
@@ -186,10 +226,7 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertFalse(m2_config.supports_currency_selector)
         self.assertTrue(m2_config.lock_price_scale_to_log)
         self.assertEqual(m2_config.model_origin_abs_day, US_M2_MODEL_ORIGIN_ABS_DAYS)
-        self.assertLessEqual(m2_config.powerlaw_intercept_bounds[0], m2_config.default_a)
-        self.assertGreaterEqual(m2_config.powerlaw_intercept_bounds[1], m2_config.default_a)
-        self.assertLessEqual(m2_config.powerlaw_slope_bounds[0], m2_config.default_b)
-        self.assertGreaterEqual(m2_config.powerlaw_slope_bounds[1], m2_config.default_b)
+        self.assert_default_params_are_within_powerlaw_bounds(m2_config)
 
     def test_russian_m2_config_uses_cbr_trillion_rub_units(self):
         m2_config = get_active_model_config(
@@ -206,10 +243,7 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertFalse(m2_config.supports_currency_selector)
         self.assertTrue(m2_config.lock_price_scale_to_log)
         self.assertEqual(m2_config.model_origin_abs_day, RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS)
-        self.assertLessEqual(m2_config.powerlaw_intercept_bounds[0], m2_config.default_a)
-        self.assertGreaterEqual(m2_config.powerlaw_intercept_bounds[1], m2_config.default_a)
-        self.assertLessEqual(m2_config.powerlaw_slope_bounds[0], m2_config.default_b)
-        self.assertGreaterEqual(m2_config.powerlaw_slope_bounds[1], m2_config.default_b)
+        self.assert_default_params_are_within_powerlaw_bounds(m2_config)
 
     def test_session_defaults_include_price_and_series_specific_models(self):
         defaults = dict(iter_session_model_defaults())

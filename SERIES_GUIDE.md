@@ -53,6 +53,8 @@ Each series config defines:
 
 ### Lightning BTC and Liquid BTC
 - Displayed with `BTC` suffix and 3 decimals
+- Lightning BTC and Lightning nodes PowerLaw time is counted from the first Lightning snapshot row
+- Liquid BTC PowerLaw time is counted from the first Liquid BTC snapshot row
 
 ### Liquid Transactions / Lightning Nodes
 - Raw unit display, no currency conversion
