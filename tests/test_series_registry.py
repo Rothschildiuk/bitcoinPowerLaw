@@ -4,7 +4,10 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
+    DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
+    FILECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
+    LITECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
     MODE_LOGPERIODIC,
@@ -24,6 +27,7 @@ from core.constants import (
     POWERLAW_SERIES_REVENUE,
     POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
+    MONERO_BTC_MODEL_ORIGIN_ABS_DAYS,
     RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS,
     US_M2_MODEL_ORIGIN_ABS_DAYS,
 )
@@ -94,7 +98,7 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
         self.assertIn(POWERLAW_SERIES_RUSSIAN_M2, group_map["Fiat Money"])
 
-    def test_filecoin_btc_config_uses_negative_powerlaw_bounds(self):
+    def test_filecoin_btc_config_uses_btc_units(self):
         filecoin_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_FILECOIN_BTC,
@@ -103,9 +107,27 @@ class TestSeriesRegistry(unittest.TestCase):
         )
 
         self.assertEqual(filecoin_config.currency_unit, "BTC")
-        self.assertEqual(filecoin_config.powerlaw_slope_bounds, (-20.0, -1.0))
-        self.assertEqual(filecoin_config.powerlaw_intercept_bounds, (20.0, 45.0))
         self.assertFalse(filecoin_config.supports_currency_selector)
+
+    def test_shitcoins_use_own_model_origins(self):
+        expected_origin_by_series = {
+            POWERLAW_SERIES_FILECOIN_BTC: FILECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
+            POWERLAW_SERIES_MONERO_BTC: MONERO_BTC_MODEL_ORIGIN_ABS_DAYS,
+            POWERLAW_SERIES_LITECOIN_BTC: LITECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
+            POWERLAW_SERIES_DOGECOIN_BTC: DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
+        }
+
+        for series_name, expected_origin in expected_origin_by_series.items():
+            with self.subTest(series_name=series_name):
+                series_config = get_active_model_config(
+                    MODE_POWERLAW,
+                    series_name,
+                    POWERLAW_SERIES_PRICE,
+                    CURRENCY_DOLLAR,
+                )
+
+                self.assertEqual(series_config.model_origin_abs_day, expected_origin)
+                self.assert_default_params_are_within_powerlaw_bounds(series_config)
 
     def test_price_series_config_tracks_selected_currency(self):
         euro_config = get_active_model_config(

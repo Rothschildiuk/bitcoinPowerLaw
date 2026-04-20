@@ -32,6 +32,11 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
   - Monero / BTC
   - Litecoin / BTC
   - Dogecoin / BTC
+- Model origins use each chain's genesis or first usable launch block reference:
+  - Filecoin: official mainnet genesis reset timestamp `2020-08-24T22:00:00Z`
+  - Monero: genesis block timestamp is hardcoded as `0`, so the model uses the first mined mainnet block date `2014-04-18`
+  - Litecoin: block 0 timestamp `2011-10-07`
+  - Dogecoin: block 0 timestamp `2013-12-06`
 
 ### Miner Revenue / Difficulty / Hashrate
 - Source: Blockchain.com CSV chart endpoints

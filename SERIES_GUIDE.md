@@ -56,6 +56,11 @@ Each series config defines:
 - Lightning BTC and Lightning nodes PowerLaw time is counted from the first Lightning snapshot row
 - Liquid BTC PowerLaw time is counted from the first Liquid BTC snapshot row
 
+### Shitcoins
+- BTC-pair PowerLaw time is counted from each chain's genesis or first usable launch block reference, not from Bitcoin genesis
+- Filecoin uses the official mainnet genesis reset timestamp
+- Monero uses the first mined mainnet block date because its hardcoded genesis block timestamp is `0`
+
 ### Liquid Transactions / Lightning Nodes
 - Raw unit display, no currency conversion
 - Liquid transactions PowerLaw time is counted from the first Liquid transaction row, not from Bitcoin genesis
