@@ -4,7 +4,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
-    RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS,
+    LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
@@ -19,6 +19,7 @@ from core.constants import (
     POWERLAW_SERIES_REVENUE,
     POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
+    RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS,
     US_M2_MODEL_ORIGIN_ABS_DAYS,
 )
 from core.series_registry import (
@@ -147,6 +148,29 @@ class TestSeriesRegistry(unittest.TestCase):
                 POWERLAW_SERIES_PRICE,
             )
         )
+
+    def test_liquid_transactions_uses_own_model_origin(self):
+        liquid_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_LIQUID_TRANSACTIONS,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(
+            liquid_config.model_origin_abs_day,
+            LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
+        )
+        self.assertLessEqual(
+            liquid_config.powerlaw_intercept_bounds[0],
+            liquid_config.default_a,
+        )
+        self.assertGreaterEqual(
+            liquid_config.powerlaw_intercept_bounds[1],
+            liquid_config.default_a,
+        )
+        self.assertLessEqual(liquid_config.powerlaw_slope_bounds[0], liquid_config.default_b)
+        self.assertGreaterEqual(liquid_config.powerlaw_slope_bounds[1], liquid_config.default_b)
 
     def test_us_m2_config_uses_fred_billions_units(self):
         m2_config = get_active_model_config(

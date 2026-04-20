@@ -74,6 +74,7 @@ from core.constants import (
     OSC_DEFAULTS,
     OSC_DEFAULTS_DIFFICULTY,
     OSC_DEFAULTS_HASHRATE,
+    LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
@@ -244,6 +245,9 @@ _BASE_SERIES_CONFIGS = {
         currency_decimals=0,
         currency_unit="RAW",
         show_halving_lines=True,
+        model_origin_abs_day=LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
+        powerlaw_intercept_bounds=(-5.0, 10.0),
+        powerlaw_slope_bounds=(0.0, 5.0),
     ),
     POWERLAW_SERIES_FILECOIN_BTC: SeriesModelConfig(
         series_name=POWERLAW_SERIES_FILECOIN_BTC,

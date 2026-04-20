@@ -56,6 +56,7 @@ Each series config defines:
 
 ### Liquid Transactions / Lightning Nodes
 - Raw unit display, no currency conversion
+- Liquid transactions PowerLaw time is counted from the first Liquid transaction row, not from Bitcoin genesis
 
 ### U.S. M2
 - Uses FRED `M2SL`
