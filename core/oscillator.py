@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 import streamlit as st
 
@@ -16,6 +18,26 @@ DEFAULT_OSCILLATOR_PARAMETER_BOUNDS = {
     "amp_factor_bottom": (0.1, 10.0),
     "impulse_damping": (0.0, 2.0),
 }
+
+
+@dataclass(frozen=True)
+class OscillatorSettings:
+    t1_age: float
+    lambda_val: float
+    amp_factor_top: float
+    amp_factor_bottom: float
+    impulse_damping: float
+
+
+@dataclass(frozen=True)
+class OscillatorComputationResult:
+    settings: OscillatorSettings
+    amplitude: float
+    angular_frequency: float
+    phase_shift: float
+    combined_r2: float
+    reference_log_day: float
+    model_values: np.ndarray
 
 
 def _resolve_oscillator_bounds(bounds_override=None):
@@ -90,6 +112,62 @@ def compute_oscillator_fit_r2(
 
     _, _, _, predicted_residuals = fit_result
     return calculate_r2_score(residual_series, predicted_residuals) * 100.0
+
+
+def compute_oscillator_overlay(
+    log_days,
+    residual_series,
+    model_log_values,
+    actual_log_values,
+    fit_mask,
+    settings,
+    current_r2,
+):
+    osc_fit_mask = np.asarray(fit_mask, dtype=bool).copy()
+    osc_model_vals = np.zeros_like(np.asarray(residual_series, dtype=float), dtype=float)
+    osc_amp = 0.0
+    osc_omega = 0.0
+    osc_phi = 0.0
+    r2_combined = float(current_r2)
+    reference_log_day = float(np.min(log_days))
+
+    osc_fit_log_d = np.asarray(log_days, dtype=float)[osc_fit_mask]
+    osc_fit_residuals = np.asarray(residual_series, dtype=float)[osc_fit_mask]
+    if osc_fit_log_d.size > 0:
+        reference_log_day = float(np.min(osc_fit_log_d))
+
+    fit_result = None
+    if osc_fit_log_d.size > 1:
+        fit_result = fit_oscillator_component(
+            osc_fit_log_d,
+            osc_fit_residuals,
+            settings.t1_age,
+            settings.lambda_val,
+            settings.amp_factor_top,
+            settings.amp_factor_bottom,
+            settings.impulse_damping,
+        )
+
+    if fit_result is not None:
+        osc_amp, osc_omega, osc_phi, osc_model_fit = fit_result
+        osc_model_vals[osc_fit_mask] = osc_model_fit
+
+    total_model_log = np.asarray(model_log_values, dtype=float) + osc_model_vals
+    if np.count_nonzero(osc_fit_mask) > 1:
+        r2_combined = calculate_r2_score(
+            np.asarray(actual_log_values, dtype=float)[osc_fit_mask],
+            total_model_log[osc_fit_mask],
+        ) * 100.0
+
+    return OscillatorComputationResult(
+        settings=settings,
+        amplitude=float(osc_amp),
+        angular_frequency=float(osc_omega),
+        phase_shift=float(osc_phi),
+        combined_r2=float(r2_combined),
+        reference_log_day=float(reference_log_day),
+        model_values=osc_model_vals,
+    )
 
 
 def optimize_oscillator_parameters(

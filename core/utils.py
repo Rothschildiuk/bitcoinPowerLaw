@@ -1,8 +1,62 @@
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 import streamlit as st
 
 from core.constants import POWERLAW_EXPONENT_MAX, POWERLAW_EXPONENT_MIN
+
+
+@dataclass(frozen=True)
+class PortfolioSettings:
+    btc_amount: float
+    monthly_buy_amount: float
+    forecast_unit: str
+    forecast_horizon: int
+
+
+@dataclass(frozen=True)
+class PortfolioProjectionResult:
+    portfolio_df: pd.DataFrame
+    table_title: str
+    forecast_unit: str
+    change_usd_col: str
+    change_pct_col: str
+
+
+@dataclass(frozen=True)
+class PortfolioViewModel:
+    portfolio_display_df: pd.DataFrame
+    table_df: pd.DataFrame
+    table_title: str
+    dca_enabled: bool
+    baseline_value: float
+    last_value: float
+    last_dca_value: float
+    last_dca_invested_capital: float
+    total_growth_pct: float
+    period_change_usd_label: str
+    period_change_pct_label: str
+
+
+@dataclass(frozen=True)
+class TrendComputationResult:
+    intercept_a: float
+    slope_b: float
+    trend_log_prices: np.ndarray
+    residual_series: np.ndarray
+
+
+def resolve_projection_anchor_day(df_index, today=None):
+    latest_data_day = pd.Timestamp(df_index.max()).normalize()
+    if today is None:
+        today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    else:
+        today = pd.Timestamp(today)
+        if today.tzinfo is not None:
+            today = today.tz_localize(None)
+        today = today.normalize()
+    return max(latest_data_day, today)
 
 
 def calculate_r2_score(actual_values, predicted_values):
@@ -26,6 +80,31 @@ def get_stable_trend_fit(log_days, log_prices, intercept_a, slope_b, residual_th
         residual_series = log_prices - trend_log_prices
 
     return intercept_a, slope_b, trend_log_prices, residual_series
+
+
+def resolve_trend_parameters(log_days, log_prices, *, intercept_a, slope_b, active_mode):
+    _, clipped_exponents, _ = evaluate_powerlaw_values(
+        log_days,
+        intercept_a,
+        slope_b,
+    )
+    trend_log_prices = clipped_exponents
+    residual_series = log_prices - trend_log_prices
+
+    if active_mode == "LogPeriodic":
+        intercept_a, slope_b, trend_log_prices, residual_series = get_stable_trend_fit(
+            log_days,
+            log_prices,
+            intercept_a,
+            slope_b,
+        )
+
+    return TrendComputationResult(
+        intercept_a=float(intercept_a),
+        slope_b=float(slope_b),
+        trend_log_prices=np.asarray(trend_log_prices, dtype=float),
+        residual_series=np.asarray(residual_series, dtype=float),
+    )
 
 
 def evaluate_powerlaw_values(
@@ -145,6 +224,178 @@ def calculate_monthly_buy_portfolio_values(
     total_btc = total_btc + additional_btc
 
     return total_btc, fair_price_arr * total_btc, invested_capital
+
+
+def build_portfolio_projection(
+    df_index,
+    current_gen_date,
+    intercept_a,
+    slope_b,
+    settings,
+    anchor_day=None,
+):
+    average_month_days = 30.44
+    anchor_day = resolve_projection_anchor_day(df_index, today=anchor_day)
+
+    if settings.forecast_unit == "Year":
+        latest_year = int(anchor_day.year)
+        start_period = pd.Timestamp(f"{latest_year - 1}-01-01")
+        date_index = pd.date_range(
+            start=start_period,
+            periods=settings.forecast_horizon + 1,
+            freq="YS",
+        )
+        change_usd_col, change_pct_col = "YoY_USD", "YoY_pct"
+        table_title = "Yearly growth table"
+    elif settings.forecast_unit == "Day":
+        latest_day = anchor_day
+        start_period = latest_day - pd.Timedelta(days=1)
+        date_index = pd.date_range(
+            start=start_period,
+            periods=settings.forecast_horizon + 1,
+            freq="D",
+        )
+        change_usd_col, change_pct_col = "DoD_USD", "DoD_pct"
+        table_title = "Daily growth table"
+    else:
+        latest_month_start = anchor_day.to_period("M").to_timestamp()
+        start_period = latest_month_start - pd.offsets.MonthBegin(1)
+        date_index = pd.date_range(
+            start=start_period,
+            periods=settings.forecast_horizon + 1,
+            freq="MS",
+        )
+        change_usd_col, change_pct_col = "MoM_USD", "MoM_pct"
+        table_title = "Monthly growth table"
+
+    period_days = np.maximum((date_index - current_gen_date).days.astype(float), 1.0)
+    period_fair_price, _, _ = evaluate_powerlaw_values(
+        np.log10(period_days),
+        intercept_a,
+        slope_b,
+    )
+    period_portfolio_value = period_fair_price * settings.btc_amount
+    dca_btc_holdings, dca_portfolio_value, dca_invested_capital = (
+        calculate_monthly_buy_portfolio_values(
+            date_index=date_index,
+            current_gen_date=current_gen_date,
+            fair_prices=period_fair_price,
+            intercept_a=intercept_a,
+            slope_b=slope_b,
+            initial_btc_amount=settings.btc_amount,
+            monthly_buy_amount=settings.monthly_buy_amount,
+            purchase_anchor_day=anchor_day,
+        )
+    )
+
+    portfolio_df = pd.DataFrame(
+        {
+            "Date": date_index,
+            "FairPriceUSD": period_fair_price,
+            "PortfolioUSD": period_portfolio_value,
+            "DcaBTC": dca_btc_holdings,
+            "DcaPortfolioUSD": dca_portfolio_value,
+            "DcaInvestedCapitalUSD": dca_invested_capital,
+        }
+    )
+    portfolio_df[change_usd_col] = portfolio_df["PortfolioUSD"].diff()
+    if settings.forecast_unit == "Month":
+        elapsed_days = portfolio_df["Date"].diff().dt.days.to_numpy(dtype=float)
+        previous_values = portfolio_df["PortfolioUSD"].shift(1).to_numpy(dtype=float)
+        current_values = portfolio_df["PortfolioUSD"].to_numpy(dtype=float)
+        portfolio_df[change_pct_col] = normalize_periodic_growth_rate(
+            current_values,
+            previous_values,
+            elapsed_days,
+            average_month_days,
+        )
+    else:
+        portfolio_df[change_pct_col] = portfolio_df["PortfolioUSD"].pct_change() * 100
+
+    return PortfolioProjectionResult(
+        portfolio_df=portfolio_df,
+        table_title=table_title,
+        forecast_unit=settings.forecast_unit,
+        change_usd_col=change_usd_col,
+        change_pct_col=change_pct_col,
+    )
+
+
+def get_growth_change_labels(forecast_unit, currency_unit):
+    prefix = "YoY" if forecast_unit == "Year" else ("DoD" if forecast_unit == "Day" else "MoM")
+    return f"{prefix} Change ({currency_unit})", f"{prefix} Change (%)"
+
+
+def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_unit):
+    portfolio_display_df = projection_result.portfolio_df.iloc[1:].copy()
+    portfolio_display_df["FairPriceDisplay"] = portfolio_display_df["FairPriceUSD"]
+    portfolio_display_df["PortfolioDisplay"] = portfolio_display_df["PortfolioUSD"]
+    portfolio_display_df["DcaPortfolioDisplay"] = portfolio_display_df["DcaPortfolioUSD"]
+    portfolio_display_df["DcaBTCDisplay"] = portfolio_display_df["DcaBTC"]
+    portfolio_display_df["DcaInvestedCapitalDisplay"] = portfolio_display_df[
+        "DcaInvestedCapitalUSD"
+    ]
+    portfolio_display_df["ChangeDisplay"] = portfolio_display_df[projection_result.change_usd_col]
+    dca_enabled = monthly_buy_amount > 0.0
+
+    baseline_value = projection_result.portfolio_df["PortfolioUSD"].iloc[0]
+    last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
+    last_dca_value = portfolio_display_df["DcaPortfolioDisplay"].iloc[-1]
+    last_dca_invested_capital = portfolio_display_df["DcaInvestedCapitalDisplay"].iloc[-1]
+    total_growth_pct = (
+        ((last_value - baseline_value) / baseline_value) * 100 if baseline_value > 0 else 0.0
+    )
+
+    period_change_usd_label, period_change_pct_label = get_growth_change_labels(
+        projection_result.forecast_unit,
+        currency_unit,
+    )
+    table_df = portfolio_display_df.copy()
+    if projection_result.forecast_unit == "Year":
+        table_df["Date"] = table_df["Date"].dt.strftime("%Y")
+    elif projection_result.forecast_unit == "Day":
+        table_df["Date"] = table_df["Date"].dt.strftime("%Y-%m-%d")
+    else:
+        table_df["Date"] = table_df["Date"].dt.strftime("%Y-%m")
+    table_df = table_df.rename(
+        columns={
+            "FairPriceDisplay": f"Fair Price ({currency_unit})",
+            "PortfolioDisplay": f"Portfolio ({currency_unit})",
+            "DcaPortfolioDisplay": f"Portfolio + monthly buys ({currency_unit})",
+            "DcaInvestedCapitalDisplay": f"Invested cash ({currency_unit})",
+            "DcaBTCDisplay": "BTC after monthly buys",
+            "ChangeDisplay": period_change_usd_label,
+            projection_result.change_pct_col: period_change_pct_label,
+        }
+    )
+    display_columns = [
+        "Date",
+        f"Fair Price ({currency_unit})",
+        f"Portfolio ({currency_unit})",
+    ]
+    if dca_enabled:
+        display_columns.extend(
+            [
+                f"Portfolio + monthly buys ({currency_unit})",
+                f"Invested cash ({currency_unit})",
+                "BTC after monthly buys",
+            ]
+        )
+    display_columns.extend([period_change_usd_label, period_change_pct_label])
+
+    return PortfolioViewModel(
+        portfolio_display_df=portfolio_display_df,
+        table_df=table_df[display_columns],
+        table_title=projection_result.table_title,
+        dca_enabled=dca_enabled,
+        baseline_value=baseline_value,
+        last_value=last_value,
+        last_dca_value=last_dca_value,
+        last_dca_invested_capital=last_dca_invested_capital,
+        total_growth_pct=total_growth_pct,
+        period_change_usd_label=period_change_usd_label,
+        period_change_pct_label=period_change_pct_label,
+    )
 
 
 def inline_radio_control(

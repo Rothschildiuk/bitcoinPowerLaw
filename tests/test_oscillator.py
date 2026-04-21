@@ -52,6 +52,111 @@ class TestOscillator(unittest.TestCase):
         self.assertLess(decay[1], decay[0])
         self.assertLess(decay[2], decay[1])
 
+    def test_compute_oscillator_overlay_returns_full_length_series_from_masked_fit(self):
+        log_days = np.linspace(0.5, 3.0, 250)
+        settings = oscillator.OscillatorSettings(
+            t1_age=1.0,
+            lambda_val=2.01,
+            amp_factor_top=1.0,
+            amp_factor_bottom=1.0,
+            impulse_damping=0.0,
+        )
+        fit_result = oscillator.fit_oscillator_component(
+            log_days,
+            np.cos(log_days),
+            settings.t1_age,
+            settings.lambda_val,
+            settings.amp_factor_top,
+            settings.amp_factor_bottom,
+            settings.impulse_damping,
+        )
+        self.assertIsNotNone(fit_result)
+        _, _, _, predicted_residuals = fit_result
+        mask = np.zeros(log_days.shape, dtype=bool)
+        mask[-150:] = True
+        full_residuals = np.zeros_like(log_days)
+        full_residuals[mask] = predicted_residuals[mask]
+        model_log_values = np.linspace(10.0, 20.0, log_days.size)
+        actual_log_values = model_log_values + full_residuals
+
+        result = oscillator.compute_oscillator_overlay(
+            log_days,
+            full_residuals,
+            model_log_values,
+            actual_log_values,
+            mask,
+            settings,
+            current_r2=12.5,
+        )
+
+        self.assertEqual(result.model_values.shape, log_days.shape)
+        self.assertTrue(np.allclose(result.model_values[~mask], 0.0))
+        self.assertGreater(np.max(np.abs(result.model_values[mask])), 0.0)
+        self.assertTrue(np.isclose(result.reference_log_day, log_days[mask][0]))
+        self.assertGreater(result.combined_r2, 99.0)
+
+    def test_compute_oscillator_overlay_keeps_baseline_r2_when_fit_is_not_possible(self):
+        log_days = np.array([1.0, 2.0, 3.0])
+        residuals = np.array([0.1, 0.2, 0.3])
+        model_log_values = np.array([10.0, 10.1, 10.2])
+        actual_log_values = model_log_values + residuals
+        settings = oscillator.OscillatorSettings(
+            t1_age=1.0,
+            lambda_val=1.0,
+            amp_factor_top=1.0,
+            amp_factor_bottom=1.0,
+            impulse_damping=0.0,
+        )
+
+        result = oscillator.compute_oscillator_overlay(
+            log_days,
+            residuals,
+            model_log_values,
+            actual_log_values,
+            np.array([False, True, False]),
+            settings,
+            current_r2=42.0,
+        )
+
+        self.assertTrue(np.allclose(result.model_values, 0.0))
+        self.assertEqual(result.combined_r2, 42.0)
+        self.assertEqual(result.amplitude, 0.0)
+        self.assertEqual(result.angular_frequency, 0.0)
+        self.assertEqual(result.phase_shift, 0.0)
+
+    def test_compute_oscillator_overlay_recomputes_masked_trend_r2_when_fit_fails_with_multiple_points(self):
+        log_days = np.array([1.0, 1.5, 2.0, 2.5], dtype=float)
+        residuals = np.array([0.0, 0.1, -0.2, 0.0], dtype=float)
+        model_log_values = np.array([10.0, 10.5, 11.0, 11.5], dtype=float)
+        actual_log_values = model_log_values + residuals
+        fit_mask = np.array([False, True, True, False])
+        settings = oscillator.OscillatorSettings(
+            t1_age=1.0,
+            lambda_val=1.0,
+            amp_factor_top=1.0,
+            amp_factor_bottom=1.0,
+            impulse_damping=0.0,
+        )
+
+        result = oscillator.compute_oscillator_overlay(
+            log_days,
+            residuals,
+            model_log_values,
+            actual_log_values,
+            fit_mask,
+            settings,
+            current_r2=42.0,
+        )
+
+        expected_r2 = oscillator.calculate_r2_score(
+            actual_log_values[fit_mask],
+            model_log_values[fit_mask],
+        ) * 100.0
+
+        self.assertTrue(np.allclose(result.model_values, 0.0))
+        self.assertTrue(np.isclose(result.combined_r2, expected_r2))
+        self.assertTrue(np.isclose(result.reference_log_day, log_days[fit_mask][0]))
+
     def test_optimize_oscillator_parameters_returns_values_within_bounds(self):
         rng = np.random.default_rng(42)
         log_days = np.linspace(0.5, 3.0, 250)
