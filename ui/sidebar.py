@@ -10,6 +10,8 @@ from core.constants import (
     KEY_A,
     KEY_B,
     KEY_BAND_METHOD,
+    KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
+    KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
@@ -30,6 +32,7 @@ from core.constants import (
     MODE_POWERLAW,
     POWERLAW_INTERCEPT_MAX,
     POWERLAW_INTERCEPT_MIN,
+    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SLOPE_MAX,
     POWERLAW_SLOPE_MIN,
@@ -150,6 +153,33 @@ def _render_powerlaw_series_selector(powerlaw_series):
         st.rerun()
 
     return selected_series
+
+
+def _render_bitcoin_network_simulation_controls():
+    def create_new_simulation():
+        st.session_state[KEY_BITCOIN_NETWORK_SIMULATION_SEED] = (
+            int(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1)) + 1
+        )
+        st.session_state[KEY_CHART_REVISION] += 1
+
+    st.markdown("**Bitcoin network simulation**")
+    st.button(
+        "Create new simulation",
+        use_container_width=True,
+        on_click=create_new_simulation,
+    )
+    st.markdown("**Resolution (days)**")
+    st.slider(
+        "Resolution (days)",
+        min_value=0.00001,
+        max_value=0.01,
+        value=float(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION, 0.00001)),
+        step=0.00001,
+        format="%.5f",
+        key=KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
+        label_visibility="collapsed",
+    )
+    st.caption(f"Seed: {int(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1))}")
 
 
 def render_sidebar_panel(
@@ -350,7 +380,12 @@ def render_sidebar_panel(
                             forecast_horizon_min, forecast_horizon_max
                         )
                         if mode == MODE_PORTFOLIO
-                        else None
+                        else (
+                            _render_bitcoin_network_simulation_controls()
+                            if active_model.series_name
+                            == POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION
+                            else None
+                        )
                     )
                 ),
                 a_key=a_key,

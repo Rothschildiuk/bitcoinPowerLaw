@@ -21,6 +21,8 @@ from core.constants import (
     KEY_B,
     KEY_B_PRICE,
     KEY_BAND_METHOD,
+    KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
+    KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
@@ -40,6 +42,7 @@ from core.constants import (
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
+    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_LITECOIN_BTC,
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
@@ -58,6 +61,7 @@ from core.series_registry import (
     iter_session_model_defaults,
     series_supports_currency_selector,
 )
+from core.simulation import build_bitcoin_network_simulation
 from core.utils import (
     PortfolioSettings,
     build_portfolio_projection,
@@ -99,6 +103,8 @@ def initialize_app_session_state():
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
         KEY_BAND_METHOD: BAND_METHOD_QUANTILE,
+        KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
+        KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -113,6 +119,7 @@ def initialize_app_session_state():
         st.session_state[KEY_A] = st.session_state[KEY_A_PRICE]
     if KEY_B not in st.session_state:
         st.session_state[KEY_B] = st.session_state[KEY_B_PRICE]
+
 
 def calculate_percentile_offsets(display_df, genesis_offset_days):
     """
@@ -485,6 +492,11 @@ raw_us_m2_df = raw_us_m2_df[raw_us_m2_df["Close"] > 0].copy()
 raw_us_m2_df["LogClose"] = np.log10(raw_us_m2_df["Close"])
 raw_russian_m2_df = raw_russian_m2_df[raw_russian_m2_df["Close"] > 0].copy()
 raw_russian_m2_df["LogClose"] = np.log10(raw_russian_m2_df["Close"])
+raw_bitcoin_network_simulation_df = build_bitcoin_network_simulation(
+    raw_df_usd,
+    seed=int(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1)),
+    resolution_days=float(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION, 0.00001)),
+)
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
@@ -499,6 +511,7 @@ raw_series_frames = {
     POWERLAW_SERIES_REVENUE: raw_revenue_df,
     POWERLAW_SERIES_DIFFICULTY: raw_difficulty_df,
     POWERLAW_SERIES_HASHRATE: raw_hashrate_df,
+    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION: raw_bitcoin_network_simulation_df,
     POWERLAW_SERIES_LIGHTNING_NODES: raw_lightning_nodes_df,
     POWERLAW_SERIES_LIGHTNING_CAPACITY: raw_lightning_capacity_df,
     POWERLAW_SERIES_LIQUID_BTC: raw_liquid_btc_df,
@@ -526,6 +539,10 @@ sidebar_series_data = {
     POWERLAW_SERIES_HASHRATE: {
         "absolute_days": raw_hashrate_df["AbsDays"].values,
         "log_close": raw_hashrate_df["LogClose"].values,
+    },
+    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION: {
+        "absolute_days": raw_bitcoin_network_simulation_df["AbsDays"].values,
+        "log_close": raw_bitcoin_network_simulation_df["LogClose"].values,
     },
     POWERLAW_SERIES_LIGHTNING_NODES: {
         "absolute_days": raw_lightning_nodes_df["AbsDays"].values,
@@ -724,9 +741,7 @@ osc_settings = oscillator.OscillatorSettings(
     amp_factor_bottom=float(
         st.session_state.get("amp_factor_bottom", OSC_DEFAULTS["amp_factor_bottom"])
     ),
-    impulse_damping=float(
-        st.session_state.get("impulse_damping", OSC_DEFAULTS["impulse_damping"])
-    ),
+    impulse_damping=float(st.session_state.get("impulse_damping", OSC_DEFAULTS["impulse_damping"])),
 )
 osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
 r2_combined = current_r2

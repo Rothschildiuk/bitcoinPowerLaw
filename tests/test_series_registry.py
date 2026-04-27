@@ -14,6 +14,7 @@ from core.constants import (
     MODE_PORTFOLIO,
     MODE_POWERLAW,
     POWERLAW_SERIES_DOGECOIN_BTC,
+    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
@@ -95,6 +96,7 @@ class TestSeriesRegistry(unittest.TestCase):
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_RUSSIAN_M2), "Fiat Money"
         )
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
+        self.assertIn(POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
         self.assertIn(POWERLAW_SERIES_RUSSIAN_M2, group_map["Fiat Money"])
 
@@ -141,6 +143,26 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(euro_config.currency_decimals, 2)
         self.assertEqual(euro_config.target_series_unit, CURRENCY_EURO)
         self.assertTrue(euro_config.supports_currency_selector)
+
+    def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
+        sim_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+        price_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(sim_config.default_a, price_config.default_a)
+        self.assertEqual(sim_config.default_b, price_config.default_b)
+        self.assertFalse(sim_config.supports_currency_selector)
+        self.assertTrue(sim_config.lock_price_scale_to_log)
+        self.assert_default_params_are_within_powerlaw_bounds(sim_config)
 
     def test_logperiodic_difficulty_uses_filtered_analysis_start(self):
         difficulty_config = get_active_model_config(
@@ -280,6 +302,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn("B_us_m2", defaults)
         self.assertIn("A_russian_m2", defaults)
         self.assertIn("B_russian_m2", defaults)
+        self.assertIn("A_bitcoin_network_simulation", defaults)
+        self.assertIn("B_bitcoin_network_simulation", defaults)
 
 
 if __name__ == "__main__":

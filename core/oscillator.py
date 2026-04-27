@@ -154,10 +154,13 @@ def compute_oscillator_overlay(
 
     total_model_log = np.asarray(model_log_values, dtype=float) + osc_model_vals
     if np.count_nonzero(osc_fit_mask) > 1:
-        r2_combined = calculate_r2_score(
-            np.asarray(actual_log_values, dtype=float)[osc_fit_mask],
-            total_model_log[osc_fit_mask],
-        ) * 100.0
+        r2_combined = (
+            calculate_r2_score(
+                np.asarray(actual_log_values, dtype=float)[osc_fit_mask],
+                total_model_log[osc_fit_mask],
+            )
+            * 100.0
+        )
 
     return OscillatorComputationResult(
         settings=settings,

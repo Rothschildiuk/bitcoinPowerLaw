@@ -62,7 +62,9 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-01-15"),
         )
 
-        self.assertTrue(np.allclose(result.portfolio_df["FairPriceUSD"], np.array([100.0, 100.0, 100.0])))
+        self.assertTrue(
+            np.allclose(result.portfolio_df["FairPriceUSD"], np.array([100.0, 100.0, 100.0]))
+        )
 
     def test_build_portfolio_projection_month_uses_normalized_growth_rate(self):
         settings = PortfolioSettings(

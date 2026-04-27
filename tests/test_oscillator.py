@@ -124,7 +124,9 @@ class TestOscillator(unittest.TestCase):
         self.assertEqual(result.angular_frequency, 0.0)
         self.assertEqual(result.phase_shift, 0.0)
 
-    def test_compute_oscillator_overlay_recomputes_masked_trend_r2_when_fit_fails_with_multiple_points(self):
+    def test_compute_oscillator_overlay_recomputes_masked_trend_r2_when_fit_fails_with_multiple_points(
+        self,
+    ):
         log_days = np.array([1.0, 1.5, 2.0, 2.5], dtype=float)
         residuals = np.array([0.0, 0.1, -0.2, 0.0], dtype=float)
         model_log_values = np.array([10.0, 10.5, 11.0, 11.5], dtype=float)
@@ -148,10 +150,13 @@ class TestOscillator(unittest.TestCase):
             current_r2=42.0,
         )
 
-        expected_r2 = oscillator.calculate_r2_score(
-            actual_log_values[fit_mask],
-            model_log_values[fit_mask],
-        ) * 100.0
+        expected_r2 = (
+            oscillator.calculate_r2_score(
+                actual_log_values[fit_mask],
+                model_log_values[fit_mask],
+            )
+            * 100.0
+        )
 
         self.assertTrue(np.allclose(result.model_values, 0.0))
         self.assertTrue(np.isclose(result.combined_r2, expected_r2))
