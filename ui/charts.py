@@ -3,12 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core.constants import (
-    BAND_METHOD_GAUSSIAN,
-    MODE_LOGPERIODIC,
-    MODE_POWERLAW,
-    TIME_LOG,
-)
+from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
 from core.utils import evaluate_powerlaw_values
 
 HALVING_DATES = [
@@ -125,7 +120,6 @@ def render_main_model_chart(
     p16_5,
     p83_5,
     p97_5,
-    band_method,
     osc_t1_age,
     osc_lambda,
     pl_template,
@@ -154,11 +148,10 @@ def render_main_model_chart(
     is_log_time = time_scale == TIME_LOG
 
     if mode == MODE_POWERLAW:
-        is_gaussian_band = band_method == BAND_METHOD_GAUSSIAN
-        p97_5_name = "+2σ" if is_gaussian_band else "+2σ (97.5th percentile)"
-        p83_5_name = "+1σ" if is_gaussian_band else "+1σ (83.5th percentile)"
-        p16_5_name = "-1σ" if is_gaussian_band else "-1σ (16.5th percentile)"
-        p2_5_name = "-2σ" if is_gaussian_band else "-2σ (2.5th percentile)"
+        p97_5_name = "+2σ (97.5th percentile)"
+        p83_5_name = "+1σ (83.5th percentile)"
+        p16_5_name = "-1σ (16.5th percentile)"
+        p2_5_name = "-2σ (2.5th percentile)"
 
         p2_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p2_5, 1.0)
         p16_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p16_5, 1.0)

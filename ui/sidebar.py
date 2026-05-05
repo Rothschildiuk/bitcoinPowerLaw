@@ -2,14 +2,11 @@ import streamlit as st
 
 from core import oscillator, power_law
 from core.constants import (
-    BAND_METHOD_OPTIONS,
-    BAND_METHOD_QUANTILE,
     CURRENCY_DOLLAR,
     CURRENCY_OPTIONS,
     DEFAULT_FORECAST_HORIZON,
     KEY_A,
     KEY_B,
-    KEY_BAND_METHOD,
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
     KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
@@ -334,22 +331,6 @@ def render_sidebar_panel(
                 width="stretch",
             )
 
-        band_method = st.session_state.get(KEY_BAND_METHOD, BAND_METHOD_QUANTILE)
-        if band_method not in BAND_METHOD_OPTIONS:
-            band_method = BAND_METHOD_QUANTILE
-            st.session_state[KEY_BAND_METHOD] = band_method
-        if mode == MODE_POWERLAW:
-            band_method = st.radio(
-                "Band model",
-                BAND_METHOD_OPTIONS,
-                horizontal=True,
-                key=KEY_BAND_METHOD,
-                width="stretch",
-            )
-        else:
-            st.session_state[KEY_BAND_METHOD] = BAND_METHOD_QUANTILE
-            band_method = BAND_METHOD_QUANTILE
-
         current_r2 = 0.0
         active_model = get_active_model_config(
             mode,
@@ -440,5 +421,4 @@ def render_sidebar_panel(
         current_r2,
         powerlaw_series,
         logperiodic_series,
-        band_method,
     )
