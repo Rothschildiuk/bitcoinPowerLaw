@@ -24,6 +24,7 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY,
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
+    KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -72,6 +73,16 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         label_visibility="collapsed",
     )
     st.caption("Adds a second portfolio line using fixed monthly buys in the current currency.")
+    st.markdown("**Price scenario**")
+    st.radio(
+        "Price scenario",
+        [-2, -1, 0, 1, 2],
+        index=2,
+        format_func=lambda value: f"{value:+d} sigma" if value != 0 else "0 sigma",
+        horizontal=True,
+        key=KEY_PORTFOLIO_SIGMA_LEVEL,
+        label_visibility="collapsed",
+    )
     st.markdown("**Forecast unit**")
     forecast_unit = st.radio(
         "Forecast unit",

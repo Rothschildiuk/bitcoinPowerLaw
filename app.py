@@ -33,6 +33,7 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
+    KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_THEME_MODE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -105,6 +106,7 @@ def initialize_app_session_state():
         KEY_BAND_METHOD: BAND_METHOD_QUANTILE,
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
+        KEY_PORTFOLIO_SIGMA_LEVEL: 0,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -167,6 +169,15 @@ def calculate_gaussian_offsets(display_df, genesis_offset_days):
     )
 
 
+def calculate_residual_sigma_log(display_df):
+    residuals = pd.to_numeric(display_df["Res"], errors="coerce").to_numpy(dtype=float)
+    residuals = residuals[np.isfinite(residuals)]
+    if residuals.size == 0:
+        return 0.0
+    sigma = float(np.std(residuals))
+    return sigma if np.isfinite(sigma) else 0.0
+
+
 @st.cache_data(ttl=3600)
 def prepare_model_grid(current_gen_date, a_active, b_active, view_max):
     m_x = np.arange(1.0, float(np.ceil(view_max)) + 1.0)
@@ -226,6 +237,8 @@ def render_portfolio_view(
         forecast_horizon=int(
             st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
         ),
+        sigma_level=int(st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0)),
+        residual_sigma_log=calculate_residual_sigma_log(df_display),
     )
     projection_result = prepare_portfolio_projection(
         df_display.index,
@@ -251,7 +264,14 @@ def render_portfolio_view(
         return
 
     g1, g2, g3 = st.columns(3)
-    g1.metric("Current Fair Price", format_portfolio_money(df_display["FairDisplay"].iloc[-1]))
+    scenario_multiplier = np.power(10.0, settings.sigma_level * settings.residual_sigma_log)
+    current_scenario_price = float(df_display["FairDisplay"].iloc[-1]) * float(scenario_multiplier)
+    current_price_label = (
+        "Current Fair Price"
+        if settings.sigma_level == 0
+        else f"Current {settings.sigma_level:+d} sigma Price"
+    )
+    g1.metric(current_price_label, format_portfolio_money(current_scenario_price))
     if portfolio_view.dca_enabled:
         g2.metric(
             "Hold-only portfolio",
@@ -290,6 +310,10 @@ def render_portfolio_view(
             ),
         )
     )
+    if settings.sigma_level != 0:
+        st.caption(
+            f"Portfolio scenario uses {settings.sigma_level:+d} sigma historical log-residual offset."
+        )
     if portfolio_view.dca_enabled:
         portfolio_fig.add_trace(
             go.Scatter(

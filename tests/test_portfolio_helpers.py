@@ -99,6 +99,56 @@ class TestPortfolioHelpers(unittest.TestCase):
             )
         )
 
+    def test_build_portfolio_projection_applies_sigma_scenario_multiplier(self):
+        settings = PortfolioSettings(
+            btc_amount=1.5,
+            monthly_buy_amount=0.0,
+            forecast_unit="Year",
+            forecast_horizon=2,
+            sigma_level=1,
+            residual_sigma_log=np.log10(2.0),
+        )
+
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-01-15"]),
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            intercept_a=2.0,
+            slope_b=0.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-01-15"),
+        )
+
+        self.assertTrue(
+            np.allclose(result.portfolio_df["FairPriceUSD"], np.array([200.0, 200.0, 200.0]))
+        )
+        self.assertTrue(
+            np.allclose(result.portfolio_df["PortfolioUSD"], np.array([300.0, 300.0, 300.0]))
+        )
+
+    def test_build_portfolio_projection_uses_sigma_scenario_for_monthly_buys(self):
+        settings = PortfolioSettings(
+            btc_amount=0.0,
+            monthly_buy_amount=100.0,
+            forecast_unit="Month",
+            forecast_horizon=2,
+            sigma_level=1,
+            residual_sigma_log=np.log10(2.0),
+        )
+
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-01-15"]),
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            intercept_a=2.0,
+            slope_b=0.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-03-15"),
+        )
+
+        self.assertTrue(np.allclose(result.portfolio_df["DcaBTC"], np.array([0.0, 0.0, 0.5])))
+        self.assertTrue(
+            np.allclose(result.portfolio_df["DcaPortfolioUSD"], np.array([0.0, 0.0, 100.0]))
+        )
+
     def test_build_portfolio_view_model_excludes_baseline_and_adds_dca_columns(self):
         projection_result = PortfolioProjectionResult(
             portfolio_df=pd.DataFrame(

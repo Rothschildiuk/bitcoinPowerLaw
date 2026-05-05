@@ -13,6 +13,8 @@ class PortfolioSettings:
     monthly_buy_amount: float
     forecast_unit: str
     forecast_horizon: int
+    sigma_level: int = 0
+    residual_sigma_log: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -167,6 +169,7 @@ def calculate_monthly_buy_portfolio_values(
     initial_btc_amount,
     monthly_buy_amount,
     purchase_anchor_day,
+    log_price_offset=0.0,
 ):
     projection_dates = pd.to_datetime(date_index)
     fair_price_arr = np.asarray(fair_prices, dtype=float)
@@ -196,6 +199,8 @@ def calculate_monthly_buy_portfolio_values(
         intercept_a,
         slope_b,
     )
+    price_multiplier = np.power(10.0, float(log_price_offset))
+    purchase_prices = purchase_prices * price_multiplier
     valid_purchase_mask = np.isfinite(purchase_prices) & (purchase_prices > 0.0)
     if not np.any(valid_purchase_mask):
         return total_btc, fair_price_arr * total_btc, invested_capital
@@ -274,6 +279,11 @@ def build_portfolio_projection(
         intercept_a,
         slope_b,
     )
+    log_price_offset = float(settings.sigma_level) * float(settings.residual_sigma_log)
+    if not np.isfinite(log_price_offset):
+        log_price_offset = 0.0
+    price_multiplier = np.power(10.0, log_price_offset)
+    period_fair_price = period_fair_price * price_multiplier
     period_portfolio_value = period_fair_price * settings.btc_amount
     dca_btc_holdings, dca_portfolio_value, dca_invested_capital = (
         calculate_monthly_buy_portfolio_values(
@@ -285,6 +295,7 @@ def build_portfolio_projection(
             initial_btc_amount=settings.btc_amount,
             monthly_buy_amount=settings.monthly_buy_amount,
             purchase_anchor_day=anchor_day,
+            log_price_offset=log_price_offset,
         )
     )
 
