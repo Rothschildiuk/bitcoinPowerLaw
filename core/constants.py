@@ -147,6 +147,7 @@ KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION = "bitcoin_network_simulation_resoluti
 KEY_POWERLAW_AUTO_FIT = "powerlaw_auto_fit"
 KEY_LOGPERIODIC_AUTO_FIT = "logperiodic_auto_fit"
 KEY_LOGPERIODIC_LAST_SERIES = "logperiodic_last_series"
+KEY_LOGPERIODIC_HARMONICS = "logperiodic_harmonics"
 KEY_OSC_AUTOFIT_SIGNATURE = "osc_autofit_signature"
 KEY_OSC_AUTOFIT_BEST_PARAMS = "osc_autofit_best_params"
 KEY_PORTFOLIO_BTC_AMOUNT = "portfolio_btc_amount"

@@ -24,6 +24,7 @@ from core.constants import (
     KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
     KEY_LAST_MODE,
+    KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_SERIES,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
@@ -68,6 +69,7 @@ from core.utils import (
     evaluate_powerlaw_values,
     powerlaw_parameters_are_unstable,
     resolve_trend_parameters,
+    resolve_portfolio_scenario_log_offset,
 )
 from services.price_service import (
     build_currency_close_series,
@@ -100,6 +102,7 @@ def initialize_app_session_state():
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
+        KEY_LOGPERIODIC_HARMONICS: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
         KEY_PORTFOLIO_SIGMA_LEVEL: 0,
@@ -180,6 +183,7 @@ def render_portfolio_view(
     current_gen_date,
     a_active,
     b_active,
+    percentile_offsets,
     current_r2,
     model_was_clipped,
     currency_prefix,
@@ -209,6 +213,7 @@ def render_portfolio_view(
         ),
         sigma_level=int(st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0)),
         residual_sigma_log=calculate_residual_sigma_log(df_display),
+        residual_percentile_offsets_log=tuple(float(value) for value in percentile_offsets),
     )
     projection_result = prepare_portfolio_projection(
         df_display.index,
@@ -234,7 +239,7 @@ def render_portfolio_view(
         return
 
     g1, g2, g3 = st.columns(3)
-    scenario_multiplier = np.power(10.0, settings.sigma_level * settings.residual_sigma_log)
+    scenario_multiplier = np.power(10.0, resolve_portfolio_scenario_log_offset(settings))
     current_scenario_price = float(df_display["FairDisplay"].iloc[-1]) * float(scenario_multiplier)
     current_price_label = (
         "Current Fair Price"
@@ -732,10 +737,13 @@ osc_settings = oscillator.OscillatorSettings(
         st.session_state.get("amp_factor_bottom", OSC_DEFAULTS["amp_factor_bottom"])
     ),
     impulse_damping=float(st.session_state.get("impulse_damping", OSC_DEFAULTS["impulse_damping"])),
+    harmonic_count=int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1)),
 )
 osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
 r2_combined = current_r2
 osc_reference_log_day = float(df_display["LogD"].min())
+osc_harmonic_coefficients = np.array([], dtype=float)
+selected_harmonic_count = max(1, min(3, int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1))))
 
 if mode == MODE_LOGPERIODIC:
     try:
@@ -754,6 +762,7 @@ if mode == MODE_LOGPERIODIC:
         osc_phi = osc_result.phase_shift
         r2_combined = osc_result.combined_r2
         osc_reference_log_day = osc_result.reference_log_day
+        osc_harmonic_coefficients = osc_result.harmonic_coefficients
     except Exception as e:
         st.error(f"LogPeriodic Error: {e}")
         osc_settings = oscillator.OscillatorSettings(
@@ -762,6 +771,7 @@ if mode == MODE_LOGPERIODIC:
             amp_factor_top=OSC_DEFAULTS["amp_factor_top"],
             amp_factor_bottom=OSC_DEFAULTS["amp_factor_bottom"],
             impulse_damping=OSC_DEFAULTS["impulse_damping"],
+            harmonic_count=1,
         )
         osc_amp, osc_omega, osc_phi, r2_combined = 0, 0, 0, current_r2
 
@@ -783,7 +793,40 @@ m_osc_y = oscillator.build_oscillator_curve(
     osc_settings.amp_factor_bottom,
     osc_settings.impulse_damping,
     osc_reference_log_day,
+    osc_harmonic_coefficients,
 )
+m_osc_y_by_harmonic = {selected_harmonic_count: m_osc_y}
+if mode == MODE_LOGPERIODIC:
+    m_osc_y_by_harmonic = {}
+    for harmonic_count in range(1, selected_harmonic_count + 1):
+        harmonic_settings = oscillator.OscillatorSettings(
+            t1_age=osc_settings.t1_age,
+            lambda_val=osc_settings.lambda_val,
+            amp_factor_top=osc_settings.amp_factor_top,
+            amp_factor_bottom=osc_settings.amp_factor_bottom,
+            impulse_damping=osc_settings.impulse_damping,
+            harmonic_count=harmonic_count,
+        )
+        harmonic_result = oscillator.compute_oscillator_overlay(
+            df_display["LogD"].values,
+            df_display["Res"].values,
+            df_display["ModelLog"].values,
+            df_display["LogClose"].values,
+            lp_r2_mask,
+            harmonic_settings,
+            current_r2,
+        )
+        m_osc_y_by_harmonic[harmonic_count] = oscillator.build_oscillator_curve(
+            m_log_d,
+            harmonic_result.amplitude,
+            harmonic_result.angular_frequency,
+            harmonic_result.phase_shift,
+            harmonic_result.settings.amp_factor_top,
+            harmonic_result.settings.amp_factor_bottom,
+            harmonic_result.settings.impulse_damping,
+            harmonic_result.reference_log_day,
+            harmonic_result.harmonic_coefficients,
+        )
 
 is_log_time = time_scale == TIME_LOG
 plot_x_model = m_x if is_log_time else m_dates
@@ -806,12 +849,14 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         m_dates_str=m_dates_str,
         m_fair_display=m_fair_display,
         m_osc_y=m_osc_y,
+        m_osc_y_by_harmonic=m_osc_y_by_harmonic,
         p2_5=p2_5,
         p16_5=p16_5,
         p83_5=p83_5,
         p97_5=p97_5,
         osc_t1_age=osc_settings.t1_age,
         osc_lambda=osc_settings.lambda_val,
+        selected_harmonic_count=selected_harmonic_count,
         pl_template=pl_template,
         pl_bg_color=pl_bg_color,
         pl_grid_color=pl_grid_color,
@@ -832,6 +877,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
+            f"{selected_harmonic_count}_"
             f"{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}"
         ),
     )
@@ -841,6 +887,7 @@ else:
         current_gen_date,
         a_active,
         b_active,
+        (p2_5, p16_5, p83_5, p97_5),
         current_r2,
         fair_was_clipped,
         currency_prefix,

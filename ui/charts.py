@@ -116,12 +116,14 @@ def render_main_model_chart(
     m_dates_str,
     m_fair_display,
     m_osc_y,
+    m_osc_y_by_harmonic,
     p2_5,
     p16_5,
     p83_5,
     p97_5,
     osc_t1_age,
     osc_lambda,
+    selected_harmonic_count,
     pl_template,
     pl_bg_color,
     pl_grid_color,
@@ -332,22 +334,31 @@ def render_main_model_chart(
                 x=osc_x_vals,
                 y=osc_y_vals,
                 mode="lines",
-                name="LogPeriodic",
-                line=dict(color="#0ecb81", width=1.2),
+                name="power-law residual",
+                line=dict(color="rgba(180, 185, 192, 0.42)", width=1.1),
                 customdata=osc_dates,
-                hovertemplate="<b>LogPeriodic</b>: %{y:.3f}<extra></extra>",
+                hovertemplate="<b>power-law residual</b>: %{y:.3f}<extra></extra>",
             )
         )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=m_osc_y,
-                mode="lines",
-                name="LogPeriodic Model",
-                line=dict(color="#ea3d2f", width=2),
-                hoverinfo="skip",
+        harmonic_curves = m_osc_y_by_harmonic or {selected_harmonic_count: m_osc_y}
+        harmonic_colors = {1: "#2f80b7", 2: "#f28e2b", 3: "#2aa84a"}
+        for harmonic_count in sorted(harmonic_curves):
+            if harmonic_count > int(selected_harmonic_count):
+                continue
+            label_suffix = "harmonic" if harmonic_count == 1 else "harmonics"
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_x_model,
+                    y=harmonic_curves[harmonic_count],
+                    mode="lines",
+                    name=f"DSI {harmonic_count} {label_suffix}",
+                    line=dict(
+                        color=harmonic_colors.get(harmonic_count, "#ea3d2f"),
+                        width=2.6 if harmonic_count == int(selected_harmonic_count) else 1.9,
+                    ),
+                    hoverinfo="skip",
+                )
             )
-        )
         fig.add_hline(y=0, line_width=1, line_color=pl_legend_color)
         fig.update_yaxes(type="linear", gridcolor=pl_grid_color, tickfont=tick_font)
 

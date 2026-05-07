@@ -15,6 +15,7 @@ class PortfolioSettings:
     forecast_horizon: int
     sigma_level: int = 0
     residual_sigma_log: float = 0.0
+    residual_percentile_offsets_log: tuple[float, float, float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,23 @@ def normalize_periodic_growth_rate(current_values, previous_values, elapsed_days
     return normalized
 
 
+def resolve_portfolio_scenario_log_offset(settings):
+    percentile_offsets = settings.residual_percentile_offsets_log
+    if percentile_offsets is not None:
+        scenario_offsets = {
+            -2: percentile_offsets[0],
+            -1: percentile_offsets[1],
+            0: 0.0,
+            1: percentile_offsets[2],
+            2: percentile_offsets[3],
+        }
+        log_offset = float(scenario_offsets.get(int(settings.sigma_level), 0.0))
+    else:
+        log_offset = float(settings.sigma_level) * float(settings.residual_sigma_log)
+
+    return log_offset if np.isfinite(log_offset) else 0.0
+
+
 def calculate_monthly_buy_portfolio_values(
     date_index,
     current_gen_date,
@@ -279,9 +297,7 @@ def build_portfolio_projection(
         intercept_a,
         slope_b,
     )
-    log_price_offset = float(settings.sigma_level) * float(settings.residual_sigma_log)
-    if not np.isfinite(log_price_offset):
-        log_price_offset = 0.0
+    log_price_offset = resolve_portfolio_scenario_log_offset(settings)
     price_multiplier = np.power(10.0, log_price_offset)
     period_fair_price = period_fair_price * price_multiplier
     period_portfolio_value = period_fair_price * settings.btc_amount

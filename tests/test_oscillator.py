@@ -94,6 +94,69 @@ class TestOscillator(unittest.TestCase):
         self.assertGreater(np.max(np.abs(result.model_values[mask])), 0.0)
         self.assertTrue(np.isclose(result.reference_log_day, log_days[mask][0]))
         self.assertGreater(result.combined_r2, 99.0)
+        self.assertEqual(result.harmonic_coefficients.shape, (1,))
+
+    def test_fit_oscillator_component_uses_requested_harmonics(self):
+        log_days = np.linspace(0.5, 3.0, 300)
+        t1_age = 1.0
+        lambda_val = 2.4
+        log_lambda = np.log10(lambda_val)
+        angular_frequency = 2 * np.pi / log_lambda
+        phase_shift = -angular_frequency * np.log10(t1_age * 365.25)
+        phase_values = angular_frequency * log_days + phase_shift
+        residuals = 0.25 * np.cos(phase_values) + 0.65 * np.cos(phase_values * 2)
+
+        one_harmonic_r2 = oscillator.compute_oscillator_fit_r2(
+            log_days,
+            residuals,
+            t1_age,
+            lambda_val,
+            top_amplitude_factor=1.0,
+            bottom_amplitude_factor=1.0,
+            impulse_damping=0.0,
+            harmonic_count=1,
+        )
+        two_harmonic_r2 = oscillator.compute_oscillator_fit_r2(
+            log_days,
+            residuals,
+            t1_age,
+            lambda_val,
+            top_amplitude_factor=1.0,
+            bottom_amplitude_factor=1.0,
+            impulse_damping=0.0,
+            harmonic_count=2,
+        )
+        fit_result = oscillator.fit_oscillator_component(
+            log_days,
+            residuals,
+            t1_age,
+            lambda_val,
+            top_amplitude_factor=1.0,
+            bottom_amplitude_factor=1.0,
+            impulse_damping=0.0,
+            harmonic_count=2,
+        )
+
+        self.assertGreater(two_harmonic_r2, one_harmonic_r2)
+        self.assertGreater(two_harmonic_r2, 99.0)
+        self.assertEqual(fit_result[0].shape, (2,))
+
+    def test_build_oscillator_curve_sums_harmonic_coefficients(self):
+        log_days = np.linspace(0.5, 3.0, 300)
+        curve = oscillator.build_oscillator_curve(
+            log_days=log_days,
+            amplitude=0.0,
+            angular_frequency=2.0,
+            phase_shift=0.3,
+            top_amplitude_factor=1.0,
+            bottom_amplitude_factor=1.0,
+            damping_factor=0.0,
+            reference_log_day=float(log_days.min()),
+            harmonic_coefficients=np.array([0.25, 0.65]),
+        )
+        expected = 0.25 * np.cos(2.0 * log_days + 0.3) + 0.65 * np.cos(2.0 * (2.0 * log_days + 0.3))
+
+        self.assertTrue(np.allclose(curve, expected))
 
     def test_compute_oscillator_overlay_keeps_baseline_r2_when_fit_is_not_possible(self):
         log_days = np.array([1.0, 2.0, 3.0])

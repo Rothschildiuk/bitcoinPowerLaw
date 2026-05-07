@@ -11,6 +11,7 @@ from core.utils import (
     get_growth_change_labels,
     normalize_periodic_growth_rate,
     resolve_projection_anchor_day,
+    resolve_portfolio_scenario_log_offset,
 )
 
 
@@ -124,6 +125,39 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertTrue(
             np.allclose(result.portfolio_df["PortfolioUSD"], np.array([300.0, 300.0, 300.0]))
         )
+
+    def test_build_portfolio_projection_prefers_percentile_scenario_offsets(self):
+        settings = PortfolioSettings(
+            btc_amount=1.5,
+            monthly_buy_amount=0.0,
+            forecast_unit="Year",
+            forecast_horizon=2,
+            sigma_level=-2,
+            residual_sigma_log=np.log10(0.25),
+            residual_percentile_offsets_log=(
+                np.log10(0.5),
+                np.log10(0.75),
+                np.log10(1.5),
+                np.log10(2.0),
+            ),
+        )
+
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-01-15"]),
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            intercept_a=2.0,
+            slope_b=0.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-01-15"),
+        )
+
+        self.assertTrue(
+            np.allclose(result.portfolio_df["FairPriceUSD"], np.array([50.0, 50.0, 50.0]))
+        )
+        self.assertTrue(
+            np.allclose(result.portfolio_df["PortfolioUSD"], np.array([75.0, 75.0, 75.0]))
+        )
+        self.assertTrue(np.isclose(resolve_portfolio_scenario_log_offset(settings), np.log10(0.5)))
 
     def test_build_portfolio_projection_uses_sigma_scenario_for_monthly_buys(self):
         settings = PortfolioSettings(
