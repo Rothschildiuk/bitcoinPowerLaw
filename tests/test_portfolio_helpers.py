@@ -216,9 +216,9 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertEqual(view_model.last_dca_value, 480.0)
         self.assertEqual(view_model.last_dca_invested_capital, 200.0)
         self.assertEqual(view_model.total_growth_pct, 20.0)
-        self.assertIn("Portfolio + monthly buys (USD)", view_model.table_df.columns)
-        self.assertIn("Invested cash (USD)", view_model.table_df.columns)
-        self.assertIn("BTC after monthly buys", view_model.table_df.columns)
+        self.assertIn("Portfolio + monthly cash flow (USD)", view_model.table_df.columns)
+        self.assertIn("Net cash flow (USD)", view_model.table_df.columns)
+        self.assertIn("BTC after monthly cash flow", view_model.table_df.columns)
 
     def test_build_portfolio_view_model_avoids_divide_by_zero_growth(self):
         projection_result = PortfolioProjectionResult(
@@ -248,7 +248,7 @@ class TestPortfolioHelpers(unittest.TestCase):
 
         self.assertFalse(view_model.dca_enabled)
         self.assertEqual(view_model.total_growth_pct, 0.0)
-        self.assertNotIn("Portfolio + monthly buys (USD)", view_model.table_df.columns)
+        self.assertNotIn("Portfolio + monthly cash flow (USD)", view_model.table_df.columns)
 
     def test_get_growth_change_labels_maps_supported_units(self):
         self.assertEqual(

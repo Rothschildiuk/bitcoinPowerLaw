@@ -59,17 +59,18 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         key=KEY_PORTFOLIO_BTC_AMOUNT,
         label_visibility="collapsed",
     )
-    st.markdown("**Experimental: monthly buy amount**")
+    st.markdown("**Experimental: monthly buy/sell amount**")
     st.number_input(
-        "Experimental: monthly buy amount",
-        min_value=0,
+        "Experimental: monthly buy/sell amount",
         value=int(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0)),
         step=10,
         format="%d",
         key=KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
         label_visibility="collapsed",
     )
-    st.caption("Adds a second portfolio line using fixed monthly buys in the current currency.")
+    st.caption(
+        "Adds a second portfolio line using fixed monthly cash flow in the current currency."
+    )
     st.markdown("**Price scenario**")
     st.radio(
         "Price scenario",

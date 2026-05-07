@@ -222,6 +222,25 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertTrue(np.allclose(portfolio_values, np.array([200.0, 300.0, 400.0, 500.0])))
         self.assertTrue(np.allclose(invested_capital, np.array([0.0, 100.0, 200.0, 300.0])))
 
+    def test_calculate_monthly_buy_portfolio_values_supports_monthly_sells(self):
+        date_index = pd.to_datetime(["2026-01-15", "2026-02-15", "2026-03-15", "2026-04-15"])
+        fair_prices = np.full(4, 100.0, dtype=float)
+
+        btc_holdings, portfolio_values, invested_capital = calculate_monthly_buy_portfolio_values(
+            date_index=date_index,
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            fair_prices=fair_prices,
+            intercept_a=2.0,
+            slope_b=0.0,
+            initial_btc_amount=2.0,
+            monthly_buy_amount=-100.0,
+            purchase_anchor_day=pd.Timestamp("2026-01-15"),
+        )
+
+        self.assertTrue(np.allclose(btc_holdings, np.array([2.0, 1.0, 0.0, 0.0])))
+        self.assertTrue(np.allclose(portfolio_values, np.array([200.0, 100.0, 0.0, 0.0])))
+        self.assertTrue(np.allclose(invested_capital, np.array([0.0, -100.0, -200.0, -200.0])))
+
     def test_calculate_monthly_buy_portfolio_values_supports_zero_initial_btc(self):
         date_index = pd.to_datetime(["2026-01-15", "2026-02-15", "2026-03-15"])
         fair_prices = np.full(3, 100.0, dtype=float)

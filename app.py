@@ -254,15 +254,15 @@ def render_portfolio_view(
             delta=f"{portfolio_view.total_growth_pct:+.1f}%",
         )
         g3.metric(
-            "With monthly buys",
+            "With monthly cash flow",
             format_portfolio_money(portfolio_view.last_dca_value),
             delta=format_portfolio_money(portfolio_view.last_dca_value - portfolio_view.last_value),
         )
         st.caption(
-            f"Invested cash by horizon: {format_portfolio_money(portfolio_view.last_dca_invested_capital)}"
+            f"Net cash flow by horizon: {format_portfolio_money(portfolio_view.last_dca_invested_capital)}"
         )
         st.caption(
-            "Experimental scenario: monthly buys start from the next calendar month and use the current selected currency."
+            "Experimental scenario: monthly cash flow starts from the next calendar month and uses the current selected currency."
         )
     else:
         g2.metric(
@@ -295,10 +295,10 @@ def render_portfolio_view(
                 x=portfolio_view.portfolio_display_df["Date"],
                 y=portfolio_view.portfolio_display_df["DcaPortfolioDisplay"],
                 mode="lines+markers",
-                name="Portfolio with monthly buys",
+                name="Portfolio with monthly cash flow",
                 line=dict(color="#14b8a6", width=2),
                 hovertemplate=(
-                    "<b>%{x|%d.%m.%Y}</b><br>Portfolio + monthly buys: "
+                    "<b>%{x|%d.%m.%Y}</b><br>Portfolio + monthly cash flow: "
                     f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -308,10 +308,10 @@ def render_portfolio_view(
                 x=portfolio_view.portfolio_display_df["Date"],
                 y=portfolio_view.portfolio_display_df["DcaInvestedCapitalDisplay"],
                 mode="lines+markers",
-                name="Cumulative invested cash",
+                name="Cumulative net cash flow",
                 line=dict(color="#8b5cf6", width=2, dash="dash"),
                 hovertemplate=(
-                    "<b>%{x|%d.%m.%Y}</b><br>Invested cash: "
+                    "<b>%{x|%d.%m.%Y}</b><br>Net cash flow: "
                     f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -355,9 +355,9 @@ def render_portfolio_view(
         portfolio_view.period_change_pct_label: "{:+.2f}%",
     }
     if portfolio_view.dca_enabled:
-        style_format[f"Portfolio + monthly buys ({currency_unit})"] = money_fmt
-        style_format[f"Invested cash ({currency_unit})"] = money_fmt
-        style_format["BTC after monthly buys"] = "{:,.6f}"
+        style_format[f"Portfolio + monthly cash flow ({currency_unit})"] = money_fmt
+        style_format[f"Net cash flow ({currency_unit})"] = money_fmt
+        style_format["BTC after monthly cash flow"] = "{:,.6f}"
     st.dataframe(
         portfolio_view.table_df.style.format(style_format),
         width="stretch",

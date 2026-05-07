@@ -196,7 +196,7 @@ def calculate_monthly_buy_portfolio_values(
 
     if (
         projection_dates.empty
-        or float(monthly_buy_amount) <= 0.0
+        or float(monthly_buy_amount) == 0.0
         or fair_price_arr.size == 0
         or not np.any(np.isfinite(fair_price_arr) & (fair_price_arr > 0.0))
     ):
@@ -224,11 +224,22 @@ def calculate_monthly_buy_portfolio_values(
         return total_btc, fair_price_arr * total_btc, invested_capital
 
     valid_purchase_dates = purchase_dates[valid_purchase_mask]
-    purchased_btc = float(monthly_buy_amount) / purchase_prices[valid_purchase_mask]
+    monthly_cash_flow = float(monthly_buy_amount)
+    purchased_btc = np.zeros(valid_purchase_dates.shape, dtype=float)
+    realized_cash_flow = np.zeros(valid_purchase_dates.shape, dtype=float)
+    running_btc = float(initial_btc_amount)
+    for index, purchase_price in enumerate(purchase_prices[valid_purchase_mask]):
+        if monthly_cash_flow < 0.0:
+            sell_btc = min(running_btc, abs(monthly_cash_flow) / float(purchase_price))
+            purchased_btc[index] = -sell_btc
+            realized_cash_flow[index] = -(sell_btc * float(purchase_price))
+        else:
+            purchased_btc[index] = monthly_cash_flow / float(purchase_price)
+            realized_cash_flow[index] = monthly_cash_flow
+        running_btc += purchased_btc[index]
+
     cumulative_btc = np.cumsum(purchased_btc)
-    cumulative_invested_capital = np.cumsum(
-        np.full(valid_purchase_dates.shape, float(monthly_buy_amount), dtype=float)
-    )
+    cumulative_invested_capital = np.cumsum(realized_cash_flow)
     purchase_positions = (
         np.searchsorted(
             valid_purchase_dates.to_numpy(dtype="datetime64[ns]"),
@@ -363,7 +374,7 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
         "DcaInvestedCapitalUSD"
     ]
     portfolio_display_df["ChangeDisplay"] = portfolio_display_df[projection_result.change_usd_col]
-    dca_enabled = monthly_buy_amount > 0.0
+    dca_enabled = monthly_buy_amount != 0.0
 
     baseline_value = projection_result.portfolio_df["PortfolioUSD"].iloc[0]
     last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
@@ -388,9 +399,9 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
         columns={
             "FairPriceDisplay": f"Fair Price ({currency_unit})",
             "PortfolioDisplay": f"Portfolio ({currency_unit})",
-            "DcaPortfolioDisplay": f"Portfolio + monthly buys ({currency_unit})",
-            "DcaInvestedCapitalDisplay": f"Invested cash ({currency_unit})",
-            "DcaBTCDisplay": "BTC after monthly buys",
+            "DcaPortfolioDisplay": f"Portfolio + monthly cash flow ({currency_unit})",
+            "DcaInvestedCapitalDisplay": f"Net cash flow ({currency_unit})",
+            "DcaBTCDisplay": "BTC after monthly cash flow",
             "ChangeDisplay": period_change_usd_label,
             projection_result.change_pct_col: period_change_pct_label,
         }
@@ -403,9 +414,9 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
     if dca_enabled:
         display_columns.extend(
             [
-                f"Portfolio + monthly buys ({currency_unit})",
-                f"Invested cash ({currency_unit})",
-                "BTC after monthly buys",
+                f"Portfolio + monthly cash flow ({currency_unit})",
+                f"Net cash flow ({currency_unit})",
+                "BTC after monthly cash flow",
             ]
         )
     display_columns.extend([period_change_usd_label, period_change_pct_label])
