@@ -29,7 +29,7 @@ footer {visibility: hidden; display: none;}
     background: __C_CARD_BG__; border: 1px solid __C_BORDER__; border-radius: 8px; padding: 10px 16px; text-align: center;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 5px; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;
 }
-.metric-label { color: __C_TEXT_MAIN__; font-size: 13px; font-weight: 600; margin-bottom: 4px; opacity: 0.8; }
+.metric-label { color: __C_TEXT_MAIN__; font-size: 12px; font-weight: 600; line-height: 1.2; margin-bottom: 4px; opacity: 0.8; overflow-wrap: anywhere; }
 .metric-value { color: __C_TEXT_VAL__; font-size: 20px; font-weight: 800; }
 .metric-delta { font-size: 12px; font-weight: 600; margin-top: 2px; }
 
