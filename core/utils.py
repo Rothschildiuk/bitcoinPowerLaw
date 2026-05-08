@@ -13,7 +13,7 @@ class PortfolioSettings:
     monthly_buy_amount: float
     forecast_unit: str
     forecast_horizon: int
-    sigma_level: int = 0
+    sigma_level: float = 0.0
     residual_sigma_log: float = 0.0
     residual_percentile_offsets_log: tuple[float, float, float, float] | None = None
 
@@ -209,14 +209,24 @@ def normalize_periodic_growth_rate(current_values, previous_values, elapsed_days
 def resolve_portfolio_scenario_log_offset(settings):
     percentile_offsets = settings.residual_percentile_offsets_log
     if percentile_offsets is not None:
-        scenario_offsets = {
-            -2: percentile_offsets[0],
-            -1: percentile_offsets[1],
-            0: 0.0,
-            1: percentile_offsets[2],
-            2: percentile_offsets[3],
-        }
-        log_offset = float(scenario_offsets.get(int(settings.sigma_level), 0.0))
+        scenario_levels = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
+        scenario_offsets = np.array(
+            [
+                percentile_offsets[0],
+                percentile_offsets[1],
+                0.0,
+                percentile_offsets[2],
+                percentile_offsets[3],
+            ],
+            dtype=float,
+        )
+        log_offset = float(
+            np.interp(
+                float(settings.sigma_level),
+                scenario_levels,
+                scenario_offsets,
+            )
+        )
     else:
         log_offset = float(settings.sigma_level) * float(settings.residual_sigma_log)
 

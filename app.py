@@ -26,7 +26,6 @@ from core.constants import (
     KEY_LAST_MODE,
     KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_SERIES,
-    KEY_POWERLAW_HISTORICAL_VIEW,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -106,7 +105,6 @@ def initialize_app_session_state():
         KEY_CURRENCY_SELECTOR: CURRENCY_DOLLAR,
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
-        KEY_POWERLAW_HISTORICAL_VIEW: False,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_HARMONICS: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
@@ -217,7 +215,7 @@ def render_portfolio_view(
         forecast_horizon=int(
             st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
         ),
-        sigma_level=int(st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0)),
+        sigma_level=float(st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)),
         residual_sigma_log=calculate_residual_sigma_log(df_display),
         residual_percentile_offsets_log=tuple(float(value) for value in percentile_offsets),
     )
@@ -250,7 +248,7 @@ def render_portfolio_view(
     current_price_label = (
         "Current Fair Price"
         if settings.sigma_level == 0
-        else f"Current {settings.sigma_level:+d} sigma Price"
+        else f"Current {settings.sigma_level:+g} sigma Price"
     )
     g1.metric(current_price_label, format_portfolio_money(current_scenario_price))
     if portfolio_view.dca_enabled:
@@ -293,7 +291,7 @@ def render_portfolio_view(
     )
     if settings.sigma_level != 0:
         st.caption(
-            f"Portfolio scenario uses {settings.sigma_level:+d} sigma historical log-residual offset."
+            f"Portfolio scenario uses {settings.sigma_level:+g} sigma historical log-residual offset."
         )
     if portfolio_view.dca_enabled:
         portfolio_fig.add_trace(
@@ -702,8 +700,6 @@ df_display["Fair"], _, fair_was_clipped = evaluate_powerlaw_values(
     0.0,
     1.0,
 )
-show_historical_powerlaw_fit = bool(st.session_state.get(KEY_POWERLAW_HISTORICAL_VIEW, False))
-show_historical_powerlaw_fit_on_chart = mode == MODE_LOGPERIODIC and show_historical_powerlaw_fit
 _, historical_powerlaw_slopes, _ = calculate_expanding_powerlaw_parameters(
     df_display["LogD"].values,
     df_display["LogClose"].values,
@@ -861,9 +857,10 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         m_dates_str=m_dates_str,
         m_fair_display=m_fair_display,
         historical_powerlaw_slopes=historical_powerlaw_slopes,
-        show_historical_powerlaw_slope=show_historical_powerlaw_fit_on_chart,
+        show_historical_powerlaw_slope=mode == MODE_LOGPERIODIC,
         m_osc_y=m_osc_y,
         m_osc_y_by_harmonic=m_osc_y_by_harmonic,
+        residual_sigma_log=calculate_residual_sigma_log(df_display),
         p2_5=p2_5,
         p16_5=p16_5,
         p83_5=p83_5,
@@ -891,7 +888,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
-            f"{selected_harmonic_count}_{int(show_historical_powerlaw_fit_on_chart)}_"
+            f"{selected_harmonic_count}_"
             f"{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}"
         ),
     )

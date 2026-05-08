@@ -126,6 +126,7 @@ def render_main_model_chart(
     show_historical_powerlaw_slope,
     m_osc_y,
     m_osc_y_by_harmonic,
+    residual_sigma_log,
     p2_5,
     p16_5,
     p83_5,
@@ -337,7 +338,10 @@ def render_main_model_chart(
             )
 
         osc_x_vals = np.asarray(plot_x_osc)[osc_mask]
-        osc_y_vals = df_display["Res"].to_numpy(dtype=float)[osc_mask]
+        sigma_scale = float(residual_sigma_log)
+        if not np.isfinite(sigma_scale) or sigma_scale <= 0.0:
+            sigma_scale = 1.0
+        osc_y_vals = df_display["Res"].to_numpy(dtype=float)[osc_mask] / sigma_scale
         osc_dates = df_display.index.strftime("%d.%m.%Y").to_numpy()[osc_mask]
 
         fig.add_trace(
@@ -345,27 +349,25 @@ def render_main_model_chart(
                 x=osc_x_vals,
                 y=osc_y_vals,
                 mode="lines",
-                name="power-law residual",
+                name="power-law residual σ",
                 line=dict(color="rgba(180, 185, 192, 0.42)", width=1.1),
                 customdata=osc_dates,
-                hovertemplate="<b>power-law residual</b>: %{y:.3f}<extra></extra>",
+                hovertemplate="<b>power-law residual σ</b>: %{y:.2f}σ<extra></extra>",
             )
         )
         if show_historical_powerlaw_slope:
             slope_vals = np.asarray(historical_powerlaw_slopes, dtype=float)[osc_mask]
             finite_slope_vals = slope_vals[np.isfinite(slope_vals)]
-            final_slope_label = (
-                f" final={finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
-            )
+            final_slope_label = f" {finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
             fig.add_trace(
                 go.Scatter(
                     x=osc_x_vals,
                     y=slope_vals,
                     mode="lines",
-                    name=f"historical PowerLaw slope{final_slope_label}",
+                    name=f"PowerLaw B{final_slope_label}",
                     line=dict(color="#f0b90b", width=1.9),
                     customdata=osc_dates,
-                    hovertemplate="<b>%{customdata}</b><br>historical slope: %{y:.3f}<extra></extra>",
+                    hovertemplate="<b>%{customdata}</b><br>PowerLaw B: %{y:.3f}<extra></extra>",
                 ),
                 secondary_y=True,
             )
@@ -378,7 +380,7 @@ def render_main_model_chart(
             fig.add_trace(
                 go.Scatter(
                     x=plot_x_model,
-                    y=harmonic_curves[harmonic_count],
+                    y=np.asarray(harmonic_curves[harmonic_count], dtype=float) / sigma_scale,
                     mode="lines",
                     name=f"DSI {harmonic_count} {label_suffix}",
                     line=dict(
@@ -391,14 +393,14 @@ def render_main_model_chart(
         fig.add_hline(y=0, line_width=1, line_color=pl_legend_color)
         fig.update_yaxes(
             type="linear",
-            title_text="Residual",
+            title_text="Sigma residual",
             gridcolor=pl_grid_color,
             tickfont=tick_font,
             secondary_y=False,
         )
         if show_historical_powerlaw_slope:
             fig.update_yaxes(
-                title_text="PowerLaw slope",
+                title_text="PowerLaw B",
                 showgrid=False,
                 tickfont=tick_font,
                 secondary_y=True,

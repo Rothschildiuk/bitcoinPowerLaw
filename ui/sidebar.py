@@ -15,7 +15,6 @@ from core.constants import (
     KEY_LOGPERIODIC_LAST_SERIES,
     KEY_MODE_SELECTOR,
     KEY_LOGPERIODIC_SERIES,
-    KEY_POWERLAW_HISTORICAL_VIEW,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -73,11 +72,18 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         "Adds a second portfolio line using fixed monthly cash flow in the current currency."
     )
     st.markdown("**Price scenario**")
+    sigma_options = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+
+    def format_sigma_option(value):
+        if value == 0.0:
+            return "0 sigma"
+        return f"{value:+g} sigma"
+
     st.radio(
         "Price scenario",
-        [-2, -1, 0, 1, 2],
-        index=2,
-        format_func=lambda value: f"{value:+d} sigma" if value != 0 else "0 sigma",
+        sigma_options,
+        index=sigma_options.index(float(st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0))),
+        format_func=format_sigma_option,
         horizontal=True,
         key=KEY_PORTFOLIO_SIGMA_LEVEL,
         label_visibility="collapsed",
@@ -413,12 +419,6 @@ def render_sidebar_panel(
                 min_abs_day_for_fit=active_model.oscillator_min_abs_day,
                 parameter_bounds_override=active_model.oscillator_parameter_bounds,
             )
-            st.markdown("**PowerLaw fit**")
-            st.toggle(
-                "Historical slope",
-                key=KEY_POWERLAW_HISTORICAL_VIEW,
-            )
-
     return (
         mode,
         currency,

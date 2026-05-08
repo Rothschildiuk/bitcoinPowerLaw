@@ -159,6 +159,18 @@ class TestPortfolioHelpers(unittest.TestCase):
         )
         self.assertTrue(np.isclose(resolve_portfolio_scenario_log_offset(settings), np.log10(0.5)))
 
+    def test_resolve_portfolio_scenario_log_offset_interpolates_half_sigma_levels(self):
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            forecast_unit="Year",
+            forecast_horizon=1,
+            sigma_level=1.5,
+            residual_percentile_offsets_log=(-0.4, -0.2, 0.2, 0.6),
+        )
+
+        self.assertTrue(np.isclose(resolve_portfolio_scenario_log_offset(settings), 0.4))
+
     def test_build_portfolio_projection_uses_sigma_scenario_for_monthly_buys(self):
         settings = PortfolioSettings(
             btc_amount=0.0,
