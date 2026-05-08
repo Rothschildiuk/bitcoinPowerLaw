@@ -26,6 +26,7 @@ from core.constants import (
     KEY_LAST_MODE,
     KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_SERIES,
+    KEY_POWERLAW_HISTORICAL_VIEW,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -65,6 +66,7 @@ from core.utils import (
     PortfolioSettings,
     build_portfolio_projection,
     build_portfolio_view_model,
+    calculate_expanding_powerlaw_parameters,
     calculate_r2_score,
     evaluate_powerlaw_values,
     powerlaw_parameters_are_unstable,
@@ -88,7 +90,10 @@ from services.price_service import (
     load_prepared_russian_m2_data,
     load_prepared_us_m2_data,
 )
-from ui.charts import _resolve_model_view_max, render_main_model_chart
+from ui.charts import (
+    _resolve_model_view_max,
+    render_main_model_chart,
+)
 from ui.kpi import render_model_kpis
 from ui.sidebar import render_sidebar_panel
 from ui.theme import apply_theme_css, get_theme
@@ -101,6 +106,7 @@ def initialize_app_session_state():
         KEY_CURRENCY_SELECTOR: CURRENCY_DOLLAR,
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
+        KEY_POWERLAW_HISTORICAL_VIEW: False,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_HARMONICS: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
@@ -696,6 +702,12 @@ df_display["Fair"], _, fair_was_clipped = evaluate_powerlaw_values(
     0.0,
     1.0,
 )
+show_historical_powerlaw_fit = bool(st.session_state.get(KEY_POWERLAW_HISTORICAL_VIEW, False))
+show_historical_powerlaw_fit_on_chart = mode == MODE_LOGPERIODIC and show_historical_powerlaw_fit
+_, historical_powerlaw_slopes, _ = calculate_expanding_powerlaw_parameters(
+    df_display["LogD"].values,
+    df_display["LogClose"].values,
+)
 
 currency_prefix = active_model.currency_prefix
 currency_suffix = active_model.currency_suffix
@@ -848,6 +860,8 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         m_dates=m_dates,
         m_dates_str=m_dates_str,
         m_fair_display=m_fair_display,
+        historical_powerlaw_slopes=historical_powerlaw_slopes,
+        show_historical_powerlaw_slope=show_historical_powerlaw_fit_on_chart,
         m_osc_y=m_osc_y,
         m_osc_y_by_harmonic=m_osc_y_by_harmonic,
         p2_5=p2_5,
@@ -877,7 +891,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
-            f"{selected_harmonic_count}_"
+            f"{selected_harmonic_count}_{int(show_historical_powerlaw_fit_on_chart)}_"
             f"{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}"
         ),
     )

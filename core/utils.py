@@ -124,6 +124,51 @@ def evaluate_powerlaw_values(
     return values, clipped_exponents, was_clipped
 
 
+def calculate_expanding_powerlaw_parameters(log_days, log_prices, min_points=100):
+    log_days_arr = np.asarray(log_days, dtype=float)
+    log_prices_arr = np.asarray(log_prices, dtype=float)
+    valid_mask = np.isfinite(log_days_arr) & np.isfinite(log_prices_arr)
+
+    x = np.where(valid_mask, log_days_arr, 0.0)
+    y = np.where(valid_mask, log_prices_arr, 0.0)
+    n = np.cumsum(valid_mask.astype(float))
+    sum_x = np.cumsum(x)
+    sum_y = np.cumsum(y)
+    sum_xx = np.cumsum(x * x)
+    sum_xy = np.cumsum(x * y)
+
+    denominator = (n * sum_xx) - (sum_x * sum_x)
+    slopes = np.full(log_days_arr.shape, np.nan, dtype=float)
+    intercepts = np.full(log_days_arr.shape, np.nan, dtype=float)
+    fitted_log_prices = np.full(log_days_arr.shape, np.nan, dtype=float)
+    fit_mask = valid_mask & (n >= float(min_points)) & (np.abs(denominator) > 1e-12)
+    if not np.any(fit_mask):
+        return intercepts, slopes, fitted_log_prices
+
+    slopes[fit_mask] = ((n[fit_mask] * sum_xy[fit_mask]) - (sum_x[fit_mask] * sum_y[fit_mask])) / (
+        denominator[fit_mask]
+    )
+    intercepts[fit_mask] = (sum_y[fit_mask] - (slopes[fit_mask] * sum_x[fit_mask])) / n[fit_mask]
+    fitted_log_prices[fit_mask] = intercepts[fit_mask] + (slopes[fit_mask] * log_days_arr[fit_mask])
+    fitted_log_prices = np.clip(
+        fitted_log_prices,
+        float(POWERLAW_EXPONENT_MIN),
+        float(POWERLAW_EXPONENT_MAX),
+    )
+
+    return intercepts, slopes, fitted_log_prices
+
+
+def calculate_expanding_powerlaw_fit(log_days, log_prices, min_points=100):
+    _, _, fitted_log_prices = calculate_expanding_powerlaw_parameters(
+        log_days,
+        log_prices,
+        min_points=min_points,
+    )
+
+    return fitted_log_prices
+
+
 def powerlaw_parameters_are_unstable(
     r2_score,
     *,

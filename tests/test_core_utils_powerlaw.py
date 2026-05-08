@@ -11,6 +11,8 @@ from core.power_law import (
 )
 from core.utils import (
     TrendComputationResult,
+    calculate_expanding_powerlaw_fit,
+    calculate_expanding_powerlaw_parameters,
     calculate_r2_score,
     calculate_monthly_buy_portfolio_values,
     evaluate_powerlaw_values,
@@ -160,6 +162,28 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertTrue(was_clipped)
         self.assertTrue(np.all(np.isfinite(values)))
         self.assertTrue(np.all(exponents <= 300.0))
+
+    def test_calculate_expanding_powerlaw_fit_uses_prefix_regressions(self):
+        log_days = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
+        log_prices = np.array([3.0, 5.0, 7.0, 20.0], dtype=float)
+
+        fitted = calculate_expanding_powerlaw_fit(log_days, log_prices, min_points=3)
+        intercepts, slopes, parameter_fitted = calculate_expanding_powerlaw_parameters(
+            log_days,
+            log_prices,
+            min_points=3,
+        )
+        expected_last_slope, expected_last_intercept = np.polyfit(log_days, log_prices, 1)
+        expected_last = expected_last_intercept + expected_last_slope * log_days[-1]
+
+        self.assertTrue(np.isnan(fitted[0]))
+        self.assertTrue(np.isnan(fitted[1]))
+        self.assertTrue(np.isclose(fitted[2], log_prices[2], atol=1e-12))
+        self.assertTrue(np.isclose(fitted[3], expected_last, atol=1e-12))
+        self.assertTrue(np.allclose(fitted, parameter_fitted, equal_nan=True))
+        self.assertTrue(np.isclose(slopes[2], 2.0, atol=1e-12))
+        self.assertTrue(np.isclose(intercepts[2], 1.0, atol=1e-12))
+        self.assertTrue(np.isclose(slopes[3], expected_last_slope, atol=1e-12))
 
     def test_powerlaw_parameters_are_unstable_for_negative_r2_or_clipping(self):
         self.assertTrue(powerlaw_parameters_are_unstable(-0.01))

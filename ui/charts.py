@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
 from core.utils import evaluate_powerlaw_values
@@ -46,6 +47,7 @@ def _resolve_powerlaw_y_range(
     use_log_scale,
     model_x=None,
     visible_start_day=None,
+    include_bands=True,
 ):
     btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
     fair_vals = np.asarray(m_fair_display, dtype=float)
@@ -60,10 +62,15 @@ def _resolve_powerlaw_y_range(
         if np.any(visible_mask):
             fair_vals = fair_vals[visible_mask]
 
-    lower_band, _, _ = evaluate_powerlaw_values(np.log10(fair_vals), p2_5, 1.0)
-    upper_band, _, _ = evaluate_powerlaw_values(np.log10(fair_vals), p97_5, 1.0)
+    candidate_parts = [btc_vals]
+    if include_bands:
+        lower_band, _, _ = evaluate_powerlaw_values(np.log10(fair_vals), p2_5, 1.0)
+        upper_band, _, _ = evaluate_powerlaw_values(np.log10(fair_vals), p97_5, 1.0)
+        candidate_parts.extend([lower_band, upper_band])
+    else:
+        candidate_parts.append(fair_vals)
 
-    candidate = np.concatenate([btc_vals, lower_band, upper_band])
+    candidate = np.concatenate(candidate_parts)
     candidate = candidate[np.isfinite(candidate)]
     if use_log_scale:
         candidate = candidate[candidate > 0]
@@ -115,6 +122,8 @@ def render_main_model_chart(
     m_dates,
     m_dates_str,
     m_fair_display,
+    historical_powerlaw_slopes,
+    show_historical_powerlaw_slope,
     m_osc_y,
     m_osc_y_by_harmonic,
     p2_5,
@@ -142,7 +151,9 @@ def render_main_model_chart(
     osc_visible_start_abs_day=None,
     chart_key,
 ):
-    fig = go.Figure()
+    fig = (
+        make_subplots(specs=[[{"secondary_y": True}]]) if mode == MODE_LOGPERIODIC else go.Figure()
+    )
     tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
     hover_label = dict(
         bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
@@ -340,6 +351,24 @@ def render_main_model_chart(
                 hovertemplate="<b>power-law residual</b>: %{y:.3f}<extra></extra>",
             )
         )
+        if show_historical_powerlaw_slope:
+            slope_vals = np.asarray(historical_powerlaw_slopes, dtype=float)[osc_mask]
+            finite_slope_vals = slope_vals[np.isfinite(slope_vals)]
+            final_slope_label = (
+                f" final={finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=osc_x_vals,
+                    y=slope_vals,
+                    mode="lines",
+                    name=f"historical PowerLaw slope{final_slope_label}",
+                    line=dict(color="#f0b90b", width=1.9),
+                    customdata=osc_dates,
+                    hovertemplate="<b>%{customdata}</b><br>historical slope: %{y:.3f}<extra></extra>",
+                ),
+                secondary_y=True,
+            )
         harmonic_curves = m_osc_y_by_harmonic or {selected_harmonic_count: m_osc_y}
         harmonic_colors = {1: "#2f80b7", 2: "#f28e2b", 3: "#2aa84a"}
         for harmonic_count in sorted(harmonic_curves):
@@ -360,7 +389,20 @@ def render_main_model_chart(
                 )
             )
         fig.add_hline(y=0, line_width=1, line_color=pl_legend_color)
-        fig.update_yaxes(type="linear", gridcolor=pl_grid_color, tickfont=tick_font)
+        fig.update_yaxes(
+            type="linear",
+            title_text="Residual",
+            gridcolor=pl_grid_color,
+            tickfont=tick_font,
+            secondary_y=False,
+        )
+        if show_historical_powerlaw_slope:
+            fig.update_yaxes(
+                title_text="PowerLaw slope",
+                showgrid=False,
+                tickfont=tick_font,
+                secondary_y=True,
+            )
 
         for i in range(6):
             halving_days_val = osc_t1_age * (osc_lambda**i) * 365.25

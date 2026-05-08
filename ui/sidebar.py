@@ -15,6 +15,7 @@ from core.constants import (
     KEY_LOGPERIODIC_LAST_SERIES,
     KEY_MODE_SELECTOR,
     KEY_LOGPERIODIC_SERIES,
+    KEY_POWERLAW_HISTORICAL_VIEW,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -312,7 +313,6 @@ def render_sidebar_panel(
                         label_visibility="collapsed",
                         width="stretch",
                     )
-
         is_non_price_series = not series_supports_currency_selector(
             mode, powerlaw_series, logperiodic_series
         )
@@ -412,6 +412,11 @@ def render_sidebar_panel(
                 defaults_override=active_osc_defaults,
                 min_abs_day_for_fit=active_model.oscillator_min_abs_day,
                 parameter_bounds_override=active_model.oscillator_parameter_bounds,
+            )
+            st.markdown("**PowerLaw fit**")
+            st.toggle(
+                "Historical slope",
+                key=KEY_POWERLAW_HISTORICAL_VIEW,
             )
 
     return (
