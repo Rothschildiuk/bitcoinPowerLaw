@@ -5,6 +5,7 @@ import pandas as pd
 
 from ui.charts import (
     _main_chart_plotly_config,
+    _resolve_optional_sigma_offsets,
     _resolve_log_time_axis,
     _resolve_model_view_max,
     _resolve_powerlaw_y_range,
@@ -122,6 +123,17 @@ class TestUIChartsHelpers(unittest.TestCase):
             view_max,
             float(((pd.Timestamp("2031-03-05") - current_gen_date).days)),
         )
+
+    def test_resolve_optional_sigma_offsets_interpolates_half_sigma_lines(self):
+        offsets = _resolve_optional_sigma_offsets(
+            p2_5=-1.0,
+            p16_5=-0.4,
+            p83_5=0.6,
+            p97_5=1.2,
+        )
+
+        self.assertEqual([level for level, _ in offsets], [-1.5, -0.5, 0.5, 1.5])
+        self.assertTrue(np.allclose([offset for _, offset in offsets], [-0.7, -0.2, 0.3, 0.9]))
 
 
 if __name__ == "__main__":

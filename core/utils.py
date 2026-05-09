@@ -13,6 +13,7 @@ class PortfolioSettings:
     monthly_buy_amount: float
     forecast_unit: str
     forecast_horizon: int
+    monthly_mom_change_pct: float = 0.0
     sigma_level: float = 0.0
     residual_sigma_log: float = 0.0
     residual_percentile_offsets_log: tuple[float, float, float, float] | None = None
@@ -40,6 +41,7 @@ class PortfolioViewModel:
     total_growth_pct: float
     period_change_usd_label: str
     period_change_pct_label: str
+    period_cash_flow_label: str
 
 
 @dataclass(frozen=True)
@@ -243,15 +245,23 @@ def calculate_monthly_buy_portfolio_values(
     monthly_buy_amount,
     purchase_anchor_day,
     log_price_offset=0.0,
+    monthly_mom_change_pct=0.0,
 ):
     projection_dates = pd.to_datetime(date_index)
     fair_price_arr = np.asarray(fair_prices, dtype=float)
     total_btc = np.full(fair_price_arr.shape, float(initial_btc_amount), dtype=float)
     invested_capital = np.zeros(fair_price_arr.shape, dtype=float)
+    monthly_cash_flow = float(monthly_buy_amount)
+    if not np.isfinite(monthly_cash_flow):
+        monthly_cash_flow = 0.0
+    monthly_mom_change_ratio = float(monthly_mom_change_pct) / 100.0
+    if not np.isfinite(monthly_mom_change_ratio):
+        monthly_mom_change_ratio = 0.0
+    monthly_mom_change_ratio = min(max(monthly_mom_change_ratio, 0.0), 1.0)
 
     if (
         projection_dates.empty
-        or float(monthly_buy_amount) == 0.0
+        or (monthly_cash_flow == 0.0 and monthly_mom_change_ratio == 0.0)
         or fair_price_arr.size == 0
         or not np.any(np.isfinite(fair_price_arr) & (fair_price_arr > 0.0))
     ):
@@ -274,23 +284,45 @@ def calculate_monthly_buy_portfolio_values(
     )
     price_multiplier = np.power(10.0, float(log_price_offset))
     purchase_prices = purchase_prices * price_multiplier
+    previous_purchase_days = np.maximum(
+        (purchase_dates - pd.offsets.MonthBegin(1) - current_gen_date).days.astype(float),
+        1.0,
+    )
+    previous_purchase_prices, _, _ = evaluate_powerlaw_values(
+        np.log10(previous_purchase_days),
+        intercept_a,
+        slope_b,
+    )
+    previous_purchase_prices = previous_purchase_prices * price_multiplier
     valid_purchase_mask = np.isfinite(purchase_prices) & (purchase_prices > 0.0)
     if not np.any(valid_purchase_mask):
         return total_btc, fair_price_arr * total_btc, invested_capital
 
     valid_purchase_dates = purchase_dates[valid_purchase_mask]
-    monthly_cash_flow = float(monthly_buy_amount)
+    valid_purchase_prices = purchase_prices[valid_purchase_mask]
+    valid_previous_purchase_prices = previous_purchase_prices[valid_purchase_mask]
     purchased_btc = np.zeros(valid_purchase_dates.shape, dtype=float)
     realized_cash_flow = np.zeros(valid_purchase_dates.shape, dtype=float)
     running_btc = float(initial_btc_amount)
-    for index, purchase_price in enumerate(purchase_prices[valid_purchase_mask]):
-        if monthly_cash_flow < 0.0:
-            sell_btc = min(running_btc, abs(monthly_cash_flow) / float(purchase_price))
+    for index, purchase_price in enumerate(valid_purchase_prices):
+        mom_change_cash_flow = 0.0
+        previous_purchase_price = float(valid_previous_purchase_prices[index])
+        if np.isfinite(previous_purchase_price) and previous_purchase_price > 0.0:
+            current_position_mom_change = (float(purchase_price) - previous_purchase_price) * float(
+                running_btc
+            )
+            mom_change_cash_flow = -(
+                max(current_position_mom_change, 0.0) * monthly_mom_change_ratio
+            )
+
+        cash_flow = monthly_cash_flow + mom_change_cash_flow
+        if cash_flow < 0.0:
+            sell_btc = min(running_btc, abs(cash_flow) / float(purchase_price))
             purchased_btc[index] = -sell_btc
             realized_cash_flow[index] = -(sell_btc * float(purchase_price))
         else:
-            purchased_btc[index] = monthly_cash_flow / float(purchase_price)
-            realized_cash_flow[index] = monthly_cash_flow
+            purchased_btc[index] = cash_flow / float(purchase_price)
+            realized_cash_flow[index] = cash_flow
         running_btc += purchased_btc[index]
 
     cumulative_btc = np.cumsum(purchased_btc)
@@ -378,6 +410,7 @@ def build_portfolio_projection(
             monthly_buy_amount=settings.monthly_buy_amount,
             purchase_anchor_day=anchor_day,
             log_price_offset=log_price_offset,
+            monthly_mom_change_pct=settings.monthly_mom_change_pct,
         )
     )
 
@@ -419,8 +452,24 @@ def get_growth_change_labels(forecast_unit, currency_unit):
     return f"{prefix} Change ({currency_unit})", f"{prefix} Change (%)"
 
 
-def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_unit):
-    portfolio_display_df = projection_result.portfolio_df.iloc[1:].copy()
+def get_period_cash_flow_label(forecast_unit, currency_unit):
+    prefix = (
+        "Yearly" if forecast_unit == "Year" else ("Daily" if forecast_unit == "Day" else "Monthly")
+    )
+    return f"{prefix} withdrawal ({currency_unit})"
+
+
+def build_portfolio_view_model(
+    projection_result,
+    monthly_buy_amount,
+    currency_unit,
+    monthly_mom_change_pct=0.0,
+):
+    projection_df = projection_result.portfolio_df.copy()
+    projection_df["DcaPeriodCashFlowUSD"] = (
+        projection_df["DcaInvestedCapitalUSD"].diff().fillna(projection_df["DcaInvestedCapitalUSD"])
+    )
+    portfolio_display_df = projection_df.iloc[1:].copy()
     portfolio_display_df["FairPriceDisplay"] = portfolio_display_df["FairPriceUSD"]
     portfolio_display_df["PortfolioDisplay"] = portfolio_display_df["PortfolioUSD"]
     portfolio_display_df["DcaPortfolioDisplay"] = portfolio_display_df["DcaPortfolioUSD"]
@@ -428,8 +477,12 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
     portfolio_display_df["DcaInvestedCapitalDisplay"] = portfolio_display_df[
         "DcaInvestedCapitalUSD"
     ]
+    portfolio_display_df["DcaPeriodCashFlowDisplay"] = np.maximum(
+        -portfolio_display_df["DcaPeriodCashFlowUSD"].to_numpy(dtype=float),
+        0.0,
+    )
     portfolio_display_df["ChangeDisplay"] = portfolio_display_df[projection_result.change_usd_col]
-    dca_enabled = monthly_buy_amount != 0.0
+    dca_enabled = monthly_buy_amount != 0.0 or monthly_mom_change_pct != 0.0
 
     baseline_value = projection_result.portfolio_df["PortfolioUSD"].iloc[0]
     last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
@@ -440,6 +493,10 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
     )
 
     period_change_usd_label, period_change_pct_label = get_growth_change_labels(
+        projection_result.forecast_unit,
+        currency_unit,
+    )
+    period_cash_flow_label = get_period_cash_flow_label(
         projection_result.forecast_unit,
         currency_unit,
     )
@@ -455,6 +512,7 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
             "FairPriceDisplay": f"Fair Price ({currency_unit})",
             "PortfolioDisplay": f"Portfolio ({currency_unit})",
             "DcaPortfolioDisplay": f"Portfolio + monthly cash flow ({currency_unit})",
+            "DcaPeriodCashFlowDisplay": period_cash_flow_label,
             "DcaInvestedCapitalDisplay": f"Net cash flow ({currency_unit})",
             "DcaBTCDisplay": "BTC after monthly cash flow",
             "ChangeDisplay": period_change_usd_label,
@@ -470,6 +528,7 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
         display_columns.extend(
             [
                 f"Portfolio + monthly cash flow ({currency_unit})",
+                period_cash_flow_label,
                 f"Net cash flow ({currency_unit})",
                 "BTC after monthly cash flow",
             ]
@@ -488,6 +547,7 @@ def build_portfolio_view_model(projection_result, monthly_buy_amount, currency_u
         total_growth_pct=total_growth_pct,
         period_change_usd_label=period_change_usd_label,
         period_change_pct_label=period_change_pct_label,
+        period_cash_flow_label=period_cash_flow_label,
     )
 
 

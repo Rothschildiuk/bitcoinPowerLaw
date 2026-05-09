@@ -21,6 +21,7 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY,
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
+    KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
     KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
@@ -71,6 +72,21 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     st.caption(
         "Adds a second portfolio line using fixed monthly cash flow in the current currency."
     )
+    st.markdown("**Experimental: sell % of MoM Change**")
+    sell_mom_pct = float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0))
+    sell_mom_pct = min(max(sell_mom_pct, 0.0), 100.0)
+    st.session_state[KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT] = sell_mom_pct
+    st.number_input(
+        "Experimental: sell % of MoM Change",
+        min_value=0.0,
+        max_value=100.0,
+        value=sell_mom_pct,
+        step=1.0,
+        format="%.1f",
+        key=KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
+        label_visibility="collapsed",
+    )
+    st.caption("Sells this percentage of positive hold-only MoM Change each month.")
     st.markdown("**Price scenario**")
     sigma_options = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
 

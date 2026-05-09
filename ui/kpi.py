@@ -3,6 +3,8 @@ import streamlit as st
 
 from core.utils import evaluate_powerlaw_values
 
+SIGMA_LEVELS = (-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0)
+
 
 def _kpi_card(col, label, value, delta=None, d_color=None):
     delta_html = (
@@ -20,45 +22,97 @@ def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
     return f"{currency_prefix}{value:,.{currency_decimals}f}{currency_suffix}"
 
 
+def _empty_band_shares():
+    return [
+        {
+            "lower_level": lower_level,
+            "upper_level": upper_level,
+            "label": f"{_format_sigma_level(lower_level)} to {_format_sigma_level(upper_level)}",
+            "share": 0.0,
+        }
+        for lower_level, upper_level in zip(SIGMA_LEVELS[:-1], SIGMA_LEVELS[1:])
+    ]
+
+
+def _format_sigma_level(value):
+    if float(value) == 0.0:
+        return "Power Law"
+    return f"{value:+g}σ"
+
+
+def _resolve_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
+    scenario_levels = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
+    scenario_offsets = np.array([p2_5, p16_5, 0.0, p83_5, p97_5], dtype=float)
+    if not np.all(np.isfinite(scenario_offsets)):
+        return None
+    return {
+        level: float(np.interp(level, scenario_levels, scenario_offsets)) for level in SIGMA_LEVELS
+    }
+
+
 def calculate_powerlaw_band_shares(df_display, p2_5, p16_5, p83_5, p97_5):
     residuals = np.asarray(df_display["Res"], dtype=float)
     valid_mask = np.isfinite(residuals)
     valid_residuals = residuals[valid_mask]
     if valid_residuals.size == 0:
-        return {
-            "plus_two_to_plus_one": 0.0,
-            "plus_one_to_powerlaw": 0.0,
-            "powerlaw_to_minus_one": 0.0,
-            "minus_one_to_minus_two": 0.0,
-        }
+        return _empty_band_shares()
 
     p2_5, p16_5, p83_5, p97_5 = (float(p2_5), float(p16_5), float(p83_5), float(p97_5))
-    thresholds = np.array([p2_5, p16_5, p83_5, p97_5], dtype=float)
-    if not np.all(np.isfinite(thresholds)):
-        return {
-            "plus_two_to_plus_one": 0.0,
-            "plus_one_to_powerlaw": 0.0,
-            "powerlaw_to_minus_one": 0.0,
-            "minus_one_to_minus_two": 0.0,
-        }
+    sigma_offsets = _resolve_sigma_offsets(p2_5, p16_5, p83_5, p97_5)
+    if sigma_offsets is None:
+        return _empty_band_shares()
 
     total = float(valid_residuals.size)
-    return {
-        "plus_two_to_plus_one": float(
-            np.count_nonzero((valid_residuals >= p83_5) & (valid_residuals <= p97_5))
-            / total
-            * 100.0
+    band_shares = []
+    for lower_level, upper_level in zip(SIGMA_LEVELS[:-1], SIGMA_LEVELS[1:]):
+        lower_offset = sigma_offsets[lower_level]
+        upper_offset = sigma_offsets[upper_level]
+        if upper_level == SIGMA_LEVELS[-1]:
+            count = np.count_nonzero(
+                (valid_residuals >= lower_offset) & (valid_residuals <= upper_offset)
+            )
+        else:
+            count = np.count_nonzero(
+                (valid_residuals >= lower_offset) & (valid_residuals < upper_offset)
+            )
+        band_shares.append(
+            {
+                "lower_level": lower_level,
+                "upper_level": upper_level,
+                "label": f"{_format_sigma_level(lower_level)} to {_format_sigma_level(upper_level)}",
+                "share": float(count / total * 100.0),
+            }
+        )
+    return band_shares
+
+
+def _render_sigma_band_chart(band_shares):
+    max_share = max((float(band["share"]) for band in band_shares), default=0.0)
+    scale_max = max(max_share, 1.0)
+    bars = "".join(
+        (
+            "<div class='sigma-bar-item'>"
+            f"<div class='sigma-bar-value'>{band['share']:.1f}%</div>"
+            "<div class='sigma-bar-track'>"
+            f"<div class='sigma-bar-fill' style='height:{(float(band['share']) / scale_max) * 100.0:.1f}%;'></div>"
+            "</div>"
+            f"<div class='sigma-bar-label'>{band['label']}</div>"
+            "</div>"
+        )
+        for band in band_shares
+    )
+    st.markdown(
+        (
+            "<div class='sigma-chart-card'>"
+            "<div class='sigma-chart-header'>"
+            "<span>Sigma band</span>"
+            "<span>History share</span>"
+            "</div>"
+            f"<div class='sigma-bars'>{bars}</div>"
+            "</div>"
         ),
-        "plus_one_to_powerlaw": float(
-            np.count_nonzero((valid_residuals >= 0.0) & (valid_residuals < p83_5)) / total * 100.0
-        ),
-        "powerlaw_to_minus_one": float(
-            np.count_nonzero((valid_residuals >= p16_5) & (valid_residuals < 0.0)) / total * 100.0
-        ),
-        "minus_one_to_minus_two": float(
-            np.count_nonzero((valid_residuals >= p2_5) & (valid_residuals < p16_5)) / total * 100.0
-        ),
-    }
+        unsafe_allow_html=True,
+    )
 
 
 def render_model_kpis(
@@ -90,7 +144,7 @@ def render_model_kpis(
     pot = ((pot_target - l_p) / l_p) * 100
     band_shares = calculate_powerlaw_band_shares(df_display, p2_5, p16_5, p83_5, p97_5)
 
-    k1, k2, k3, z1, z2, z3, z4 = st.columns([1.25, 1.25, 1.25, 1, 1, 1, 1])
+    k1, k2, k3 = st.columns(3)
     _kpi_card(
         k1,
         f"{target_series_name.upper()}",
@@ -107,31 +161,4 @@ def render_model_kpis(
     )
     _kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
 
-    _kpi_card(
-        z1,
-        "TIME -2σ TO -1σ",
-        f"{band_shares['minus_one_to_minus_two']:.1f}%",
-        "history share",
-        "#1199d6",
-    )
-    _kpi_card(
-        z2,
-        "TIME -1σ TO POWER LAW",
-        f"{band_shares['powerlaw_to_minus_one']:.1f}%",
-        "history share",
-        "#0ecb81",
-    )
-    _kpi_card(
-        z3,
-        "TIME POWER LAW TO +1σ",
-        f"{band_shares['plus_one_to_powerlaw']:.1f}%",
-        "history share",
-        "#f0b90b",
-    )
-    _kpi_card(
-        z4,
-        "TIME +1σ TO +2σ",
-        f"{band_shares['plus_two_to_plus_one']:.1f}%",
-        "history share",
-        "#ea3d2f",
-    )
+    _render_sigma_band_chart(band_shares)

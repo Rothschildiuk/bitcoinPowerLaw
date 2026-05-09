@@ -15,6 +15,7 @@ HALVING_DATES = [
 ]
 TIME_AXIS_LEADING_PADDING_DAYS = 90
 MODEL_FORWARD_YEARS = 5
+OPTIONAL_SIGMA_LEVELS = (-1.5, -0.5, 0.5, 1.5)
 
 
 def _main_chart_plotly_config():
@@ -105,6 +106,28 @@ def _resolve_log_time_axis(df_display, current_gen_date, view_max, m_dates):
             tick_labels.append(str(year))
 
     return [np.log10(range_start_day), np.log10(range_end_day)], tick_days, tick_labels
+
+
+def _resolve_optional_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
+    scenario_levels = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
+    scenario_offsets = np.array([p2_5, p16_5, 0.0, p83_5, p97_5], dtype=float)
+    if not np.all(np.isfinite(scenario_offsets)):
+        return []
+
+    return [
+        (level, float(np.interp(level, scenario_levels, scenario_offsets)))
+        for level in OPTIONAL_SIGMA_LEVELS
+    ]
+
+
+def _format_sigma_line_name(level):
+    return f"{level:+g}σ"
+
+
+def _optional_sigma_line_style(level):
+    if level > 0.0:
+        return dict(color="rgba(234, 61, 47, 0.72)", width=1.0, dash="dash")
+    return dict(color="rgba(17, 153, 214, 0.72)", width=1.0, dash="dash")
 
 
 def render_main_model_chart(
@@ -205,87 +228,166 @@ def render_main_model_chart(
                 y=df_display["CloseDisplay"],
                 mode="lines",
                 name=main_series_label,
-                legendrank=10,
                 line=dict(color=pl_btc_color, width=1.5),
                 customdata=df_display.index.strftime("%d.%m.%Y"),
                 hovertemplate=btc_hover,
             )
         )
 
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=p97_5_series,
-                mode="lines",
-                line=dict(color="#ea3d2f", width=1.2, dash="dot"),
-                name=p97_5_name,
-                legendrank=20,
-                customdata=m_dates_str,
-                hovertemplate=(
-                    f"<b>{p97_5_name}</b>: "
-                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
+        def add_model_line(y_values, name, line, legendgroup, visible=True):
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_x_model,
+                    y=y_values,
+                    mode="lines",
+                    line=line,
+                    name=name,
+                    legendgroup=legendgroup,
+                    showlegend=False,
+                    visible=visible,
+                    customdata=m_dates_str,
+                    hovertemplate=(
+                        f"<b>{name}</b>: "
+                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                    ),
+                )
             )
+
+        def add_legend_item(name, line, legendgroup, visible=True):
+            fig.add_trace(
+                go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode="lines",
+                    line=line,
+                    name=name,
+                    legendgroup=legendgroup,
+                    visible=visible,
+                    hoverinfo="skip",
+                    showlegend=True,
+                )
+            )
+
+        optional_sigma_series = {}
+        for sigma_level, sigma_offset in _resolve_optional_sigma_offsets(
+            p2_5,
+            p16_5,
+            p83_5,
+            p97_5,
+        ):
+            sigma_series, _, _ = evaluate_powerlaw_values(
+                np.log10(m_fair_display),
+                sigma_offset,
+                1.0,
+            )
+            optional_sigma_series[sigma_level] = sigma_series
+
+        add_model_line(
+            p97_5_series,
+            p97_5_name,
+            dict(color="#ea3d2f", width=1.2, dash="dot"),
+            "sigma_p2",
         )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=p83_5_series,
-                mode="lines",
-                line=dict(color="#1199d6", width=1.2, dash="dot"),
-                name=p83_5_name,
-                legendrank=30,
-                customdata=m_dates_str,
-                hovertemplate=(
-                    f"<b>{p83_5_name}</b>: "
-                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
-            )
+        add_model_line(
+            optional_sigma_series[1.5],
+            _format_sigma_line_name(1.5),
+            _optional_sigma_line_style(1.5),
+            "sigma_p1_5",
+            visible="legendonly",
         )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=m_fair_display,
-                mode="lines",
-                line=dict(color="#f0b90b", width=1.8),
-                name="Power regression",
-                legendrank=40,
-                customdata=m_dates_str,
-                hovertemplate=(
-                    "<b>Power regression</b>: "
-                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
-            )
+        add_model_line(
+            p83_5_series,
+            p83_5_name,
+            dict(color="#1199d6", width=1.2, dash="dot"),
+            "sigma_p1",
         )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=p16_5_series,
-                mode="lines",
-                line=dict(color="#1199d6", width=1.2, dash="dot"),
-                name=p16_5_name,
-                legendrank=50,
-                customdata=m_dates_str,
-                hovertemplate=(
-                    f"<b>{p16_5_name}</b>: "
-                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
-            )
+        add_model_line(
+            optional_sigma_series[0.5],
+            _format_sigma_line_name(0.5),
+            _optional_sigma_line_style(0.5),
+            "sigma_p0_5",
+            visible="legendonly",
         )
-        fig.add_trace(
-            go.Scatter(
-                x=plot_x_model,
-                y=p2_5_series,
-                mode="lines",
-                line=dict(color="#ea3d2f", width=1.2, dash="dot"),
-                name=p2_5_name,
-                legendrank=60,
-                customdata=m_dates_str,
-                hovertemplate=(
-                    f"<b>{p2_5_name}</b>: "
-                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
-            )
+        add_model_line(
+            m_fair_display,
+            "Power regression",
+            dict(color="#f0b90b", width=1.8),
+            "power_regression",
+        )
+        add_model_line(
+            optional_sigma_series[-0.5],
+            _format_sigma_line_name(-0.5),
+            _optional_sigma_line_style(-0.5),
+            "sigma_m0_5",
+            visible="legendonly",
+        )
+        add_model_line(
+            p16_5_series,
+            p16_5_name,
+            dict(color="#1199d6", width=1.2, dash="dot"),
+            "sigma_m1",
+        )
+        add_model_line(
+            optional_sigma_series[-1.5],
+            _format_sigma_line_name(-1.5),
+            _optional_sigma_line_style(-1.5),
+            "sigma_m1_5",
+            visible="legendonly",
+        )
+        add_model_line(
+            p2_5_series,
+            p2_5_name,
+            dict(color="#ea3d2f", width=1.2, dash="dot"),
+            "sigma_m2",
+        )
+        add_legend_item(
+            p2_5_name,
+            dict(color="#ea3d2f", width=1.2, dash="dot"),
+            "sigma_m2",
+        )
+        add_legend_item(
+            _format_sigma_line_name(-1.5),
+            _optional_sigma_line_style(-1.5),
+            "sigma_m1_5",
+            visible="legendonly",
+        )
+        add_legend_item(
+            p16_5_name,
+            dict(color="#1199d6", width=1.2, dash="dot"),
+            "sigma_m1",
+        )
+        add_legend_item(
+            _format_sigma_line_name(-0.5),
+            _optional_sigma_line_style(-0.5),
+            "sigma_m0_5",
+            visible="legendonly",
+        )
+        add_legend_item(
+            "Power regression",
+            dict(color="#f0b90b", width=1.8),
+            "power_regression",
+        )
+        add_legend_item(
+            _format_sigma_line_name(0.5),
+            _optional_sigma_line_style(0.5),
+            "sigma_p0_5",
+            visible="legendonly",
+        )
+        add_legend_item(
+            p83_5_name,
+            dict(color="#1199d6", width=1.2, dash="dot"),
+            "sigma_p1",
+        )
+        add_legend_item(
+            _format_sigma_line_name(1.5),
+            _optional_sigma_line_style(1.5),
+            "sigma_p1_5",
+            visible="legendonly",
+        )
+        add_legend_item(
+            p97_5_name,
+            dict(color="#ea3d2f", width=1.2, dash="dot"),
+            "sigma_p2",
         )
         if show_halving_lines:
             for halving_date in HALVING_DATES:
@@ -465,6 +567,7 @@ def render_main_model_chart(
             xanchor="center",
             font=dict(size=14, color=pl_legend_color),
             bgcolor="rgba(0,0,0,0)",
+            groupclick="togglegroup",
         ),
         paper_bgcolor=pl_bg_color,
         plot_bgcolor=pl_bg_color,

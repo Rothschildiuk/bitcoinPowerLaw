@@ -195,6 +195,123 @@ class TestPortfolioHelpers(unittest.TestCase):
             np.allclose(result.portfolio_df["DcaPortfolioUSD"], np.array([0.0, 0.0, 100.0]))
         )
 
+    def test_build_portfolio_projection_sells_percentage_of_positive_monthly_change(self):
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=50.0,
+            forecast_unit="Month",
+            forecast_horizon=2,
+        )
+
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-03-15"]),
+            current_gen_date=pd.Timestamp("2026-01-01"),
+            intercept_a=0.0,
+            slope_b=1.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-03-15"),
+        )
+
+        expected_cash_flow = -(((90.0 - 59.0) * 1.0) * 0.5)
+        expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
+
+        self.assertTrue(
+            np.allclose(result.portfolio_df["DcaBTC"], np.array([1.0, 1.0, expected_april_btc]))
+        )
+        self.assertTrue(
+            np.allclose(
+                result.portfolio_df["DcaInvestedCapitalUSD"],
+                np.array([0.0, 0.0, expected_cash_flow]),
+            )
+        )
+        self.assertTrue(
+            np.allclose(
+                result.portfolio_df["DcaPortfolioUSD"],
+                np.array([31.0, 59.0, 90.0 + expected_cash_flow]),
+            )
+        )
+
+    def test_build_portfolio_projection_does_not_buy_on_negative_monthly_change(self):
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=50.0,
+            forecast_unit="Month",
+            forecast_horizon=2,
+        )
+
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-03-15"]),
+            current_gen_date=pd.Timestamp("2025-11-01"),
+            intercept_a=3.0,
+            slope_b=-1.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-03-15"),
+        )
+
+        self.assertTrue(np.allclose(result.portfolio_df["DcaBTC"], np.array([1.0, 1.0, 1.0])))
+        self.assertTrue(
+            np.allclose(result.portfolio_df["DcaInvestedCapitalUSD"], np.array([0.0, 0.0, 0.0]))
+        )
+
+    def test_build_portfolio_projection_clamps_monthly_change_sell_percentage(self):
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=150.0,
+            forecast_unit="Month",
+            forecast_horizon=2,
+        )
+
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-03-15"]),
+            current_gen_date=pd.Timestamp("2026-01-01"),
+            intercept_a=0.0,
+            slope_b=1.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-03-15"),
+        )
+
+        expected_cash_flow = -(90.0 - 59.0)
+        expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
+
+        self.assertTrue(
+            np.allclose(result.portfolio_df["DcaBTC"], np.array([1.0, 1.0, expected_april_btc]))
+        )
+        self.assertTrue(
+            np.allclose(
+                result.portfolio_df["DcaInvestedCapitalUSD"],
+                np.array([0.0, 0.0, expected_cash_flow]),
+            )
+        )
+
+    def test_build_portfolio_projection_keeps_capital_flat_when_selling_full_monthly_growth(self):
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=100.0,
+            forecast_unit="Month",
+            forecast_horizon=4,
+        )
+
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-03-15"]),
+            current_gen_date=pd.Timestamp("2026-01-01"),
+            intercept_a=0.0,
+            slope_b=1.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-03-15"),
+        )
+
+        self.assertTrue(
+            np.allclose(
+                result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)[2:],
+                np.array([59.0, 59.0, 59.0]),
+                atol=1e-9,
+            )
+        )
+
     def test_build_portfolio_view_model_excludes_baseline_and_adds_dca_columns(self):
         projection_result = PortfolioProjectionResult(
             portfolio_df=pd.DataFrame(
@@ -229,8 +346,73 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertEqual(view_model.last_dca_invested_capital, 200.0)
         self.assertEqual(view_model.total_growth_pct, 20.0)
         self.assertIn("Portfolio + monthly cash flow (USD)", view_model.table_df.columns)
+        self.assertIn("Monthly withdrawal (USD)", view_model.table_df.columns)
         self.assertIn("Net cash flow (USD)", view_model.table_df.columns)
         self.assertIn("BTC after monthly cash flow", view_model.table_df.columns)
+        self.assertTrue(
+            np.allclose(view_model.table_df["Monthly withdrawal (USD)"], np.array([0.0, 0.0]))
+        )
+
+    def test_build_portfolio_view_model_enables_dca_for_monthly_change_percentage(self):
+        projection_result = PortfolioProjectionResult(
+            portfolio_df=pd.DataFrame(
+                {
+                    "Date": pd.to_datetime(["2026-01-01", "2026-02-01"]),
+                    "FairPriceUSD": [100.0, 120.0],
+                    "PortfolioUSD": [100.0, 120.0],
+                    "DcaBTC": [1.0, 1.1],
+                    "DcaPortfolioUSD": [100.0, 132.0],
+                    "DcaInvestedCapitalUSD": [0.0, 12.0],
+                    "MoM_USD": [np.nan, 20.0],
+                    "MoM_pct": [np.nan, 20.0],
+                }
+            ),
+            table_title="Monthly growth table",
+            forecast_unit="Month",
+            change_usd_col="MoM_USD",
+            change_pct_col="MoM_pct",
+        )
+
+        view_model = build_portfolio_view_model(
+            projection_result,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=60.0,
+            currency_unit="USD",
+        )
+
+        self.assertTrue(view_model.dca_enabled)
+        self.assertIn("Portfolio + monthly cash flow (USD)", view_model.table_df.columns)
+
+    def test_build_portfolio_view_model_shows_monthly_withdrawal_as_positive_amount(self):
+        projection_result = PortfolioProjectionResult(
+            portfolio_df=pd.DataFrame(
+                {
+                    "Date": pd.to_datetime(["2026-01-01", "2026-02-01", "2026-03-01"]),
+                    "FairPriceUSD": [100.0, 110.0, 120.0],
+                    "PortfolioUSD": [200.0, 220.0, 240.0],
+                    "DcaBTC": [2.0, 1.9, 1.75],
+                    "DcaPortfolioUSD": [200.0, 209.0, 210.0],
+                    "DcaInvestedCapitalUSD": [0.0, -100.0, -250.0],
+                    "MoM_USD": [np.nan, 20.0, 20.0],
+                    "MoM_pct": [np.nan, 10.0, 9.09],
+                }
+            ),
+            table_title="Monthly growth table",
+            forecast_unit="Month",
+            change_usd_col="MoM_USD",
+            change_pct_col="MoM_pct",
+        )
+
+        view_model = build_portfolio_view_model(
+            projection_result,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=100.0,
+            currency_unit="USD",
+        )
+
+        self.assertTrue(
+            np.allclose(view_model.table_df["Monthly withdrawal (USD)"], np.array([100.0, 150.0]))
+        )
 
     def test_build_portfolio_view_model_avoids_divide_by_zero_growth(self):
         projection_result = PortfolioProjectionResult(

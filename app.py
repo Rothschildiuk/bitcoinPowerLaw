@@ -31,6 +31,7 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
+    KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
     KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_THEME_MODE,
     MODE_LOGPERIODIC,
@@ -110,6 +111,7 @@ def initialize_app_session_state():
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
         KEY_PORTFOLIO_SIGMA_LEVEL: 0,
+        KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT: 0.0,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -211,6 +213,9 @@ def render_portfolio_view(
     settings = PortfolioSettings(
         btc_amount=float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)),
         monthly_buy_amount=float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0.0)),
+        monthly_mom_change_pct=float(
+            st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0)
+        ),
         forecast_unit=st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Year"),
         forecast_horizon=int(
             st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
@@ -228,8 +233,9 @@ def render_portfolio_view(
     )
     portfolio_view = build_portfolio_view_model(
         projection_result,
-        settings.monthly_buy_amount,
-        currency_unit,
+        monthly_buy_amount=settings.monthly_buy_amount,
+        currency_unit=currency_unit,
+        monthly_mom_change_pct=settings.monthly_mom_change_pct,
     )
 
     unstable_portfolio = powerlaw_parameters_are_unstable(
@@ -310,6 +316,19 @@ def render_portfolio_view(
         portfolio_fig.add_trace(
             go.Scatter(
                 x=portfolio_view.portfolio_display_df["Date"],
+                y=portfolio_view.portfolio_display_df["DcaPeriodCashFlowDisplay"],
+                mode="lines+markers",
+                name=portfolio_view.period_cash_flow_label,
+                line=dict(color="#38bdf8", width=2),
+                hovertemplate=(
+                    f"<b>%{{x|%d.%m.%Y}}</b><br>{portfolio_view.period_cash_flow_label}: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        portfolio_fig.add_trace(
+            go.Scatter(
+                x=portfolio_view.portfolio_display_df["Date"],
                 y=portfolio_view.portfolio_display_df["DcaInvestedCapitalDisplay"],
                 mode="lines+markers",
                 name="Cumulative net cash flow",
@@ -360,6 +379,7 @@ def render_portfolio_view(
     }
     if portfolio_view.dca_enabled:
         style_format[f"Portfolio + monthly cash flow ({currency_unit})"] = money_fmt
+        style_format[portfolio_view.period_cash_flow_label] = money_fmt
         style_format[f"Net cash flow ({currency_unit})"] = money_fmt
         style_format["BTC after monthly cash flow"] = "{:,.6f}"
     st.dataframe(

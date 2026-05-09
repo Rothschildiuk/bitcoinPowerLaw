@@ -7,7 +7,7 @@ from ui.kpi import calculate_powerlaw_band_shares
 
 
 class TestUIKpi(unittest.TestCase):
-    def test_calculate_powerlaw_band_shares_counts_four_sigma_zones(self):
+    def test_calculate_powerlaw_band_shares_counts_half_sigma_zones(self):
         df_display = pd.DataFrame(
             {
                 "Res": [
@@ -34,10 +34,20 @@ class TestUIKpi(unittest.TestCase):
             p97_5=1.0,
         )
 
-        self.assertEqual(shares["plus_two_to_plus_one"], 20.0)
-        self.assertEqual(shares["plus_one_to_powerlaw"], 20.0)
-        self.assertEqual(shares["powerlaw_to_minus_one"], 20.0)
-        self.assertEqual(shares["minus_one_to_minus_two"], 20.0)
+        self.assertEqual(
+            [band["label"] for band in shares],
+            [
+                "-2σ to -1.5σ",
+                "-1.5σ to -1σ",
+                "-1σ to -0.5σ",
+                "-0.5σ to Power Law",
+                "Power Law to +0.5σ",
+                "+0.5σ to +1σ",
+                "+1σ to +1.5σ",
+                "+1.5σ to +2σ",
+            ],
+        )
+        self.assertEqual([band["share"] for band in shares], [10.0] * 8)
 
     def test_calculate_powerlaw_band_shares_returns_zero_for_no_valid_residuals(self):
         df_display = pd.DataFrame({"Res": [np.nan, np.inf]})
@@ -50,15 +60,7 @@ class TestUIKpi(unittest.TestCase):
             p97_5=1.0,
         )
 
-        self.assertEqual(
-            shares,
-            {
-                "plus_two_to_plus_one": 0.0,
-                "plus_one_to_powerlaw": 0.0,
-                "powerlaw_to_minus_one": 0.0,
-                "minus_one_to_minus_two": 0.0,
-            },
-        )
+        self.assertEqual([band["share"] for band in shares], [0.0] * 8)
 
 
 if __name__ == "__main__":
