@@ -8,14 +8,51 @@ from core.utils import (
     PortfolioSettings,
     build_portfolio_projection,
     build_portfolio_view_model,
+    estimate_current_monthly_pension,
     get_growth_change_labels,
+    interpolate_sigma_level_from_log_offset,
     normalize_periodic_growth_rate,
+    rate_withdrawal_attractiveness,
     resolve_projection_anchor_day,
     resolve_portfolio_scenario_log_offset,
 )
 
 
 class TestPortfolioHelpers(unittest.TestCase):
+    def test_interpolate_sigma_level_from_log_offset_returns_exact_fractional_sigma(self):
+        sigma_level = interpolate_sigma_level_from_log_offset(
+            log_offset=0.3,
+            percentile_offsets=(-1.0, -0.4, 0.6, 1.2),
+        )
+
+        self.assertTrue(np.isclose(sigma_level, 0.5))
+
+    def test_estimate_current_monthly_pension_uses_current_exact_sigma_line(self):
+        estimate = estimate_current_monthly_pension(
+            current_price=3000.0,
+            current_model_log=np.log10(3000.0),
+            current_date=pd.Timestamp("2026-01-31"),
+            current_gen_date=pd.Timestamp("2026-01-01"),
+            intercept_a=2.0,
+            slope_b=1.0,
+            btc_amount=0.8,
+            sell_mom_change_pct=50.0,
+            percentile_offsets=(-0.5, -0.25, 0.25, 0.5),
+        )
+
+        self.assertTrue(np.isclose(estimate.current_sigma_level, 0.0))
+        self.assertTrue(np.isclose(estimate.next_month_price, 5800.0))
+        self.assertTrue(np.isclose(estimate.monthly_growth_per_btc, 2800.0))
+        self.assertTrue(np.isclose(estimate.max_monthly_withdrawal, 2240.0))
+        self.assertTrue(np.isclose(estimate.selected_monthly_withdrawal, 1120.0))
+        self.assertEqual(estimate.withdrawal_rating, "Attractive")
+
+    def test_rate_withdrawal_attractiveness_uses_sigma_bands(self):
+        self.assertEqual(rate_withdrawal_attractiveness(-1.2)[0], "Not attractive")
+        self.assertEqual(rate_withdrawal_attractiveness(-0.4)[0], "Cautious")
+        self.assertEqual(rate_withdrawal_attractiveness(0.4)[0], "Attractive")
+        self.assertEqual(rate_withdrawal_attractiveness(1.2)[0], "Very attractive")
+
     def test_resolve_projection_anchor_day_uses_newer_of_data_and_today(self):
         df_index = pd.to_datetime(["2026-01-15", "2026-02-15"])
 

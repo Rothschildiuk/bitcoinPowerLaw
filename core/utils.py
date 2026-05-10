@@ -45,6 +45,20 @@ class PortfolioViewModel:
 
 
 @dataclass(frozen=True)
+class CurrentMonthlyPensionEstimate:
+    current_sigma_level: float
+    withdrawal_rating: str
+    withdrawal_rating_color: str
+    withdrawal_rating_note: str
+    current_price: float
+    next_month_price: float
+    monthly_growth_per_btc: float
+    max_monthly_withdrawal: float
+    selected_monthly_withdrawal: float
+    next_month_date: pd.Timestamp
+
+
+@dataclass(frozen=True)
 class TrendComputationResult:
     intercept_a: float
     slope_b: float
@@ -233,6 +247,128 @@ def resolve_portfolio_scenario_log_offset(settings):
         log_offset = float(settings.sigma_level) * float(settings.residual_sigma_log)
 
     return log_offset if np.isfinite(log_offset) else 0.0
+
+
+def interpolate_sigma_level_from_log_offset(log_offset, percentile_offsets):
+    offsets = np.array(
+        [
+            percentile_offsets[0],
+            percentile_offsets[1],
+            0.0,
+            percentile_offsets[2],
+            percentile_offsets[3],
+        ],
+        dtype=float,
+    )
+    levels = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
+    if not np.isfinite(log_offset) or not np.all(np.isfinite(offsets)):
+        return 0.0
+
+    sort_order = np.argsort(offsets)
+    offsets = offsets[sort_order]
+    levels = levels[sort_order]
+    unique_offsets, unique_indices = np.unique(offsets, return_index=True)
+    offsets = unique_offsets
+    levels = levels[unique_indices]
+    if offsets.size < 2:
+        return 0.0
+
+    log_offset = float(log_offset)
+    if log_offset <= offsets[0]:
+        x0, x1 = offsets[0], offsets[1]
+        y0, y1 = levels[0], levels[1]
+    elif log_offset >= offsets[-1]:
+        x0, x1 = offsets[-2], offsets[-1]
+        y0, y1 = levels[-2], levels[-1]
+    else:
+        return float(np.interp(log_offset, offsets, levels))
+
+    if np.isclose(x0, x1):
+        return float(y0)
+    return float(y0 + ((log_offset - x0) / (x1 - x0)) * (y1 - y0))
+
+
+def rate_withdrawal_attractiveness(sigma_level):
+    sigma_level = float(sigma_level)
+    if not np.isfinite(sigma_level):
+        sigma_level = 0.0
+    if sigma_level < -1.0:
+        return (
+            "Not attractive",
+            "#ef4444",
+            "Below -1σ; prefer cash buffer over selling BTC if possible.",
+        )
+    if sigma_level < 0.0:
+        return (
+            "Cautious",
+            "#f97316",
+            "Below fair value; withdraw only if needed.",
+        )
+    if sigma_level < 1.0:
+        return (
+            "Attractive",
+            "#f0b90b",
+            "Above fair value; growth withdrawals are more reasonable.",
+        )
+    return (
+        "Very attractive",
+        "#0ecb81",
+        "Above +1σ; historically expensive zone for taking profits.",
+    )
+
+
+def estimate_current_monthly_pension(
+    *,
+    current_price,
+    current_model_log,
+    current_date,
+    current_gen_date,
+    intercept_a,
+    slope_b,
+    btc_amount,
+    sell_mom_change_pct,
+    percentile_offsets,
+):
+    current_price = float(current_price)
+    current_model_log = float(current_model_log)
+    if not np.isfinite(current_price) or current_price <= 0.0 or not np.isfinite(current_model_log):
+        current_price = 0.0
+        current_log_offset = 0.0
+    else:
+        current_log_offset = float(np.log10(current_price) - current_model_log)
+
+    current_sigma_level = interpolate_sigma_level_from_log_offset(
+        current_log_offset,
+        percentile_offsets,
+    )
+    rating, rating_color, rating_note = rate_withdrawal_attractiveness(current_sigma_level)
+    current_date = pd.Timestamp(current_date)
+    if current_date.tzinfo is not None:
+        current_date = current_date.tz_localize(None)
+    next_month_date = current_date + pd.DateOffset(months=1)
+    next_month_days = max(1.0, float((next_month_date - pd.Timestamp(current_gen_date)).days))
+    next_month_fair_price, _, _ = evaluate_powerlaw_values(
+        np.array([np.log10(next_month_days)]),
+        intercept_a,
+        slope_b,
+    )
+    next_month_price = float(next_month_fair_price[0] * np.power(10.0, current_log_offset))
+    monthly_growth_per_btc = max(0.0, next_month_price - current_price)
+    max_monthly_withdrawal = monthly_growth_per_btc * max(float(btc_amount), 0.0)
+    sell_ratio = min(max(float(sell_mom_change_pct) / 100.0, 0.0), 1.0)
+
+    return CurrentMonthlyPensionEstimate(
+        current_sigma_level=current_sigma_level,
+        withdrawal_rating=rating,
+        withdrawal_rating_color=rating_color,
+        withdrawal_rating_note=rating_note,
+        current_price=current_price,
+        next_month_price=next_month_price,
+        monthly_growth_per_btc=monthly_growth_per_btc,
+        max_monthly_withdrawal=max_monthly_withdrawal,
+        selected_monthly_withdrawal=max_monthly_withdrawal * sell_ratio,
+        next_month_date=next_month_date,
+    )
 
 
 def calculate_monthly_buy_portfolio_values(

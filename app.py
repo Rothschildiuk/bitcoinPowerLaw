@@ -68,6 +68,7 @@ from core.utils import (
     build_portfolio_view_model,
     calculate_expanding_powerlaw_parameters,
     calculate_r2_score,
+    estimate_current_monthly_pension,
     evaluate_powerlaw_values,
     powerlaw_parameters_are_unstable,
     resolve_trend_parameters,
@@ -280,6 +281,55 @@ def render_portfolio_view(
             format_portfolio_money(portfolio_view.last_value),
         )
         g3.metric("Total Growth", f"{portfolio_view.total_growth_pct:+.1f}%")
+
+    if st.button("Calculate current monthly pension", use_container_width=False):
+        st.session_state["show_current_monthly_pension"] = True
+    if st.session_state.get("show_current_monthly_pension", False):
+        pension_estimate = estimate_current_monthly_pension(
+            current_price=df_display["CloseDisplay"].iloc[-1],
+            current_model_log=df_display["ModelLog"].iloc[-1],
+            current_date=df_display.index[-1],
+            current_gen_date=current_gen_date,
+            intercept_a=a_active,
+            slope_b=b_active,
+            btc_amount=settings.btc_amount,
+            sell_mom_change_pct=settings.monthly_mom_change_pct,
+            percentile_offsets=percentile_offsets,
+        )
+        st.markdown("#### Current monthly pension")
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("Current sigma", f"{pension_estimate.current_sigma_level:+.3f}σ")
+        p1.markdown(
+            (
+                "<div class='pension-rating' "
+                f"style='border-color:{pension_estimate.withdrawal_rating_color};"
+                f"color:{pension_estimate.withdrawal_rating_color};'>"
+                f"{pension_estimate.withdrawal_rating}</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+        p2.metric(
+            "Same-sigma price next month",
+            format_portfolio_money(pension_estimate.next_month_price),
+            delta=f"{pension_estimate.next_month_date:%Y-%m-%d}",
+        )
+        p3.metric(
+            "Monthly growth per BTC",
+            format_portfolio_money(pension_estimate.monthly_growth_per_btc),
+        )
+        p4.metric(
+            f"Max pension for {settings.btc_amount:.4f} BTC",
+            format_portfolio_money(pension_estimate.max_monthly_withdrawal),
+        )
+        st.caption(
+            "Max pension assumes selling 100% of the modelled one-month growth on the current exact sigma line."
+        )
+        st.caption(pension_estimate.withdrawal_rating_note)
+        if settings.monthly_mom_change_pct != 100.0:
+            st.caption(
+                f"At selected sell {settings.monthly_mom_change_pct:.1f}%: "
+                f"{format_portfolio_money(pension_estimate.selected_monthly_withdrawal)}."
+            )
 
     portfolio_fig = go.Figure()
     portfolio_fig.add_trace(

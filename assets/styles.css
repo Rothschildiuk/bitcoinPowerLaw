@@ -32,6 +32,11 @@ footer {visibility: hidden; display: none;}
 .metric-label { color: __C_TEXT_MAIN__; font-size: 12px; font-weight: 600; line-height: 1.2; margin-bottom: 4px; opacity: 0.8; overflow-wrap: anywhere; }
 .metric-value { color: __C_TEXT_VAL__; font-size: 20px; font-weight: 800; }
 .metric-delta { font-size: 12px; font-weight: 600; margin-top: 2px; }
+.pension-rating {
+    display: inline-flex; align-items: center; justify-content: center; border: 1px solid; border-radius: 999px;
+    padding: 3px 9px; font-size: 12px; font-weight: 800; margin-top: -6px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.03);
+}
 .sigma-chart-card {
     background: __C_CARD_BG__; border: 1px solid __C_BORDER__; border-radius: 8px; margin-top: 10px; overflow-x: auto; overflow-y: hidden;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
