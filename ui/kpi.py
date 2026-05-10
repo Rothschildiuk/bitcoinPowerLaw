@@ -3,7 +3,7 @@ import streamlit as st
 
 from core.utils import evaluate_powerlaw_values
 
-SIGMA_LEVELS = (-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0)
+SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.0, 2.0 + 0.25, 0.25))
 
 
 def _kpi_card(col, label, value, delta=None, d_color=None):

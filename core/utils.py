@@ -786,12 +786,12 @@ def fancy_control(
     if auto_fit_clicked and on_auto_fit is not None:
         on_auto_fit()
 
-    return c2.slider(
+    return c2.number_input(
         key,
-        min_v,
-        max_v,
-        key=key,
+        min_value=min_v,
+        max_value=max_v,
         step=step,
+        key=key,
         format=display_format,
         label_visibility="collapsed",
         disabled=disabled,
