@@ -21,6 +21,7 @@ from core.constants import (  # noqa: E402
     OSC_DEFAULTS_DIFFICULTY,
     OSC_DEFAULTS_HASHRATE,
     POWERLAW_SERIES_DOGECOIN_BTC,
+    POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
@@ -41,6 +42,7 @@ from core.series_registry import get_active_model_config  # noqa: E402
 from core.utils import get_stable_trend_fit  # noqa: E402
 from services.price_service import (  # noqa: E402
     build_currency_close_series,
+    build_prepared_bitcoin_volatility_data,
     load_prepared_dogecoin_btc_data,
     load_prepared_difficulty_data,
     load_prepared_filecoin_btc_data,
@@ -64,6 +66,12 @@ DEFAULT_CASES = [
     (POWERLAW_SERIES_PRICE, CURRENCY_EURO, "DEFAULT_EURO_A", "DEFAULT_EURO_B"),
     (POWERLAW_SERIES_PRICE, CURRENCY_GOLD, "DEFAULT_GOLD_A", "DEFAULT_GOLD_B"),
     (POWERLAW_SERIES_REVENUE, CURRENCY_DOLLAR, "DEFAULT_REVENUE_A", "DEFAULT_REVENUE_B"),
+    (
+        POWERLAW_SERIES_BITCOIN_VOLATILITY,
+        CURRENCY_DOLLAR,
+        "DEFAULT_BITCOIN_VOLATILITY_A",
+        "DEFAULT_BITCOIN_VOLATILITY_B",
+    ),
     (
         POWERLAW_SERIES_DIFFICULTY,
         CURRENCY_DOLLAR,
@@ -141,9 +149,13 @@ OSCILLATOR_DEFAULT_CASES = [
 
 
 def _load_series_frames():
+    prepared_price_data = load_prepared_price_data()
     return {
-        POWERLAW_SERIES_PRICE: load_prepared_price_data(),
+        POWERLAW_SERIES_PRICE: prepared_price_data,
         POWERLAW_SERIES_REVENUE: load_prepared_miner_revenue_data(),
+        POWERLAW_SERIES_BITCOIN_VOLATILITY: build_prepared_bitcoin_volatility_data(
+            prepared_price_data
+        ),
         POWERLAW_SERIES_DIFFICULTY: load_prepared_difficulty_data(),
         POWERLAW_SERIES_HASHRATE: load_prepared_hashrate_data(),
         POWERLAW_SERIES_LIGHTNING_NODES: load_prepared_lightning_nodes_data(),
