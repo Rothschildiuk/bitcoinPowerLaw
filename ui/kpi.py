@@ -128,6 +128,8 @@ def render_model_kpis(
     currency_decimals,
     target_series_name,
     target_series_unit,
+    logperiodic_stats_rows=None,
+    perrenod_stats_rows=None,
 ):
     l_p, l_f = df_display["Close"].iloc[-1], df_display["Fair"].iloc[-1]
     l_p_display, l_f_display = (
@@ -160,5 +162,14 @@ def render_model_kpis(
         "#0ecb81" if diff < 0 else "#ea3d2f",
     )
     _kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
+
+    if logperiodic_stats_rows:
+        from core.oscillator import render_oscillator_model_stats_table
+
+        render_oscillator_model_stats_table(logperiodic_stats_rows)
+    if perrenod_stats_rows:
+        from core.oscillator import render_regression_comparison_stats_table
+
+        render_regression_comparison_stats_table(perrenod_stats_rows)
 
     _render_sigma_band_chart(band_shares)

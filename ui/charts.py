@@ -149,6 +149,7 @@ def render_main_model_chart(
     show_historical_powerlaw_slope,
     m_osc_y,
     m_osc_y_by_harmonic,
+    perrenod_curve,
     residual_sigma_log,
     p2_5,
     p16_5,
@@ -470,25 +471,45 @@ def render_main_model_chart(
                     line=dict(color="#f0b90b", width=1.9),
                     customdata=osc_dates,
                     hovertemplate="<b>%{customdata}</b><br>PowerLaw B: %{y:.3f}<extra></extra>",
+                    visible="legendonly",
                 ),
                 secondary_y=True,
             )
         harmonic_curves = m_osc_y_by_harmonic or {selected_harmonic_count: m_osc_y}
         harmonic_colors = {1: "#2f80b7", 2: "#f28e2b", 3: "#2aa84a"}
+        harmonic_labels = {1: "ω", 2: "ω,2ω", 3: "ω,2ω,4ω"}
         for harmonic_count in sorted(harmonic_curves):
             if harmonic_count > int(selected_harmonic_count):
                 continue
-            label_suffix = "harmonic" if harmonic_count == 1 else "harmonics"
             fig.add_trace(
                 go.Scatter(
                     x=plot_x_model,
                     y=np.asarray(harmonic_curves[harmonic_count], dtype=float) / sigma_scale,
                     mode="lines",
-                    name=f"DSI {harmonic_count} {label_suffix}",
+                    name=f"DSI {harmonic_labels.get(harmonic_count, harmonic_count)}",
                     line=dict(
                         color=harmonic_colors.get(harmonic_count, "#ea3d2f"),
                         width=2.6 if harmonic_count == int(selected_harmonic_count) else 1.9,
                     ),
+                    hoverinfo="skip",
+                    visible="legendonly",
+                )
+            )
+        if perrenod_curve is not None:
+            perrenod_label = str(perrenod_curve.get("label", "DSI decayed"))
+            perrenod_r2 = perrenod_curve.get("r2")
+            perrenod_name = (
+                f"{perrenod_label} R² {perrenod_r2:.2f}%"
+                if perrenod_r2 is not None and np.isfinite(perrenod_r2)
+                else perrenod_label
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_x_model,
+                    y=np.asarray(perrenod_curve["values"], dtype=float) / sigma_scale,
+                    mode="lines",
+                    name=perrenod_name,
+                    line=dict(color="#f0b90b", width=3.0, dash="solid"),
                     hoverinfo="skip",
                 )
             )

@@ -53,6 +53,7 @@ OSC_DEFAULTS_HASHRATE = {
     "lambda_val": 4.71,
     "t1_age": 1.69,
     "amp_factor_top": 0.68,
+    "harmonic_count": 1,
 }
 """
         updated = update_constants_content(
@@ -61,12 +62,14 @@ OSC_DEFAULTS_HASHRATE = {
                 "DEFAULT_A": "-16.400",
                 "OSC_DEFAULTS_HASHRATE.lambda_val": "5.32",
                 "OSC_DEFAULTS_HASHRATE.t1_age": "1.51",
+                "OSC_DEFAULTS_HASHRATE.harmonic_count": "3",
             },
         )
 
         self.assertIn("DEFAULT_A = -16.400", updated)
         self.assertIn('"lambda_val": 5.32,', updated)
         self.assertIn('"t1_age": 1.51,', updated)
+        self.assertIn('"harmonic_count": 3,', updated)
 
 
 if __name__ == "__main__":

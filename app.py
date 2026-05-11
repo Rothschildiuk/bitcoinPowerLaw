@@ -26,6 +26,7 @@ from core.constants import (
     KEY_LAST_MODE,
     KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_SERIES,
+    KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -110,7 +111,8 @@ def initialize_app_session_state():
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
-        KEY_LOGPERIODIC_HARMONICS: 1,
+        KEY_LOGPERIODIC_HARMONICS: int(OSC_DEFAULTS.get("harmonic_count", 1)),
+        KEY_LOGPERIODIC_SHOW_DECAYED_DSI: True,
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
         KEY_PORTFOLIO_SIGMA_LEVEL: 0,
@@ -298,9 +300,9 @@ def render_portfolio_view(
             sell_mom_change_pct=settings.monthly_mom_change_pct,
             percentile_offsets=percentile_offsets,
         )
-        st.markdown("#### Current monthly pension")
+        st.markdown("#### Monthly BTC pension estimate")
         p1, p2, p3, p4 = st.columns(4)
-        p1.metric("Current sigma", f"{pension_estimate.current_sigma_level:+.3f}σ")
+        p1.metric("Market position today", f"{pension_estimate.current_sigma_level:+.3f}σ")
         p1.markdown(
             (
                 "<div class='pension-rating' "
@@ -311,20 +313,22 @@ def render_portfolio_view(
             unsafe_allow_html=True,
         )
         p2.metric(
-            "Same-sigma price next month",
-            format_portfolio_money(pension_estimate.next_month_price),
-            delta=f"{pension_estimate.next_month_date:%Y-%m-%d}",
+            "Conservative monthly pension",
+            format_portfolio_money(pension_estimate.minimum_monthly_withdrawal),
+            delta=f"{settings.btc_amount:.4f} BTC at -2σ floor",
         )
         p3.metric(
-            "Monthly growth per BTC",
-            format_portfolio_money(pension_estimate.monthly_growth_per_btc),
+            "Model-based monthly pension",
+            format_portfolio_money(pension_estimate.max_monthly_withdrawal),
+            delta=f"{settings.btc_amount:.4f} BTC at today's σ",
         )
         p4.metric(
-            f"Max pension for {settings.btc_amount:.4f} BTC",
-            format_portfolio_money(pension_estimate.max_monthly_withdrawal),
+            "Projected BTC price next month",
+            format_portfolio_money(pension_estimate.next_month_price),
+            delta=f"if market stays at {pension_estimate.current_sigma_level:+.2f}σ",
         )
         st.caption(
-            "Max pension assumes selling 100% of the modelled one-month growth on the current exact sigma line."
+            "Conservative pension uses one month of model growth on the -2σ floor. Model-based pension uses one month of growth on today's market-position line."
         )
         st.caption(pension_estimate.withdrawal_rating_note)
         if settings.monthly_mom_change_pct != 100.0:
@@ -830,6 +834,9 @@ r2_combined = current_r2
 osc_reference_log_day = float(df_display["LogD"].min())
 osc_harmonic_coefficients = np.array([], dtype=float)
 selected_harmonic_count = max(1, min(3, int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1))))
+logperiodic_stats_rows = None
+perrenod_stats_rows = None
+perrenod_curve = None
 
 if mode == MODE_LOGPERIODIC:
     try:
@@ -849,6 +856,31 @@ if mode == MODE_LOGPERIODIC:
         r2_combined = osc_result.combined_r2
         osc_reference_log_day = osc_result.reference_log_day
         osc_harmonic_coefficients = osc_result.harmonic_coefficients
+        stats_params = {
+            "t1_age": osc_settings.t1_age,
+            "lambda_val": osc_settings.lambda_val,
+            "amp_factor_top": osc_settings.amp_factor_top,
+            "amp_factor_bottom": osc_settings.amp_factor_bottom,
+            "impulse_damping": osc_settings.impulse_damping,
+        }
+        fit_log_days = df_display["LogD"].values[lp_r2_mask]
+        fit_residuals = df_display["Res"].values[lp_r2_mask]
+        fit_days = df_display["Days"].values[lp_r2_mask]
+        logperiodic_stats_rows = oscillator.compute_oscillator_model_stats_table(
+            fit_log_days,
+            fit_residuals,
+            stats_params,
+        )
+        perrenod_stats_rows = oscillator.compute_perrenod_comparison_stats_table(
+            fit_log_days,
+            fit_residuals,
+            fit_days,
+            (
+                active_model.oscillator_parameter_bounds.get("lambda_val", (1.5, 5.0))
+                if active_model.oscillator_parameter_bounds
+                else (1.5, 5.0)
+            ),
+        )
     except Exception as e:
         st.error(f"LogPeriodic Error: {e}")
         osc_settings = oscillator.OscillatorSettings(
@@ -913,6 +945,36 @@ if mode == MODE_LOGPERIODIC:
             harmonic_result.reference_log_day,
             harmonic_result.harmonic_coefficients,
         )
+    if perrenod_stats_rows and bool(st.session_state.get(KEY_LOGPERIODIC_SHOW_DECAYED_DSI, True)):
+        target_perrenod_row = next(
+            (
+                row
+                for row in perrenod_stats_rows
+                if row is not None and row.label == "DSI ω,2ω,4ω decayed"
+            ),
+            None,
+        )
+        if target_perrenod_row is not None:
+            try:
+                target_lambda = float(target_perrenod_row.parameter_label.split()[1])
+                perrenod_curve_values = oscillator.build_dsi_regression_curve(
+                    df_display["LogD"].values[lp_r2_mask],
+                    df_display["Res"].values[lp_r2_mask],
+                    m_log_d,
+                    target_lambda,
+                    harmonic_count=3,
+                    fit_days_since_genesis=df_display["Days"].values[lp_r2_mask],
+                    predict_days_since_genesis=m_x,
+                    decay_model="reciprocal_age",
+                )
+                if perrenod_curve_values is not None:
+                    perrenod_curve = {
+                        "label": target_perrenod_row.label,
+                        "r2": target_perrenod_row.r2,
+                        "values": perrenod_curve_values,
+                    }
+            except (IndexError, TypeError, ValueError):
+                perrenod_curve = None
 
 is_log_time = time_scale == TIME_LOG
 plot_x_model = m_x if is_log_time else m_dates
@@ -938,6 +1000,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         show_historical_powerlaw_slope=mode == MODE_LOGPERIODIC,
         m_osc_y=m_osc_y,
         m_osc_y_by_harmonic=m_osc_y_by_harmonic,
+        perrenod_curve=perrenod_curve,
         residual_sigma_log=calculate_residual_sigma_log(df_display),
         p2_5=p2_5,
         p16_5=p16_5,
@@ -1006,4 +1069,6 @@ render_model_kpis(
     currency_decimals,
     target_series_name,
     target_series_unit,
+    logperiodic_stats_rows=logperiodic_stats_rows,
+    perrenod_stats_rows=perrenod_stats_rows,
 )

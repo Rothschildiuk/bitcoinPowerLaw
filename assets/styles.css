@@ -65,6 +65,112 @@ footer {visibility: hidden; display: none;}
 .sigma-bar-label {
     color: __C_TEXT_MAIN__; font-size: 10px; font-weight: 700; line-height: 1.15; text-align: center; opacity: 0.9;
 }
+.lp-stats-panel {
+    width: min(100%, 1520px);
+    margin: 16px auto 14px;
+    background: __C_CARD_BG__;
+    border: 1px solid __C_BORDER__;
+    border-radius: 8px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.10);
+    overflow: hidden;
+}
+.lp-stats-panel-compact {
+    width: min(100%, 1260px);
+    margin-top: 14px;
+}
+.lp-stats-panel-header {
+    padding: 13px 16px 11px;
+    border-bottom: 1px solid __C_BORDER__;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.lp-stats-eyebrow {
+    color: __C_ACCENT__;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.lp-stats-title {
+    color: __C_TEXT_VAL__;
+    font-size: 17px;
+    font-weight: 850;
+    line-height: 1.25;
+    margin-top: 4px;
+}
+.lp-stats-badge {
+    color: __C_TEXT_MAIN__;
+    background: rgba(240, 185, 11, 0.10);
+    border: 1px solid rgba(240, 185, 11, 0.28);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    padding: 7px 10px;
+    white-space: nowrap;
+}
+.lp-stats-table-wrap {
+    overflow-x: auto;
+}
+.lp-stats-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    color: __C_TEXT_MAIN__;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+.lp-stats-table th,
+.lp-stats-table td {
+    border-bottom: 1px solid rgba(155, 163, 175, 0.18);
+    padding: 11px 14px;
+    text-align: right;
+    white-space: nowrap;
+}
+.lp-stats-table th:first-child,
+.lp-stats-table td:first-child {
+    text-align: left;
+}
+.lp-stats-table th {
+    color: __C_TEXT_VAL__;
+    font-size: 12px;
+    font-weight: 850;
+    background: rgba(155, 163, 175, 0.10);
+}
+.lp-stats-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+.lp-stats-table tbody tr:hover td {
+    background: rgba(155, 163, 175, 0.06);
+}
+.lp-stats-table tbody tr.is-best td {
+    color: __C_TEXT_VAL__;
+    background: rgba(240, 185, 11, 0.09);
+    border-bottom-color: rgba(240, 185, 11, 0.20);
+    font-weight: 800;
+}
+.lp-mode-table {
+    min-width: 760px;
+}
+.lp-regression-table {
+    min-width: 1080px;
+}
+.lp-mode-table th:first-child,
+.lp-mode-table td:first-child {
+    width: 30%;
+}
+.lp-regression-table th:first-child,
+.lp-regression-table td:first-child {
+    width: 28%;
+}
+.lp-regression-table th:nth-child(2),
+.lp-regression-table td:nth-child(2) {
+    width: 13%;
+}
 
 div[data-testid="stSidebar"] .stRadio div[role="radiogroup"],
 div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] {

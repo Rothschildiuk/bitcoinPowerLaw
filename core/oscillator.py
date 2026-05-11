@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timedelta
 
 import numpy as np
 import streamlit as st
@@ -6,10 +7,12 @@ import streamlit as st
 from core.constants import (
     DEFAULT_A,
     DEFAULT_B,
+    GENESIS_DATE,
     KEY_A,
     KEY_B,
     KEY_GENESIS_OFFSET,
     KEY_LOGPERIODIC_HARMONICS,
+    KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     OSC_DEFAULTS,
 )
 from core.optimization_utils import optimize_parameter_by_candidates
@@ -26,6 +29,12 @@ DEFAULT_OSCILLATOR_PARAMETER_BOUNDS = {
     "amp_factor_bottom": (0.1, 10.0),
     "impulse_damping": (0.0, 2.0),
 }
+
+
+def format_cycle_anchor_date(age_years, origin_offset_days=0):
+    anchor_days = int(origin_offset_days) + int(round(float(age_years) * 365.25))
+    anchor_date = GENESIS_DATE + timedelta(days=anchor_days)
+    return anchor_date.strftime("%Y-%m-%d")
 
 
 @dataclass(frozen=True)
@@ -50,6 +59,28 @@ class OscillatorComputationResult:
     harmonic_coefficients: np.ndarray
 
 
+@dataclass(frozen=True)
+class OscillatorModelStats:
+    harmonic_count: int
+    mode_multipliers: tuple[int, ...]
+    parameter_count: int
+    r2: float
+    aic: float
+    bic: float
+    rmse: float
+
+
+@dataclass(frozen=True)
+class RegressionComparisonStats:
+    label: str
+    parameter_label: str
+    parameter_count: int
+    r2: float
+    aic: float
+    bic: float
+    rmse: float
+
+
 def _resolve_oscillator_bounds(bounds_override=None):
     bounds = dict(DEFAULT_OSCILLATOR_PARAMETER_BOUNDS)
     if bounds_override:
@@ -63,6 +94,15 @@ def _normalize_harmonic_count(harmonic_count):
     except (TypeError, ValueError):
         count = 1
     return min(3, max(1, count))
+
+
+def resolve_harmonic_multipliers(harmonic_count):
+    count = _normalize_harmonic_count(harmonic_count)
+    if count == 1:
+        return (1,)
+    if count == 2:
+        return (1, 2)
+    return (1, 2, 4)
 
 
 def _build_asymmetric_harmonic_template(
@@ -101,20 +141,20 @@ def fit_oscillator_component(
     phase_shift = -angular_frequency * t1_log_days
     phase_values = angular_frequency * log_days + phase_shift
     decay_factor = compute_impulse_decay(log_days, impulse_damping, float(np.min(log_days)))
-    harmonic_count = _normalize_harmonic_count(harmonic_count)
+    mode_multipliers = resolve_harmonic_multipliers(harmonic_count)
 
     harmonic_templates = [
         _build_asymmetric_harmonic_template(
             phase_values,
-            harmonic_index,
+            harmonic_multiplier,
             decay_factor,
             top_amplitude_factor,
             bottom_amplitude_factor,
         )
-        for harmonic_index in range(1, harmonic_count + 1)
+        for harmonic_multiplier in mode_multipliers
     ]
 
-    if harmonic_count == 1:
+    if len(mode_multipliers) == 1:
         asymmetric_template = harmonic_templates[0]
         template_energy = np.dot(asymmetric_template, asymmetric_template)
         if template_energy <= 1e-12:
@@ -162,6 +202,472 @@ def compute_oscillator_fit_r2(
 
     _, _, _, predicted_residuals = fit_result
     return calculate_r2_score(residual_series, predicted_residuals) * 100.0
+
+
+def compute_sidebar_logperiodic_r2(
+    log_days,
+    residual_series,
+    days_since_genesis,
+    current_params,
+    *,
+    harmonic_count,
+    lambda_bounds,
+    show_decayed_regression,
+):
+    if show_decayed_regression:
+        stats = optimize_dsi_regression_lambda(
+            log_days,
+            residual_series,
+            harmonic_count,
+            min_lambda=lambda_bounds[0],
+            max_lambda=lambda_bounds[1],
+            days_since_genesis=days_since_genesis,
+            decay_model="reciprocal_age",
+        )
+        return float(stats.r2)
+
+    return compute_oscillator_fit_r2(
+        log_days,
+        residual_series,
+        current_params["t1_age"],
+        current_params["lambda_val"],
+        current_params["amp_factor_top"],
+        current_params["amp_factor_bottom"],
+        current_params["impulse_damping"],
+        harmonic_count,
+    )
+
+
+def compute_oscillator_model_stats(
+    log_days,
+    residual_series,
+    t1_cycle_age_years,
+    cycle_lambda,
+    top_amplitude_factor,
+    bottom_amplitude_factor,
+    impulse_damping,
+    harmonic_count=1,
+):
+    residual_values = np.asarray(residual_series, dtype=float)
+    fit_result = fit_oscillator_component(
+        log_days,
+        residual_values,
+        t1_cycle_age_years,
+        cycle_lambda,
+        top_amplitude_factor,
+        bottom_amplitude_factor,
+        impulse_damping,
+        harmonic_count,
+    )
+    mode_multipliers = resolve_harmonic_multipliers(harmonic_count)
+    coefficient_count = len(mode_multipliers)
+    parameter_count = coefficient_count + 2
+    if fit_result is None or residual_values.size == 0:
+        return OscillatorModelStats(
+            harmonic_count=_normalize_harmonic_count(harmonic_count),
+            mode_multipliers=mode_multipliers,
+            parameter_count=parameter_count,
+            r2=-1e9,
+            aic=np.inf,
+            bic=np.inf,
+            rmse=np.inf,
+        )
+
+    _, _, _, predicted_residuals = fit_result
+    residual_errors = residual_values - np.asarray(predicted_residuals, dtype=float)
+    valid_errors = residual_errors[np.isfinite(residual_errors)]
+    n_obs = int(valid_errors.size)
+    if n_obs == 0:
+        sse = np.inf
+        rmse = np.inf
+    else:
+        sse = float(np.sum(valid_errors**2))
+        rmse = float(np.sqrt(sse / n_obs))
+    safe_mse = max(sse / max(n_obs, 1), np.finfo(float).tiny)
+    aic = float(n_obs * np.log(safe_mse) + 2 * parameter_count)
+    bic = float(n_obs * np.log(safe_mse) + parameter_count * np.log(max(n_obs, 1)))
+    return OscillatorModelStats(
+        harmonic_count=_normalize_harmonic_count(harmonic_count),
+        mode_multipliers=mode_multipliers,
+        parameter_count=parameter_count,
+        r2=calculate_r2_score(residual_values, predicted_residuals) * 100.0,
+        aic=aic,
+        bic=bic,
+        rmse=rmse,
+    )
+
+
+def compute_oscillator_model_stats_table(log_days, residual_series, current_params):
+    return [
+        compute_oscillator_model_stats(
+            log_days,
+            residual_series,
+            current_params["t1_age"],
+            current_params["lambda_val"],
+            current_params["amp_factor_top"],
+            current_params["amp_factor_bottom"],
+            current_params["impulse_damping"],
+            harmonic_count=harmonic_count,
+        )
+        for harmonic_count in (1, 2, 3)
+    ]
+
+
+def _format_mode_label(mode_multipliers):
+    return ",".join(f"{mode}ω" if mode != 1 else "ω" for mode in mode_multipliers)
+
+
+def _format_metric_value(value, precision):
+    if not np.isfinite(value):
+        return "-"
+    return f"{value:.{precision}f}"
+
+
+def _best_aic_row_index(stats_rows):
+    finite_rows = [
+        (index, float(row.aic))
+        for index, row in enumerate(stats_rows)
+        if row is not None and np.isfinite(row.aic)
+    ]
+    if not finite_rows:
+        return None
+    return min(finite_rows, key=lambda item: item[1])[0]
+
+
+def _compute_prediction_stats(observed_values, predicted_values, parameter_count):
+    observed = np.asarray(observed_values, dtype=float)
+    predicted = np.asarray(predicted_values, dtype=float)
+    valid_mask = np.isfinite(observed) & np.isfinite(predicted)
+    observed = observed[valid_mask]
+    predicted = predicted[valid_mask]
+    n_obs = int(observed.size)
+    if n_obs == 0:
+        return -1e9, np.inf, np.inf, np.inf
+
+    errors = observed - predicted
+    sse = float(np.sum(errors**2))
+    rmse = float(np.sqrt(sse / n_obs))
+    safe_mse = max(sse / n_obs, np.finfo(float).tiny)
+    aic = float(n_obs * np.log(safe_mse) + 2 * parameter_count)
+    bic = float(n_obs * np.log(safe_mse) + parameter_count * np.log(n_obs))
+    return calculate_r2_score(observed, predicted) * 100.0, aic, bic, rmse
+
+
+def _fit_design_matrix(design_matrix, observed_values):
+    design = np.asarray(design_matrix, dtype=float)
+    observed = np.asarray(observed_values, dtype=float)
+    valid_mask = np.isfinite(observed) & np.all(np.isfinite(design), axis=1)
+    design = design[valid_mask]
+    observed = observed[valid_mask]
+    if observed.size == 0 or design.size == 0 or np.linalg.matrix_rank(design) == 0:
+        return None
+    coefficients, *_ = np.linalg.lstsq(design, observed, rcond=None)
+    if not np.all(np.isfinite(coefficients)):
+        return None
+    return valid_mask, design @ coefficients
+
+
+def _build_dsi_regression_design(log_days, lambda_val, mode_multipliers, decay_values=None):
+    log_lambda = np.log10(float(lambda_val))
+    if abs(log_lambda) <= 1e-9:
+        return None
+    phase_values = (2.0 * np.pi / log_lambda) * np.asarray(log_days, dtype=float)
+    if decay_values is None:
+        decay = np.ones_like(phase_values)
+    else:
+        decay = np.asarray(decay_values, dtype=float)
+    columns = [np.ones_like(phase_values)]
+    for mode_multiplier in mode_multipliers:
+        mode_phase = phase_values * mode_multiplier
+        columns.append(np.cos(mode_phase) * decay)
+        columns.append(np.sin(mode_phase) * decay)
+    return np.column_stack(columns)
+
+
+def _build_reciprocal_age_decay(days_since_genesis):
+    age_years = np.maximum(np.asarray(days_since_genesis, dtype=float) / 365.25, 0.0)
+    return 1.0 / (age_years + 2.0)
+
+
+def compute_dsi_regression_stats(
+    log_days,
+    residual_series,
+    lambda_val,
+    harmonic_count,
+    *,
+    days_since_genesis=None,
+    decay_model="none",
+):
+    mode_multipliers = resolve_harmonic_multipliers(harmonic_count)
+    decay_values = None
+    decay_suffix = ""
+    if decay_model == "reciprocal_age":
+        if days_since_genesis is None:
+            return RegressionComparisonStats(
+                label=f"DSI {_format_mode_label(mode_multipliers)} decayed",
+                parameter_label=f"λ {lambda_val:.2f}",
+                parameter_count=2 * len(mode_multipliers) + 2,
+                r2=-1e9,
+                aic=np.inf,
+                bic=np.inf,
+                rmse=np.inf,
+            )
+        decay_values = _build_reciprocal_age_decay(days_since_genesis)
+        decay_suffix = " decayed"
+
+    design_matrix = _build_dsi_regression_design(
+        log_days,
+        lambda_val,
+        mode_multipliers,
+        decay_values=decay_values,
+    )
+    parameter_count = 2 * len(mode_multipliers) + 2
+    if design_matrix is None:
+        return RegressionComparisonStats(
+            label=f"DSI {_format_mode_label(mode_multipliers)}{decay_suffix}",
+            parameter_label=f"λ {lambda_val:.2f}",
+            parameter_count=parameter_count,
+            r2=-1e9,
+            aic=np.inf,
+            bic=np.inf,
+            rmse=np.inf,
+        )
+
+    fit_result = _fit_design_matrix(design_matrix, residual_series)
+    if fit_result is None:
+        r2, aic, bic, rmse = -1e9, np.inf, np.inf, np.inf
+    else:
+        valid_mask, predicted = fit_result
+        r2, aic, bic, rmse = _compute_prediction_stats(
+            np.asarray(residual_series, dtype=float)[valid_mask],
+            predicted,
+            parameter_count,
+        )
+    return RegressionComparisonStats(
+        label=f"DSI {_format_mode_label(mode_multipliers)}{decay_suffix}",
+        parameter_label=f"λ {lambda_val:.2f}",
+        parameter_count=parameter_count,
+        r2=r2,
+        aic=aic,
+        bic=bic,
+        rmse=rmse,
+    )
+
+
+def build_dsi_regression_curve(
+    fit_log_days,
+    fit_residuals,
+    predict_log_days,
+    lambda_val,
+    harmonic_count,
+    *,
+    fit_days_since_genesis=None,
+    predict_days_since_genesis=None,
+    decay_model="none",
+):
+    fit_decay_values = None
+    predict_decay_values = None
+    if decay_model == "reciprocal_age":
+        if fit_days_since_genesis is None or predict_days_since_genesis is None:
+            return None
+        fit_decay_values = _build_reciprocal_age_decay(fit_days_since_genesis)
+        predict_decay_values = _build_reciprocal_age_decay(predict_days_since_genesis)
+
+    mode_multipliers = resolve_harmonic_multipliers(harmonic_count)
+    fit_design = _build_dsi_regression_design(
+        fit_log_days,
+        lambda_val,
+        mode_multipliers,
+        decay_values=fit_decay_values,
+    )
+    predict_design = _build_dsi_regression_design(
+        predict_log_days,
+        lambda_val,
+        mode_multipliers,
+        decay_values=predict_decay_values,
+    )
+    if fit_design is None or predict_design is None:
+        return None
+
+    fit_residual_values = np.asarray(fit_residuals, dtype=float)
+    valid_mask = np.isfinite(fit_residual_values) & np.all(np.isfinite(fit_design), axis=1)
+    if np.count_nonzero(valid_mask) == 0:
+        return None
+    coefficients, *_ = np.linalg.lstsq(
+        fit_design[valid_mask],
+        fit_residual_values[valid_mask],
+        rcond=None,
+    )
+    if not np.all(np.isfinite(coefficients)):
+        return None
+    return predict_design @ coefficients
+
+
+def optimize_dsi_regression_lambda(
+    log_days,
+    residual_series,
+    harmonic_count,
+    *,
+    min_lambda,
+    max_lambda,
+    days_since_genesis=None,
+    decay_model="none",
+):
+    candidates = np.arange(float(min_lambda), float(max_lambda) + 0.005, 0.01)
+    if candidates.size == 0:
+        candidates = np.linspace(float(min_lambda), float(max_lambda), 41)
+    best_stats = None
+    for candidate in candidates:
+        stats = compute_dsi_regression_stats(
+            log_days,
+            residual_series,
+            float(candidate),
+            harmonic_count,
+            days_since_genesis=days_since_genesis,
+            decay_model=decay_model,
+        )
+        if best_stats is None or stats.aic < best_stats.aic:
+            best_stats = stats
+    return best_stats
+
+
+def compute_linear_cycle_regression_stats(
+    days_since_genesis,
+    residual_series,
+    cycle_years,
+):
+    age_years = np.asarray(days_since_genesis, dtype=float) / 365.25
+    phase_values = 2.0 * np.pi * age_years / float(cycle_years)
+    design_matrix = np.column_stack(
+        [np.ones_like(phase_values), np.cos(phase_values), np.sin(phase_values)]
+    )
+    parameter_count = 3
+    fit_result = _fit_design_matrix(design_matrix, residual_series)
+    if fit_result is None:
+        r2, aic, bic, rmse = -1e9, np.inf, np.inf, np.inf
+    else:
+        valid_mask, predicted = fit_result
+        r2, aic, bic, rmse = _compute_prediction_stats(
+            np.asarray(residual_series, dtype=float)[valid_mask],
+            predicted,
+            parameter_count,
+        )
+    return RegressionComparisonStats(
+        label=f"Linear {cycle_years:g}y",
+        parameter_label=f"{cycle_years:g}y",
+        parameter_count=parameter_count,
+        r2=r2,
+        aic=aic,
+        bic=bic,
+        rmse=rmse,
+    )
+
+
+def compute_perrenod_comparison_stats_table(
+    log_days,
+    residual_series,
+    days_since_genesis,
+    lambda_bounds,
+):
+    min_lambda, max_lambda = lambda_bounds
+    rows = [
+        compute_linear_cycle_regression_stats(days_since_genesis, residual_series, 3.5),
+        compute_linear_cycle_regression_stats(days_since_genesis, residual_series, 4.0),
+    ]
+    for decay_model in ("none", "reciprocal_age"):
+        for harmonic_count in (1, 2, 3):
+            rows.append(
+                optimize_dsi_regression_lambda(
+                    log_days,
+                    residual_series,
+                    harmonic_count,
+                    min_lambda=min_lambda,
+                    max_lambda=max_lambda,
+                    days_since_genesis=days_since_genesis,
+                    decay_model=decay_model,
+                )
+            )
+    return rows
+
+
+def render_regression_comparison_stats_table(stats_rows):
+    best_index = _best_aic_row_index(stats_rows)
+    rows_html = "".join(
+        (
+            f"<tr class='{'is-best' if index == best_index else ''}'>"
+            f"<td>{row.label}</td>"
+            f"<td>{row.parameter_label}</td>"
+            f"<td>{row.parameter_count}</td>"
+            f"<td>{_format_metric_value(row.r2, 2)}</td>"
+            f"<td>{_format_metric_value(row.aic, 1)}</td>"
+            f"<td>{_format_metric_value(row.bic, 1)}</td>"
+            f"<td>{_format_metric_value(row.rmse, 4)}</td>"
+            "</tr>"
+        )
+        for index, row in enumerate(stats_rows)
+        if row is not None
+    )
+    st.markdown(
+        (
+            "<section class='lp-stats-panel'>"
+            "<div class='lp-stats-panel-header'>"
+            "<div>"
+            "<div class='lp-stats-eyebrow'>Perrenod-style</div>"
+            "<div class='lp-stats-title'>Regression comparison</div>"
+            "</div>"
+            "<div class='lp-stats-badge'>best AIC highlighted</div>"
+            "</div>"
+            "<div class='lp-stats-table-wrap'>"
+            "<table class='lp-stats-table lp-regression-table'>"
+            "<thead><tr>"
+            "<th>Model</th><th>Fit</th><th>Params</th><th>R²%</th><th>AIC</th><th>BIC</th><th>RMSE</th>"
+            "</tr></thead>"
+            f"<tbody>{rows_html}</tbody>"
+            "</table>"
+            "</div>"
+            "</section>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def render_oscillator_model_stats_table(stats_rows):
+    best_index = _best_aic_row_index(stats_rows)
+    rows_html = "".join(
+        (
+            f"<tr class='{'is-best' if index == best_index else ''}'>"
+            f"<td>{_format_mode_label(row.mode_multipliers)}</td>"
+            f"<td>{row.parameter_count}</td>"
+            f"<td>{_format_metric_value(row.r2, 2)}</td>"
+            f"<td>{_format_metric_value(row.aic, 1)}</td>"
+            f"<td>{_format_metric_value(row.bic, 1)}</td>"
+            f"<td>{_format_metric_value(row.rmse, 4)}</td>"
+            "</tr>"
+        )
+        for index, row in enumerate(stats_rows)
+    )
+    st.markdown(
+        (
+            "<section class='lp-stats-panel lp-stats-panel-compact'>"
+            "<div class='lp-stats-panel-header'>"
+            "<div>"
+            "<div class='lp-stats-eyebrow'>LogPeriodic</div>"
+            "<div class='lp-stats-title'>DSI mode fit</div>"
+            "</div>"
+            "<div class='lp-stats-badge'>best AIC highlighted</div>"
+            "</div>"
+            "<div class='lp-stats-table-wrap'>"
+            "<table class='lp-stats-table lp-mode-table'>"
+            "<thead><tr>"
+            "<th>Modes</th><th>Params</th><th>R²%</th><th>AIC</th><th>BIC</th><th>RMSE</th>"
+            "</tr></thead>"
+            f"<tbody>{rows_html}</tbody>"
+            "</table>"
+            "</div>"
+            "</section>"
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def compute_oscillator_overlay(
@@ -431,10 +937,11 @@ def build_oscillator_curve(
         )
     )
     y_values = np.zeros_like(np.asarray(log_days, dtype=float), dtype=float)
-    for index, coefficient in enumerate(coefficients, start=1):
+    multipliers = resolve_harmonic_multipliers(len(coefficients))
+    for harmonic_multiplier, coefficient in zip(multipliers, coefficients):
         template = _build_asymmetric_harmonic_template(
             phase_values,
-            index,
+            harmonic_multiplier,
             decay_factor,
             top_amplitude_factor,
             bottom_amplitude_factor,
@@ -464,16 +971,22 @@ def render_sidebar(
     defaults = dict(defaults_override or OSC_DEFAULTS)
     harmonic_options = [1, 2, 3]
     if KEY_LOGPERIODIC_HARMONICS not in st.session_state:
-        st.session_state[KEY_LOGPERIODIC_HARMONICS] = harmonic_options[0]
+        st.session_state[KEY_LOGPERIODIC_HARMONICS] = int(
+            defaults.get("harmonic_count", harmonic_options[0])
+        )
     parameter_bounds = _resolve_oscillator_bounds(parameter_bounds_override)
     for k, v in defaults.items():
+        if k == "harmonic_count":
+            continue
         if k not in st.session_state:
             st.session_state[k] = v
 
     def reset_oscillator_params():
         for k, v in defaults.items():
+            if k == "harmonic_count":
+                st.session_state[KEY_LOGPERIODIC_HARMONICS] = int(v)
+                continue
             st.session_state[k] = v
-        st.session_state[KEY_LOGPERIODIC_HARMONICS] = harmonic_options[0]
 
     days_since_genesis = all_abs_days - st.session_state.get(KEY_GENESIS_OFFSET, 0)
     valid_days_mask = days_since_genesis > 0
@@ -482,9 +995,11 @@ def render_sidebar(
     oscillator_r2_display = 0.0
     log_days = None
     residual_series = None
+    fit_days_since_genesis = None
     has_fit_data = np.count_nonzero(valid_days_mask) > 100
 
     if has_fit_data:
+        fit_days_since_genesis = days_since_genesis[valid_days_mask]
         log_days = np.log10(days_since_genesis[valid_days_mask])
         _, _, trend_log_prices, residual_series = get_stable_trend_fit(
             log_days,
@@ -570,15 +1085,26 @@ def render_sidebar(
 
     t1_min, t1_max = parameter_bounds["t1_age"]
     lambda_min, lambda_max = parameter_bounds["lambda_val"]
-    render_oscillator_control("1st Cycle Age", "t1_age", 0.01, t1_min, t1_max)
+    render_oscillator_control("1st Cycle Anchor", "t1_age", 0.01, t1_min, t1_max)
+    st.caption(
+        "Anchor date: "
+        f"{format_cycle_anchor_date(st.session_state['t1_age'], st.session_state.get(KEY_GENESIS_OFFSET, 0))}"
+    )
     render_oscillator_control("Lambda", "lambda_val", 0.01, lambda_min, lambda_max)
-    st.markdown("**Harmonics**")
+    st.markdown("**DSI modes**")
     st.radio(
-        "Harmonics",
+        "DSI modes",
         harmonic_options,
+        format_func=lambda count: _format_mode_label(resolve_harmonic_multipliers(count)),
         key=KEY_LOGPERIODIC_HARMONICS,
         horizontal=True,
         label_visibility="collapsed",
+    )
+    if KEY_LOGPERIODIC_SHOW_DECAYED_DSI not in st.session_state:
+        st.session_state[KEY_LOGPERIODIC_SHOW_DECAYED_DSI] = True
+    st.toggle(
+        "Show decayed DSI regression",
+        key=KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     )
     # Keep advanced amplitude/damping parameters fixed to defaults in LogPeriodic sidebar.
     st.session_state["amp_factor_top"] = float(defaults["amp_factor_top"])
@@ -587,15 +1113,32 @@ def render_sidebar(
 
     # --- R2 Calculation for Sidebar Display ---
     if has_fit_data:
-        oscillator_r2_display = compute_oscillator_fit_r2(
+        harmonic_count = _normalize_harmonic_count(
+            st.session_state.get(KEY_LOGPERIODIC_HARMONICS, harmonic_options[0])
+        )
+        current_params = {
+            "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
+            "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
+            "amp_factor_top": float(
+                st.session_state.get("amp_factor_top", defaults["amp_factor_top"])
+            ),
+            "amp_factor_bottom": float(
+                st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])
+            ),
+            "impulse_damping": float(
+                st.session_state.get("impulse_damping", defaults["impulse_damping"])
+            ),
+        }
+        oscillator_r2_display = compute_sidebar_logperiodic_r2(
             log_days,
             residual_series,
-            st.session_state.get("t1_age", defaults["t1_age"]),
-            st.session_state.get("lambda_val", defaults["lambda_val"]),
-            st.session_state.get("amp_factor_top", defaults["amp_factor_top"]),
-            st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"]),
-            st.session_state.get("impulse_damping", defaults["impulse_damping"]),
-            st.session_state.get(KEY_LOGPERIODIC_HARMONICS, harmonic_options[0]),
+            fit_days_since_genesis,
+            current_params,
+            harmonic_count=harmonic_count,
+            lambda_bounds=parameter_bounds["lambda_val"],
+            show_decayed_regression=bool(
+                st.session_state.get(KEY_LOGPERIODIC_SHOW_DECAYED_DSI, True)
+            ),
         )
 
     st.markdown(
@@ -603,6 +1146,5 @@ def render_sidebar(
         f"LogPeriodic R² = {oscillator_r2_display:.4f}%</p>",
         unsafe_allow_html=True,
     )
-
     st.button("Auto-fit model", use_container_width=True, on_click=auto_fit_visible_parameters)
     st.button("Reset parameters", use_container_width=True, on_click=reset_oscillator_params)

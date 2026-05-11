@@ -44,6 +44,11 @@ Each series config defines:
 - Available in both PowerLaw and LogPeriodic
 - Uses the base LogPeriodic parameter bounds
 
+### LogPeriodic DSI
+- LogPeriodic mode fits residual structure in logarithmic time after removing the PowerLaw trend.
+- DSI mode options use `ω`, `ω,2ω`, and `ω,2ω,4ω` bases.
+- The sidebar reports R², AIC, BIC, and RMSE for 1-, 2-, and 3-mode DSI comparisons.
+
 ### Difficulty and Hashrate
 - Available in PowerLaw and LogPeriodic
 - Force log price scale

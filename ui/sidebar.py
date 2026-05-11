@@ -12,6 +12,7 @@ from core.constants import (
     KEY_CHART_REVISION,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
+    KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_LAST_SERIES,
     KEY_MODE_SELECTOR,
     KEY_LOGPERIODIC_SERIES,
@@ -56,7 +57,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         min_value=0.0,
         value=float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)),
         step=0.0001,
-        format="%.8f",
+        format="%.4f",
         key=KEY_PORTFOLIO_BTC_AMOUNT,
         label_visibility="collapsed",
     )
@@ -424,6 +425,9 @@ def render_sidebar_panel(
             last_lp_series = st.session_state.get(KEY_LOGPERIODIC_LAST_SERIES)
             if last_lp_series != logperiodic_series:
                 for k, v in active_osc_defaults.items():
+                    if k == "harmonic_count":
+                        st.session_state[KEY_LOGPERIODIC_HARMONICS] = int(v)
+                        continue
                     st.session_state[k] = v
                 st.session_state[KEY_LOGPERIODIC_LAST_SERIES] = logperiodic_series
 

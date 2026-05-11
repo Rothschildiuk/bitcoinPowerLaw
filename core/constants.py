@@ -47,7 +47,7 @@ DEFAULT_LIGHTNING_NODES_A = 1.286
 DEFAULT_LIGHTNING_NODES_B = 0.873
 DEFAULT_LIGHTNING_CAPACITY_A = -1.528
 DEFAULT_LIGHTNING_CAPACITY_B = 1.555
-DEFAULT_LIQUID_BTC_A = -2.721
+DEFAULT_LIQUID_BTC_A = -2.722
 DEFAULT_LIQUID_BTC_B = 1.944
 DEFAULT_LIQUID_TRANSACTIONS_A = 0.477
 DEFAULT_LIQUID_TRANSACTIONS_B = 1.100
@@ -68,25 +68,28 @@ POWERLAW_INTERCEPT_MAX = 45.0
 POWERLAW_SLOPE_MIN = 1.0
 POWERLAW_SLOPE_MAX = 15.0
 OSC_DEFAULTS = {
-    "lambda_val": 2.01,
-    "t1_age": 1.24,
+    "lambda_val": 2.05,
+    "t1_age": 1.22,
     "amp_factor_top": 1.00,
     "amp_factor_bottom": 0.78,
     "impulse_damping": 1.72,
+    "harmonic_count": 3,
 }
 OSC_DEFAULTS_DIFFICULTY = {
-    "lambda_val": 3.88,
-    "t1_age": 2.10,
+    "lambda_val": 3.87,
+    "t1_age": 1.04,
     "amp_factor_top": 0.69,
     "amp_factor_bottom": 0.78,
     "impulse_damping": 0.25,
+    "harmonic_count": 2,
 }
 OSC_DEFAULTS_HASHRATE = {
-    "lambda_val": 4.04,
-    "t1_age": 0.50,
+    "lambda_val": 4.03,
+    "t1_age": 0.98,
     "amp_factor_top": 0.68,
     "amp_factor_bottom": 0.74,
     "impulse_damping": 0.11,
+    "harmonic_count": 3,
 }
 
 # Forecast limits
@@ -152,6 +155,7 @@ KEY_POWERLAW_AUTO_FIT = "powerlaw_auto_fit"
 KEY_LOGPERIODIC_AUTO_FIT = "logperiodic_auto_fit"
 KEY_LOGPERIODIC_LAST_SERIES = "logperiodic_last_series"
 KEY_LOGPERIODIC_HARMONICS = "logperiodic_harmonics"
+KEY_LOGPERIODIC_SHOW_DECAYED_DSI = "logperiodic_show_decayed_dsi"
 KEY_OSC_AUTOFIT_SIGNATURE = "osc_autofit_signature"
 KEY_OSC_AUTOFIT_BEST_PARAMS = "osc_autofit_best_params"
 KEY_PORTFOLIO_BTC_AMOUNT = "portfolio_btc_amount"

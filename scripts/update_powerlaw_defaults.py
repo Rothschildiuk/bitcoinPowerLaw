@@ -263,17 +263,36 @@ def compute_default_updates():
             intercept_a=fit_params["intercept_a"],
             slope_b=fit_params["slope_b"],
         )
-        optimized = oscillator.optimize_visible_oscillator_parameters(
-            log_days,
-            residual_series,
-            dict(oscillator_defaults),
-            bounds_override=config.oscillator_parameter_bounds,
-            parameter_order=["t1_age", "lambda_val"],
-            step_map={"t1_age": 0.01, "lambda_val": 0.01},
-            passes=24,
-        )
+        optimized_candidates = []
+        for harmonic_count in (1, 2, 3):
+            trial_defaults = dict(oscillator_defaults)
+            trial_defaults["harmonic_count"] = harmonic_count
+            optimized_trial = oscillator.optimize_visible_oscillator_parameters(
+                log_days,
+                residual_series,
+                trial_defaults,
+                bounds_override=config.oscillator_parameter_bounds,
+                parameter_order=["t1_age", "lambda_val"],
+                step_map={"t1_age": 0.01, "lambda_val": 0.01},
+                passes=24,
+            )
+            optimized_trial["harmonic_count"] = harmonic_count
+            trial_stats = oscillator.compute_oscillator_model_stats(
+                log_days,
+                residual_series,
+                optimized_trial["t1_age"],
+                optimized_trial["lambda_val"],
+                optimized_trial["amp_factor_top"],
+                optimized_trial["amp_factor_bottom"],
+                optimized_trial["impulse_damping"],
+                harmonic_count=harmonic_count,
+            )
+            optimized_candidates.append((trial_stats, optimized_trial))
+
+        best_stats, optimized = min(optimized_candidates, key=lambda item: item[0].aic)
         replacements[f"{dict_name}.t1_age"] = f"{optimized['t1_age']:.2f}"
         replacements[f"{dict_name}.lambda_val"] = f"{optimized['lambda_val']:.2f}"
+        replacements[f"{dict_name}.harmonic_count"] = str(int(optimized["harmonic_count"]))
         oscillator_r2 = oscillator.compute_oscillator_fit_r2(
             log_days,
             residual_series,
@@ -282,6 +301,7 @@ def compute_default_updates():
             optimized["amp_factor_top"],
             optimized["amp_factor_bottom"],
             optimized["impulse_damping"],
+            optimized["harmonic_count"],
         )
         oscillator_summary_rows.append(
             {
@@ -290,6 +310,8 @@ def compute_default_updates():
                 "dict_name": dict_name,
                 "t1_age": f"{optimized['t1_age']:.2f}",
                 "lambda_val": f"{optimized['lambda_val']:.2f}",
+                "harmonic_count": str(int(optimized["harmonic_count"])),
+                "aic": f"{best_stats.aic:.1f}",
                 "r2": f"{oscillator_r2:.4f}",
                 "rows": str(len(log_days)),
             }
@@ -374,7 +396,8 @@ def print_summary(powerlaw_summary_rows, oscillator_summary_rows):
             f"- {row['series']} [{row['currency']}]: "
             f"{row['dict_name']}.t1_age={row['t1_age']}, "
             f"{row['dict_name']}.lambda_val={row['lambda_val']}, "
-            f"R2={row['r2']}, rows={row['rows']}"
+            f"{row['dict_name']}.harmonic_count={row['harmonic_count']}, "
+            f"R2={row['r2']}, AIC={row['aic']}, rows={row['rows']}"
         )
 
 

@@ -6,6 +6,13 @@ from core import oscillator
 
 
 class TestOscillator(unittest.TestCase):
+    def test_format_cycle_anchor_date_uses_years_from_genesis(self):
+        self.assertEqual(oscillator.format_cycle_anchor_date(1.0), "2010-01-03")
+        self.assertEqual(
+            oscillator.format_cycle_anchor_date(1.0, origin_offset_days=20),
+            "2010-01-23",
+        )
+
     def test_fit_oscillator_component_returns_none_when_lambda_is_invalid(self):
         log_days = np.linspace(1.0, 2.0, 128)
         residuals = np.sin(log_days)
@@ -141,6 +148,33 @@ class TestOscillator(unittest.TestCase):
         self.assertGreater(two_harmonic_r2, 99.0)
         self.assertEqual(fit_result[0].shape, (2,))
 
+    def test_three_mode_dsi_uses_fourth_harmonic_not_third(self):
+        log_days = np.linspace(0.5, 3.0, 300)
+        t1_age = 1.0
+        lambda_val = 2.4
+        log_lambda = np.log10(lambda_val)
+        angular_frequency = 2 * np.pi / log_lambda
+        phase_shift = -angular_frequency * np.log10(t1_age * 365.25)
+        phase_values = angular_frequency * log_days + phase_shift
+        residuals = (
+            0.25 * np.cos(phase_values)
+            + 0.45 * np.cos(phase_values * 2)
+            + 0.65 * np.cos(phase_values * 4)
+        )
+
+        three_mode_r2 = oscillator.compute_oscillator_fit_r2(
+            log_days,
+            residuals,
+            t1_age,
+            lambda_val,
+            top_amplitude_factor=1.0,
+            bottom_amplitude_factor=1.0,
+            impulse_damping=0.0,
+            harmonic_count=3,
+        )
+        self.assertEqual(oscillator.resolve_harmonic_multipliers(3), (1, 2, 4))
+        self.assertGreater(three_mode_r2, 99.0)
+
     def test_build_oscillator_curve_sums_harmonic_coefficients(self):
         log_days = np.linspace(0.5, 3.0, 300)
         curve = oscillator.build_oscillator_curve(
@@ -157,6 +191,186 @@ class TestOscillator(unittest.TestCase):
         expected = 0.25 * np.cos(2.0 * log_days + 0.3) + 0.65 * np.cos(2.0 * (2.0 * log_days + 0.3))
 
         self.assertTrue(np.allclose(curve, expected))
+
+    def test_build_oscillator_curve_uses_dsi_mode_multipliers(self):
+        log_days = np.linspace(0.5, 3.0, 300)
+        curve = oscillator.build_oscillator_curve(
+            log_days=log_days,
+            amplitude=0.0,
+            angular_frequency=2.0,
+            phase_shift=0.3,
+            top_amplitude_factor=1.0,
+            bottom_amplitude_factor=1.0,
+            damping_factor=0.0,
+            reference_log_day=float(log_days.min()),
+            harmonic_coefficients=np.array([0.25, 0.45, 0.65]),
+        )
+        phase_values = 2.0 * log_days + 0.3
+        expected = (
+            0.25 * np.cos(phase_values)
+            + 0.45 * np.cos(phase_values * 2)
+            + 0.65 * np.cos(phase_values * 4)
+        )
+
+        self.assertTrue(np.allclose(curve, expected))
+
+    def test_compute_oscillator_model_stats_reports_information_criteria(self):
+        log_days = np.linspace(0.5, 3.0, 300)
+        t1_age = 1.0
+        lambda_val = 2.4
+        log_lambda = np.log10(lambda_val)
+        angular_frequency = 2 * np.pi / log_lambda
+        phase_shift = -angular_frequency * np.log10(t1_age * 365.25)
+        phase_values = angular_frequency * log_days + phase_shift
+        residuals = 0.25 * np.cos(phase_values) + 0.45 * np.cos(phase_values * 2)
+
+        stats = oscillator.compute_oscillator_model_stats(
+            log_days,
+            residuals,
+            t1_age,
+            lambda_val,
+            top_amplitude_factor=1.0,
+            bottom_amplitude_factor=1.0,
+            impulse_damping=0.0,
+            harmonic_count=2,
+        )
+
+        self.assertEqual(stats.mode_multipliers, (1, 2))
+        self.assertEqual(stats.parameter_count, 4)
+        self.assertGreater(stats.r2, 99.0)
+        self.assertTrue(np.isfinite(stats.aic))
+        self.assertTrue(np.isfinite(stats.bic))
+        self.assertLess(stats.rmse, 1e-10)
+
+    def test_dsi_regression_stats_fit_cos_sin_modes_without_fixed_phase(self):
+        log_days = np.linspace(0.5, 3.0, 300)
+        lambda_val = 2.4
+        omega = 2 * np.pi / np.log10(lambda_val)
+        phase_values = omega * log_days
+        residuals = (
+            0.10
+            + 0.25 * np.cos(phase_values)
+            - 0.15 * np.sin(phase_values)
+            + 0.45 * np.cos(phase_values * 2)
+            + 0.30 * np.sin(phase_values * 2)
+        )
+
+        stats = oscillator.compute_dsi_regression_stats(
+            log_days,
+            residuals,
+            lambda_val,
+            harmonic_count=2,
+        )
+
+        self.assertEqual(stats.label, "DSI ω,2ω")
+        self.assertEqual(stats.parameter_count, 6)
+        self.assertGreater(stats.r2, 99.0)
+        self.assertLess(stats.rmse, 1e-10)
+
+    def test_build_dsi_regression_curve_predicts_decayed_modes(self):
+        fit_days = np.linspace(365.25, 365.25 * 10.0, 300)
+        predict_days = np.linspace(365.25, 365.25 * 11.0, 330)
+        fit_log_days = np.log10(fit_days)
+        predict_log_days = np.log10(predict_days)
+        lambda_val = 2.4
+        omega = 2 * np.pi / np.log10(lambda_val)
+        fit_decay = 1.0 / (fit_days / 365.25 + 2.0)
+        predict_decay = 1.0 / (predict_days / 365.25 + 2.0)
+        fit_residuals = 0.2 + fit_decay * (
+            0.7 * np.cos(omega * fit_log_days)
+            - 0.3 * np.sin(2.0 * omega * fit_log_days)
+            + 0.4 * np.cos(4.0 * omega * fit_log_days)
+        )
+        expected_prediction = 0.2 + predict_decay * (
+            0.7 * np.cos(omega * predict_log_days)
+            - 0.3 * np.sin(2.0 * omega * predict_log_days)
+            + 0.4 * np.cos(4.0 * omega * predict_log_days)
+        )
+
+        prediction = oscillator.build_dsi_regression_curve(
+            fit_log_days,
+            fit_residuals,
+            predict_log_days,
+            lambda_val,
+            harmonic_count=3,
+            fit_days_since_genesis=fit_days,
+            predict_days_since_genesis=predict_days,
+            decay_model="reciprocal_age",
+        )
+
+        self.assertTrue(np.allclose(prediction, expected_prediction))
+
+    def test_sidebar_logperiodic_r2_uses_decayed_regression_when_enabled(self):
+        days = np.linspace(365.25, 365.25 * 10.0, 300)
+        log_days = np.log10(days)
+        lambda_val = 2.4
+        omega = 2 * np.pi / np.log10(lambda_val)
+        decay = 1.0 / (days / 365.25 + 2.0)
+        residuals = 0.2 + decay * (
+            0.7 * np.cos(omega * log_days)
+            - 0.3 * np.sin(2.0 * omega * log_days)
+            + 0.4 * np.cos(4.0 * omega * log_days)
+        )
+
+        sidebar_r2 = oscillator.compute_sidebar_logperiodic_r2(
+            log_days,
+            residuals,
+            days,
+            {
+                "t1_age": 1.0,
+                "lambda_val": 2.0,
+                "amp_factor_top": 1.0,
+                "amp_factor_bottom": 1.0,
+                "impulse_damping": 0.0,
+            },
+            harmonic_count=3,
+            lambda_bounds=(2.0, 2.8),
+            show_decayed_regression=True,
+        )
+        expected_stats = oscillator.optimize_dsi_regression_lambda(
+            log_days,
+            residuals,
+            harmonic_count=3,
+            min_lambda=2.0,
+            max_lambda=2.8,
+            days_since_genesis=days,
+            decay_model="reciprocal_age",
+        )
+
+        self.assertAlmostEqual(sidebar_r2, expected_stats.r2)
+        self.assertGreater(sidebar_r2, 99.0)
+
+    def test_optimized_dsi_regression_lambda_prefers_signal_lambda(self):
+        log_days = np.linspace(0.5, 3.0, 300)
+        lambda_val = 2.4
+        omega = 2 * np.pi / np.log10(lambda_val)
+        residuals = np.cos(omega * log_days) + 0.5 * np.sin(omega * log_days * 2)
+
+        stats = oscillator.optimize_dsi_regression_lambda(
+            log_days,
+            residuals,
+            harmonic_count=2,
+            min_lambda=2.0,
+            max_lambda=2.8,
+        )
+
+        self.assertAlmostEqual(float(stats.parameter_label.split()[1]), lambda_val, places=2)
+        self.assertGreater(stats.r2, 99.0)
+
+    def test_linear_cycle_regression_stats_fit_fixed_year_cycle(self):
+        days_since_genesis = np.linspace(365.25, 365.25 * 10.0, 600)
+        age_years = days_since_genesis / 365.25
+        residuals = 0.2 + 0.7 * np.cos(2.0 * np.pi * age_years / 4.0)
+
+        stats = oscillator.compute_linear_cycle_regression_stats(
+            days_since_genesis,
+            residuals,
+            cycle_years=4.0,
+        )
+
+        self.assertEqual(stats.label, "Linear 4y")
+        self.assertEqual(stats.parameter_count, 3)
+        self.assertGreater(stats.r2, 99.0)
 
     def test_compute_oscillator_overlay_keeps_baseline_r2_when_fit_is_not_possible(self):
         log_days = np.array([1.0, 2.0, 3.0])

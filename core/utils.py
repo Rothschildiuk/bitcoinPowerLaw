@@ -51,8 +51,12 @@ class CurrentMonthlyPensionEstimate:
     withdrawal_rating_color: str
     withdrawal_rating_note: str
     current_price: float
+    current_floor_price: float
+    next_month_floor_price: float
     next_month_price: float
+    floor_monthly_growth_per_btc: float
     monthly_growth_per_btc: float
+    minimum_monthly_withdrawal: float
     max_monthly_withdrawal: float
     selected_monthly_withdrawal: float
     next_month_date: pd.Timestamp
@@ -352,8 +356,13 @@ def estimate_current_monthly_pension(
         intercept_a,
         slope_b,
     )
+    current_floor_offset = float(percentile_offsets[0])
+    current_floor_price = float(np.power(10.0, current_model_log + current_floor_offset))
+    next_month_floor_price = float(next_month_fair_price[0] * np.power(10.0, current_floor_offset))
     next_month_price = float(next_month_fair_price[0] * np.power(10.0, current_log_offset))
+    floor_monthly_growth_per_btc = max(0.0, next_month_floor_price - current_floor_price)
     monthly_growth_per_btc = max(0.0, next_month_price - current_price)
+    minimum_monthly_withdrawal = floor_monthly_growth_per_btc * max(float(btc_amount), 0.0)
     max_monthly_withdrawal = monthly_growth_per_btc * max(float(btc_amount), 0.0)
     sell_ratio = min(max(float(sell_mom_change_pct) / 100.0, 0.0), 1.0)
 
@@ -363,8 +372,12 @@ def estimate_current_monthly_pension(
         withdrawal_rating_color=rating_color,
         withdrawal_rating_note=rating_note,
         current_price=current_price,
+        current_floor_price=current_floor_price,
+        next_month_floor_price=next_month_floor_price,
         next_month_price=next_month_price,
+        floor_monthly_growth_per_btc=floor_monthly_growth_per_btc,
         monthly_growth_per_btc=monthly_growth_per_btc,
+        minimum_monthly_withdrawal=minimum_monthly_withdrawal,
         max_monthly_withdrawal=max_monthly_withdrawal,
         selected_monthly_withdrawal=max_monthly_withdrawal * sell_ratio,
         next_month_date=next_month_date,

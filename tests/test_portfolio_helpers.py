@@ -41,6 +41,20 @@ class TestPortfolioHelpers(unittest.TestCase):
         )
 
         self.assertTrue(np.isclose(estimate.current_sigma_level, 0.0))
+        self.assertTrue(np.isclose(estimate.current_floor_price, 3000.0 * 10**-0.5))
+        self.assertTrue(np.isclose(estimate.next_month_floor_price, 5800.0 * 10**-0.5))
+        self.assertTrue(
+            np.isclose(
+                estimate.floor_monthly_growth_per_btc,
+                (5800.0 - 3000.0) * 10**-0.5,
+            )
+        )
+        self.assertTrue(
+            np.isclose(
+                estimate.minimum_monthly_withdrawal,
+                (5800.0 - 3000.0) * 10**-0.5 * 0.8,
+            )
+        )
         self.assertTrue(np.isclose(estimate.next_month_price, 5800.0))
         self.assertTrue(np.isclose(estimate.monthly_growth_per_btc, 2800.0))
         self.assertTrue(np.isclose(estimate.max_monthly_withdrawal, 2240.0))
