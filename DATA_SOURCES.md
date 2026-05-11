@@ -18,6 +18,12 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
   2. CoinGecko range API
   3. CoinCap history API
 
+### Bitcoin Volatility
+- Source: derived from the prepared Bitcoin price series.
+- Metric: rolling 30-day standard deviation of daily BTC/USD log returns, expressed as a daily percentage.
+- Formula: `std(log(close / close.shift(1)), 30) * 100`.
+- No external volatility API is required at runtime.
+
 ### FX and Gold Reference Series
 - `yfinance`
 - Symbols:

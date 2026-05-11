@@ -15,6 +15,7 @@ from core.constants import (
     MODE_POWERLAW,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
+    POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
@@ -97,8 +98,23 @@ class TestSeriesRegistry(unittest.TestCase):
         )
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION, group_map["Bitcoin Network"])
+        self.assertIn(POWERLAW_SERIES_BITCOIN_VOLATILITY, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
         self.assertIn(POWERLAW_SERIES_RUSSIAN_M2, group_map["Fiat Money"])
+
+    def test_bitcoin_volatility_config_uses_percent_units(self):
+        volatility_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_BITCOIN_VOLATILITY,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(volatility_config.target_series_unit, "Daily volatility")
+        self.assertEqual(volatility_config.currency_suffix, "%")
+        self.assertFalse(volatility_config.supports_currency_selector)
+        self.assertTrue(volatility_config.lock_price_scale_to_log)
+        self.assert_default_params_are_within_powerlaw_bounds(volatility_config)
 
     def test_filecoin_btc_config_uses_btc_units(self):
         filecoin_config = get_active_model_config(

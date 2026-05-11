@@ -949,6 +949,14 @@ def build_currency_close_series(raw_df, selected_currency):
     return close_usd
 
 
+def build_prepared_bitcoin_volatility_data(raw_df, rolling_window_days=30):
+    close_series = pd.to_numeric(raw_df["Close"], errors="coerce").dropna()
+    close_series = close_series[close_series > 0].sort_index()
+    log_returns = np.log(close_series / close_series.shift(1))
+    volatility = log_returns.rolling(int(rolling_window_days)).std() * 100.0
+    return _normalize_prepared_close_frame(volatility.index, volatility.values)
+
+
 @st.cache_data(ttl=3600)
 def load_prepared_price_data(
     price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=0, source="auto"

@@ -21,6 +21,7 @@ Each series config defines:
 ### Bitcoin Network
 - Bitcoin
 - Miner revenue
+- Bitcoin volatility
 - Difficulty
 - Hashrate
 
@@ -50,6 +51,12 @@ Each series config defines:
 - Early raw history may still exist in the cache, but chart/model analysis starts from the cutoff
 - Use wider LogPeriodic `Lambda` bounds than Bitcoin
 - Their checked-in LogPeriodic defaults are intended to be refreshed from current data
+
+### Bitcoin Volatility
+- Derived from BTC/USD close history using rolling 30-day daily log-return standard deviation.
+- Displayed as a daily percent, matching non-annualized volatility views such as BTC volatility index charts.
+- Available in PowerLaw only.
+- Forces log price scale because the values are positive percentages.
 
 ### Lightning BTC and Liquid BTC
 - Displayed with `BTC` suffix and 3 decimals

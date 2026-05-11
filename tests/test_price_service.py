@@ -47,6 +47,27 @@ class TestPriceService(unittest.TestCase):
         snapshot_df["LogClose"] = np.log10(snapshot_df["Close"])
         return snapshot_df
 
+    def test_build_prepared_bitcoin_volatility_data_uses_daily_log_returns(self):
+        date_index = pd.date_range("2024-01-01", periods=6, freq="D")
+        close_values = [100.0, 110.0, 99.0, 118.8, 95.04, 123.552]
+        price_df = pd.DataFrame({"Close": close_values}, index=date_index)
+
+        result = price_service.build_prepared_bitcoin_volatility_data(
+            price_df,
+            rolling_window_days=3,
+        )
+
+        expected_returns = np.log(pd.Series(close_values, index=date_index).pct_change() + 1.0)
+        expected_volatility = expected_returns.rolling(3).std() * 100.0
+        expected_volatility = expected_volatility.dropna()
+
+        self.assertListEqual(
+            result.index.strftime("%Y-%m-%d").tolist(),
+            expected_volatility.index.strftime("%Y-%m-%d").tolist(),
+        )
+        np.testing.assert_allclose(result["Close"].values, expected_volatility.values)
+        np.testing.assert_allclose(result["LogClose"].values, np.log10(result["Close"].values))
+
     def test_load_or_refresh_dataframe_cache_uses_fresh_local_snapshot(self):
         cached_df = pd.DataFrame(
             {"Close": [100.0]},

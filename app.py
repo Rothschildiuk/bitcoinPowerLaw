@@ -43,6 +43,7 @@ from core.constants import (
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
+    POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_LITECOIN_BTC,
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
@@ -76,6 +77,7 @@ from core.utils import (
 )
 from services.price_service import (
     build_currency_close_series,
+    build_prepared_bitcoin_volatility_data,
     load_prepared_dogecoin_btc_data,
     load_prepared_difficulty_data,
     load_prepared_filecoin_btc_data,
@@ -565,6 +567,7 @@ raw_us_m2_df = raw_us_m2_df[raw_us_m2_df["Close"] > 0].copy()
 raw_us_m2_df["LogClose"] = np.log10(raw_us_m2_df["Close"])
 raw_russian_m2_df = raw_russian_m2_df[raw_russian_m2_df["Close"] > 0].copy()
 raw_russian_m2_df["LogClose"] = np.log10(raw_russian_m2_df["Close"])
+raw_bitcoin_volatility_df = build_prepared_bitcoin_volatility_data(raw_df_usd)
 raw_bitcoin_network_simulation_df = build_bitcoin_network_simulation(
     raw_df_usd,
     seed=int(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1)),
@@ -582,6 +585,7 @@ sidebar_price_log_close = np.log10(sidebar_price_close.values)
 raw_series_frames = {
     POWERLAW_SERIES_PRICE: raw_df_usd,
     POWERLAW_SERIES_REVENUE: raw_revenue_df,
+    POWERLAW_SERIES_BITCOIN_VOLATILITY: raw_bitcoin_volatility_df,
     POWERLAW_SERIES_DIFFICULTY: raw_difficulty_df,
     POWERLAW_SERIES_HASHRATE: raw_hashrate_df,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION: raw_bitcoin_network_simulation_df,
@@ -604,6 +608,10 @@ sidebar_series_data = {
     POWERLAW_SERIES_REVENUE: {
         "absolute_days": raw_revenue_df["AbsDays"].values,
         "log_close": raw_revenue_df["LogClose"].values,
+    },
+    POWERLAW_SERIES_BITCOIN_VOLATILITY: {
+        "absolute_days": raw_bitcoin_volatility_df["AbsDays"].values,
+        "log_close": raw_bitcoin_volatility_df["LogClose"].values,
     },
     POWERLAW_SERIES_DIFFICULTY: {
         "absolute_days": raw_difficulty_df["AbsDays"].values,
