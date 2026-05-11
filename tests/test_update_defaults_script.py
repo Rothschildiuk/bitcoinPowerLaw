@@ -2,7 +2,7 @@ import unittest
 from contextlib import ExitStack
 from unittest.mock import patch
 
-from core.constants import POWERLAW_SERIES_BITCOIN_VOLATILITY
+from core.constants import CURRENCY_UAH, POWERLAW_SERIES_BITCOIN_VOLATILITY, POWERLAW_SERIES_PRICE
 from scripts import update_powerlaw_defaults
 from scripts.update_powerlaw_defaults import DEFAULT_CASES, update_constants_content
 
@@ -16,6 +16,12 @@ class TestUpdateDefaultsScript(unittest.TestCase):
         self.assertEqual(len(volatility_cases), 1)
         self.assertEqual(volatility_cases[0][2], "DEFAULT_BITCOIN_VOLATILITY_A")
         self.assertEqual(volatility_cases[0][3], "DEFAULT_BITCOIN_VOLATILITY_B")
+
+    def test_default_cases_include_uah_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_UAH, "DEFAULT_UAH_A", "DEFAULT_UAH_B"),
+            DEFAULT_CASES,
+        )
 
     def test_load_series_frames_builds_bitcoin_volatility_from_price_data(self):
         update_powerlaw_defaults.load_prepared_price_data.clear()

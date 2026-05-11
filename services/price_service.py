@@ -13,7 +13,13 @@ import pandas as pd
 import streamlit as st
 import yfinance as yf
 
-from core.constants import CURRENCY_DOLLAR, CURRENCY_EURO, CURRENCY_GOLD, GENESIS_DATE
+from core.constants import (
+    CURRENCY_DOLLAR,
+    CURRENCY_EURO,
+    CURRENCY_GOLD,
+    CURRENCY_UAH,
+    GENESIS_DATE,
+)
 
 BTC_HISTORY_CSV_URL = "https://raw.githubusercontent.com/Habrador/Bitcoin-price-visualization/main/Bitcoin-price-USD.csv"
 MINER_REVENUE_CSV_URL = (
@@ -278,7 +284,7 @@ def _validate_reference_frame(data_df):
     return (
         isinstance(data_df, pd.DataFrame)
         and len(data_df) >= 100
-        and ("EURUSD" in data_df.columns or "XAUUSD" in data_df.columns)
+        and {"EURUSD", "USDUAH", "XAUUSD"}.issubset(set(data_df.columns))
     )
 
 
@@ -888,6 +894,7 @@ def _safe_download_btc_tail_from_coincap(start_date):
 def load_reference_series(start_date, source="auto"):
     def fetch_reference_frame():
         eur_usd = _safe_download_close_series("EURUSD=X", start_date)
+        usd_uah = _safe_download_close_series("UAH=X", start_date)
         # GC=F is usually more stable than XAUUSD=X on hosted environments.
         xau_usd = _safe_download_close_series("GC=F", start_date)
         if xau_usd.empty:
@@ -896,6 +903,7 @@ def load_reference_series(start_date, source="auto"):
         reference_df = pd.concat(
             [
                 eur_usd.rename("EURUSD"),
+                usd_uah.rename("USDUAH"),
                 xau_usd.rename("XAUUSD"),
             ],
             axis=1,
@@ -925,9 +933,15 @@ def load_reference_series(start_date, source="auto"):
         if "XAUUSD" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    usd_uah = (
+        pd.to_numeric(reference_df["USDUAH"], errors="coerce").dropna()
+        if "USDUAH" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     eur_usd.index = pd.to_datetime(eur_usd.index)
+    usd_uah.index = pd.to_datetime(usd_uah.index)
     xau_usd.index = pd.to_datetime(xau_usd.index)
-    return eur_usd, xau_usd
+    return eur_usd, usd_uah, xau_usd
 
 
 def build_currency_close_series(raw_df, selected_currency):
@@ -936,11 +950,15 @@ def build_currency_close_series(raw_df, selected_currency):
         return close_usd
 
     start_date = str(raw_df.index.min().date())
-    eur_usd, xau_usd = load_reference_series(start_date)
+    eur_usd, usd_uah, xau_usd = load_reference_series(start_date)
 
     if selected_currency == CURRENCY_EURO and not eur_usd.empty:
         eur_usd_aligned = eur_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
         return close_usd / eur_usd_aligned
+
+    if selected_currency == CURRENCY_UAH and not usd_uah.empty:
+        usd_uah_aligned = usd_uah.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        return close_usd * usd_uah_aligned
 
     if selected_currency == CURRENCY_GOLD and not xau_usd.empty:
         xau_usd_aligned = xau_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()

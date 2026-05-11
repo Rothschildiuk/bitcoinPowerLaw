@@ -1,6 +1,11 @@
 import unittest
 
 from core.constants import (
+    CURRENCY_DOLLAR,
+    CURRENCY_EURO,
+    CURRENCY_GOLD,
+    CURRENCY_OPTIONS,
+    CURRENCY_UAH,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
@@ -18,6 +23,12 @@ from core.constants import (
 
 
 class TestConstantsSeries(unittest.TestCase):
+    def test_currency_options_follow_requested_order(self):
+        self.assertEqual(
+            CURRENCY_OPTIONS,
+            [CURRENCY_EURO, CURRENCY_DOLLAR, CURRENCY_UAH, CURRENCY_GOLD],
+        )
+
     def test_powerlaw_series_options_include_lightning_and_liquid_series(self):
         self.assertIn(POWERLAW_SERIES_LIGHTNING_NODES, POWERLAW_SERIES_OPTIONS)
         self.assertIn(POWERLAW_SERIES_LIGHTNING_CAPACITY, POWERLAW_SERIES_OPTIONS)

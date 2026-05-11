@@ -4,6 +4,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
+    CURRENCY_UAH,
     DEFAULT_A,
     DEFAULT_B,
     DEFAULT_BITCOIN_VOLATILITY_A,
@@ -36,6 +37,8 @@ from core.constants import (
     DEFAULT_REVENUE_B,
     DEFAULT_RUSSIAN_M2_A,
     DEFAULT_RUSSIAN_M2_B,
+    DEFAULT_UAH_A,
+    DEFAULT_UAH_B,
     DEFAULT_US_M2_A,
     DEFAULT_US_M2_B,
     DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
@@ -55,6 +58,7 @@ from core.constants import (
     KEY_A_PRICE,
     KEY_A_REVENUE,
     KEY_A_RUSSIAN_M2,
+    KEY_A_UAH,
     KEY_A_BITCOIN_NETWORK_SIMULATION,
     KEY_A_BITCOIN_VOLATILITY,
     KEY_A_US_M2,
@@ -73,6 +77,7 @@ from core.constants import (
     KEY_B_PRICE,
     KEY_B_REVENUE,
     KEY_B_RUSSIAN_M2,
+    KEY_B_UAH,
     KEY_B_BITCOIN_NETWORK_SIMULATION,
     KEY_B_BITCOIN_VOLATILITY,
     KEY_B_US_M2,
@@ -429,6 +434,17 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_decimals": 2,
         "currency_unit": CURRENCY_EURO,
     },
+    CURRENCY_UAH: {
+        "a_key": KEY_A_UAH,
+        "b_key": KEY_B_UAH,
+        "default_a": DEFAULT_UAH_A,
+        "default_b": DEFAULT_UAH_B,
+        "target_series_unit": CURRENCY_UAH,
+        "currency_prefix": "₴",
+        "currency_suffix": "",
+        "currency_decimals": 0,
+        "currency_unit": CURRENCY_UAH,
+    },
     CURRENCY_GOLD: {
         "a_key": KEY_A_GOLD,
         "b_key": KEY_B_GOLD,
@@ -548,7 +564,7 @@ def series_supports_currency_selector(mode, powerlaw_series, logperiodic_series)
 
 def iter_session_model_defaults():
     seen_keys = set()
-    for currency in (CURRENCY_DOLLAR, CURRENCY_EURO, CURRENCY_GOLD):
+    for currency in (CURRENCY_EURO, CURRENCY_DOLLAR, CURRENCY_UAH, CURRENCY_GOLD):
         price_config = get_series_config(POWERLAW_SERIES_PRICE, selected_currency=currency)
         for key, value in (
             (price_config.a_key, price_config.default_a),

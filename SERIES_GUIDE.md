@@ -40,7 +40,7 @@ Each series config defines:
 ## Special Handling
 
 ### Bitcoin
-- Only series that supports currency switching (`USD`, `EUR`, `GOLD`)
+- Only series that supports currency switching (`EUR`, `USD`, `UAH`, `GOLD`)
 - Available in both PowerLaw and LogPeriodic
 - Uses the base LogPeriodic parameter bounds
 

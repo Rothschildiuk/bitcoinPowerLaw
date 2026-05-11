@@ -28,6 +28,7 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
 - `yfinance`
 - Symbols:
   - `EURUSD=X`
+  - `UAH=X`
   - `GC=F`
   - fallback `XAUUSD=X`
 

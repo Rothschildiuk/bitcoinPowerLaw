@@ -9,6 +9,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
+    CURRENCY_UAH,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
     FORECAST_HORIZON_MAX,
@@ -171,6 +172,49 @@ def resolve_current_sigma_level(df_display, percentile_offsets):
         return 0.0
     current_log_offset = float(np.log10(current_price) - current_model_log)
     return interpolate_sigma_level_from_log_offset(current_log_offset, percentile_offsets)
+
+
+def style_portfolio_table(table_df, style_format, currency_unit, portfolio_view):
+    column_colors = {
+        f"Fair Price ({currency_unit})": "#f0b90b",
+        f"Portfolio ({currency_unit})": "#f0b90b",
+    }
+    if portfolio_view.dca_enabled:
+        column_colors.update(
+            {
+                f"Portfolio + monthly cash flow ({currency_unit})": "#14b8a6",
+                portfolio_view.period_cash_flow_label: "#38bdf8",
+                f"Net cash flow ({currency_unit})": "#8b5cf6",
+            }
+        )
+
+    def color_column_values(data):
+        styled = pd.DataFrame("", index=data.index, columns=data.columns)
+        for column_name, color in column_colors.items():
+            if column_name in styled.columns:
+                styled[column_name] = f"color: {color}; font-weight: 700;"
+        return styled
+
+    table_styles = [
+        {
+            "selector": f"th.col{table_df.columns.get_loc(column_name)}",
+            "props": [
+                ("color", color),
+                ("border-bottom", f"2px solid {color}"),
+                ("box-shadow", f"inset 0 -2px 0 {color}"),
+            ],
+        }
+        for column_name, color in column_colors.items()
+        if column_name in table_df.columns
+    ]
+    return (
+        table_df.style.format(style_format)
+        .apply(color_column_values, axis=None)
+        .set_table_styles(
+            table_styles,
+            overwrite=False,
+        )
+    )
 
 
 @st.cache_data(ttl=3600)
@@ -472,7 +516,12 @@ def render_portfolio_view(
         style_format[f"Net cash flow ({currency_unit})"] = money_fmt
         style_format["BTC after monthly cash flow"] = "{:,.6f}"
     st.dataframe(
-        portfolio_view.table_df.style.format(style_format),
+        style_portfolio_table(
+            portfolio_view.table_df,
+            style_format,
+            currency_unit,
+            portfolio_view,
+        ),
         width="stretch",
         hide_index=True,
     )
@@ -613,7 +662,7 @@ raw_bitcoin_network_simulation_df = build_bitcoin_network_simulation(
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
-if sidebar_currency not in [CURRENCY_DOLLAR, CURRENCY_EURO, CURRENCY_GOLD]:
+if sidebar_currency not in [CURRENCY_EURO, CURRENCY_DOLLAR, CURRENCY_UAH, CURRENCY_GOLD]:
     sidebar_currency = CURRENCY_DOLLAR
 sidebar_price_close = build_currency_close_series(raw_df_usd, sidebar_currency)
 sidebar_price_close = sidebar_price_close[sidebar_price_close > 0]

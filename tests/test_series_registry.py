@@ -3,6 +3,7 @@ import unittest
 from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
+    CURRENCY_UAH,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     FILECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
@@ -160,6 +161,18 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(euro_config.target_series_unit, CURRENCY_EURO)
         self.assertTrue(euro_config.supports_currency_selector)
 
+        uah_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_UAH,
+        )
+
+        self.assertEqual(uah_config.currency_prefix, "₴")
+        self.assertEqual(uah_config.currency_decimals, 0)
+        self.assertEqual(uah_config.target_series_unit, CURRENCY_UAH)
+        self.assertTrue(uah_config.supports_currency_selector)
+
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(
             MODE_POWERLAW,
@@ -312,6 +325,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn("B_price", defaults)
         self.assertIn("A_euro", defaults)
         self.assertIn("B_euro", defaults)
+        self.assertIn("A_uah", defaults)
+        self.assertIn("B_uah", defaults)
         self.assertIn("A_liquid_transactions", defaults)
         self.assertIn("B_liquid_transactions", defaults)
         self.assertIn("A_us_m2", defaults)
