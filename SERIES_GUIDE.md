@@ -13,7 +13,7 @@ Each series config defines:
 - currency behavior
 - PowerLaw / LogPeriodic availability
 - chart behavior such as halving lines
-- analysis cutoff for noisy early data
+- optional analysis cutoff when a series intentionally excludes early rows
 - LogPeriodic parameter bounds overrides where needed
 
 ## Series Families
@@ -47,8 +47,8 @@ Each series config defines:
 ### Difficulty and Hashrate
 - Available in PowerLaw and LogPeriodic
 - Force log price scale
-- Use startup-era analysis cutoff from `2010-07-18`
-- Early raw history may still exist in the cache, but chart/model analysis starts from the cutoff
+- Use startup-era analysis cutoff from `2010-01-01`
+- Early raw 2009 history may still exist in the cache, but chart/model analysis starts from the cutoff
 - Use wider LogPeriodic `Lambda` bounds than Bitcoin
 - Their checked-in LogPeriodic defaults are intended to be refreshed from current data
 

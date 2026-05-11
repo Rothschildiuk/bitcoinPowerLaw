@@ -105,7 +105,7 @@ Checked-in runtime snapshots are stored under `data/snapshots/`.
 
 ## Reliability Notes
 - Blockchain.com early difficulty/hashrate rows contain noisy startup-era data.
-- Difficulty/hashrate analysis is intentionally filtered from `2010-07-18` onward in the app layer.
+- Difficulty/hashrate analysis is filtered from `2010-01-01` onward in the app layer.
 - Some upstreams are unofficial or undocumented and should be treated as operational dependencies, not strict contracts.
 
 ## Default Refresh Workflow

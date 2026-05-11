@@ -39,7 +39,7 @@ This project is a Streamlit app for exploring Bitcoin-style power law and log-pe
 
 ## Current Important Constraints
 - PowerLaw chart horizon is limited to 5 years beyond the latest data point.
-- Difficulty and Hashrate use an analysis cutoff starting at `2010-07-18` to avoid early network noise.
+- Difficulty and Hashrate use an analysis cutoff starting at `2010-01-01` to skip the earliest startup-era rows.
 - Currency conversion applies only to Bitcoin price series.
 - LogPeriodic sidebar currently exposes only `1st Cycle Age` and `Lambda`; amplitude and damping stay pinned to series defaults.
 - Difficulty and Hashrate allow a wider LogPeriodic `Lambda` search range than Bitcoin.

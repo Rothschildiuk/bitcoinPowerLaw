@@ -3,7 +3,7 @@ import pandas as pd
 # App/meta
 APP_VERSION = "1.1.2"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
-DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-07-18")
+DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
     (DIFFICULTY_HASHRATE_ANALYSIS_START_DATE - GENESIS_DATE).days
 )
@@ -39,10 +39,10 @@ DEFAULT_REVENUE_A = -7.883
 DEFAULT_REVENUE_B = 4.161
 DEFAULT_BITCOIN_VOLATILITY_A = 1.998
 DEFAULT_BITCOIN_VOLATILITY_B = -0.427
-DEFAULT_DIFFICULTY_A = -27.868
-DEFAULT_DIFFICULTY_B = 11.261
-DEFAULT_HASHRATE_A = -32.726
-DEFAULT_HASHRATE_B = 11.184
+DEFAULT_DIFFICULTY_A = -29.205
+DEFAULT_DIFFICULTY_B = 11.637
+DEFAULT_HASHRATE_A = -34.062
+DEFAULT_HASHRATE_B = 11.560
 DEFAULT_LIGHTNING_NODES_A = 1.286
 DEFAULT_LIGHTNING_NODES_B = 0.873
 DEFAULT_LIGHTNING_CAPACITY_A = -1.528
@@ -75,15 +75,15 @@ OSC_DEFAULTS = {
     "impulse_damping": 1.72,
 }
 OSC_DEFAULTS_DIFFICULTY = {
-    "lambda_val": 5.38,
-    "t1_age": 1.50,
+    "lambda_val": 3.88,
+    "t1_age": 2.10,
     "amp_factor_top": 0.69,
     "amp_factor_bottom": 0.78,
     "impulse_damping": 0.25,
 }
 OSC_DEFAULTS_HASHRATE = {
-    "lambda_val": 5.51,
-    "t1_age": 1.46,
+    "lambda_val": 4.04,
+    "t1_age": 0.50,
     "amp_factor_top": 0.68,
     "amp_factor_bottom": 0.74,
     "impulse_damping": 0.11,

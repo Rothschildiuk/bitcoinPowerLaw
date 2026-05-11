@@ -2,7 +2,7 @@
 
 ## Scope
 - Python Streamlit app workflow (run, format, test).
-- Node helper workflow for Gemini CLI prompts.
+- Node placeholder test workflow.
 
 ## Verified Workflows
 - Initial setup (fresh clone):
@@ -25,9 +25,8 @@
   - `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`
 - Cleanup:
   - `make clean`
-- Gemini CLI helpers:
-  - `npm run gemini`
-  - `npm run gemini:review`
+- Node helper package:
+  - `npm test` (placeholder; exits 0 with "No JS tests configured")
 
 ## Grounded Notes
 - Python dependencies are sourced from `config/requirements.txt`.

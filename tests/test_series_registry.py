@@ -180,7 +180,7 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertTrue(sim_config.lock_price_scale_to_log)
         self.assert_default_params_are_within_powerlaw_bounds(sim_config)
 
-    def test_logperiodic_difficulty_uses_filtered_analysis_start(self):
+    def test_logperiodic_difficulty_uses_start_2010_analysis_cutoff(self):
         difficulty_config = get_active_model_config(
             MODE_LOGPERIODIC,
             POWERLAW_SERIES_PRICE,
