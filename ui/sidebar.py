@@ -36,6 +36,7 @@ from core.constants import (
     POWERLAW_SERIES_PRICE,
     POWERLAW_SLOPE_MAX,
     POWERLAW_SLOPE_MIN,
+    PORTFOLIO_SIGMA_CURRENT,
     TIME_LOG,
     TIME_LIN,
 )
@@ -89,17 +90,35 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     )
     st.caption("Sells this percentage of positive hold-only MoM Change each month.")
     st.markdown("**Price scenario**")
-    sigma_options = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+    sigma_options = [
+        PORTFOLIO_SIGMA_CURRENT,
+        -2.0,
+        -1.5,
+        -1.0,
+        -0.5,
+        0.0,
+        0.5,
+        1.0,
+        1.5,
+        2.0,
+    ]
 
     def format_sigma_option(value):
+        if value == PORTFOLIO_SIGMA_CURRENT:
+            return "Current sigma"
         if value == 0.0:
             return "0 sigma"
         return f"{value:+g} sigma"
 
+    selected_sigma = st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
+    if selected_sigma not in sigma_options:
+        selected_sigma = 0.0
+        st.session_state[KEY_PORTFOLIO_SIGMA_LEVEL] = selected_sigma
+
     st.radio(
         "Price scenario",
         sigma_options,
-        index=sigma_options.index(float(st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0))),
+        index=sigma_options.index(selected_sigma),
         format_func=format_sigma_option,
         horizontal=True,
         key=KEY_PORTFOLIO_SIGMA_LEVEL,

@@ -58,6 +58,25 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertTrue(np.isclose(estimate.next_month_price, 5800.0))
         self.assertTrue(np.isclose(estimate.monthly_growth_per_btc, 2800.0))
         self.assertTrue(np.isclose(estimate.max_monthly_withdrawal, 2240.0))
+        self.assertTrue(
+            np.isclose(
+                estimate.minimum_btc_to_sell,
+                estimate.minimum_monthly_withdrawal / estimate.next_month_floor_price,
+            )
+        )
+        self.assertTrue(
+            np.isclose(
+                estimate.minimum_btc_to_sell_today,
+                estimate.minimum_monthly_withdrawal / estimate.current_price,
+            )
+        )
+        self.assertTrue(
+            np.isclose(
+                estimate.minimum_btc_sell_reduction_pct,
+                (1.0 - (estimate.minimum_btc_to_sell_today / estimate.minimum_btc_to_sell)) * 100.0,
+            )
+        )
+        self.assertTrue(np.isclose(estimate.model_btc_to_sell, 2240.0 / 5800.0))
         self.assertTrue(np.isclose(estimate.selected_monthly_withdrawal, 1120.0))
         self.assertEqual(estimate.withdrawal_rating, "Attractive")
 

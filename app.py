@@ -55,6 +55,7 @@ from core.constants import (
     POWERLAW_SERIES_REVENUE,
     POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
+    PORTFOLIO_SIGMA_CURRENT,
     TIME_LOG,
 )
 from core.series_registry import (
@@ -72,6 +73,7 @@ from core.utils import (
     calculate_r2_score,
     estimate_current_monthly_pension,
     evaluate_powerlaw_values,
+    interpolate_sigma_level_from_log_offset,
     powerlaw_parameters_are_unstable,
     resolve_trend_parameters,
     resolve_portfolio_scenario_log_offset,
@@ -162,6 +164,15 @@ def calculate_residual_sigma_log(display_df):
     return sigma if np.isfinite(sigma) else 0.0
 
 
+def resolve_current_sigma_level(df_display, percentile_offsets):
+    current_price = float(df_display["CloseDisplay"].iloc[-1])
+    current_model_log = float(df_display["ModelLog"].iloc[-1])
+    if current_price <= 0.0 or not np.isfinite(current_price) or not np.isfinite(current_model_log):
+        return 0.0
+    current_log_offset = float(np.log10(current_price) - current_model_log)
+    return interpolate_sigma_level_from_log_offset(current_log_offset, percentile_offsets)
+
+
 @st.cache_data(ttl=3600)
 def prepare_model_grid(current_gen_date, a_active, b_active, view_max):
     m_x = np.arange(1.0, float(np.ceil(view_max)) + 1.0)
@@ -215,6 +226,14 @@ def render_portfolio_view(
         return f"{currency_prefix}{value:,.{display_currency_decimals}f}{currency_suffix}"
 
     st.markdown("### Portfolio Growth (Fair Price / Power Law)")
+    selected_sigma_level = st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
+    use_current_sigma_scenario = selected_sigma_level == PORTFOLIO_SIGMA_CURRENT
+    scenario_sigma_level = (
+        resolve_current_sigma_level(df_display, percentile_offsets)
+        if use_current_sigma_scenario
+        else float(selected_sigma_level)
+    )
+
     settings = PortfolioSettings(
         btc_amount=float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)),
         monthly_buy_amount=float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0.0)),
@@ -225,7 +244,7 @@ def render_portfolio_view(
         forecast_horizon=int(
             st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
         ),
-        sigma_level=float(st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)),
+        sigma_level=scenario_sigma_level,
         residual_sigma_log=calculate_residual_sigma_log(df_display),
         residual_percentile_offsets_log=tuple(float(value) for value in percentile_offsets),
     )
@@ -256,11 +275,12 @@ def render_portfolio_view(
     g1, g2, g3 = st.columns(3)
     scenario_multiplier = np.power(10.0, resolve_portfolio_scenario_log_offset(settings))
     current_scenario_price = float(df_display["FairDisplay"].iloc[-1]) * float(scenario_multiplier)
-    current_price_label = (
-        "Current Fair Price"
-        if settings.sigma_level == 0
-        else f"Current {settings.sigma_level:+g} sigma Price"
-    )
+    if use_current_sigma_scenario:
+        current_price_label = f"Current Sigma Price ({settings.sigma_level:+.2f}σ)"
+    elif settings.sigma_level == 0:
+        current_price_label = "Current Fair Price"
+    else:
+        current_price_label = f"Current {settings.sigma_level:+g} sigma Price"
     g1.metric(current_price_label, format_portfolio_money(current_scenario_price))
     if portfolio_view.dca_enabled:
         g2.metric(
@@ -315,12 +335,21 @@ def render_portfolio_view(
         p2.metric(
             "Conservative monthly pension",
             format_portfolio_money(pension_estimate.minimum_monthly_withdrawal),
-            delta=f"{settings.btc_amount:.4f} BTC at -2σ floor",
+            delta=f"sell {pension_estimate.minimum_btc_to_sell:.4f} BTC at -2σ floor",
+        )
+        p2.markdown(
+            (
+                "<div class='pension-detail'>"
+                f"Today: sell {pension_estimate.minimum_btc_to_sell_today:.4f} BTC "
+                f"({pension_estimate.minimum_btc_sell_reduction_pct:.1f}% less BTC)"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
         )
         p3.metric(
             "Model-based monthly pension",
             format_portfolio_money(pension_estimate.max_monthly_withdrawal),
-            delta=f"{settings.btc_amount:.4f} BTC at today's σ",
+            delta=f"sell {pension_estimate.model_btc_to_sell:.4f} BTC at today's σ",
         )
         p4.metric(
             "Projected BTC price next month",
@@ -351,7 +380,11 @@ def render_portfolio_view(
             ),
         )
     )
-    if settings.sigma_level != 0:
+    if use_current_sigma_scenario:
+        st.caption(
+            f"Portfolio scenario uses today's exact market position: {settings.sigma_level:+.2f} sigma."
+        )
+    elif settings.sigma_level != 0:
         st.caption(
             f"Portfolio scenario uses {settings.sigma_level:+g} sigma historical log-residual offset."
         )
