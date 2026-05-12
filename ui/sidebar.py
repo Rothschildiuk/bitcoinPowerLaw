@@ -369,7 +369,6 @@ def render_sidebar_panel(
                 "Currency",
                 CURRENCY_OPTIONS,
                 horizontal=True,
-                index=CURRENCY_OPTIONS.index(selected_currency),
                 key=KEY_CURRENCY_SELECTOR,
                 width="stretch",
             )
