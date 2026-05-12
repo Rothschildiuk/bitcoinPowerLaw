@@ -45,6 +45,22 @@ class PortfolioViewModel:
 
 
 @dataclass(frozen=True)
+class PortfolioBacktestResult:
+    strategy_name: str
+    sell_mom_change_pct: float
+    backtest_df: pd.DataFrame
+    table_df: pd.DataFrame
+    start_value: float
+    hold_last_value: float
+    strategy_last_value: float
+    net_cash_flow: float
+    strategy_btc: float
+    total_return_pct: float
+    strategy_return_pct: float
+    monthly_withdrawal_label: str
+
+
+@dataclass(frozen=True)
 class CurrentMonthlyPensionEstimate:
     current_sigma_level: float
     withdrawal_rating: str
@@ -717,6 +733,178 @@ def build_portfolio_view_model(
         period_change_usd_label=period_change_usd_label,
         period_change_pct_label=period_change_pct_label,
         period_cash_flow_label=period_cash_flow_label,
+    )
+
+
+def build_portfolio_real_data_backtest(
+    price_display_df,
+    settings,
+    currency_unit,
+    years=5,
+    *,
+    current_gen_date=None,
+    intercept_a=None,
+    slope_b=None,
+    percentile_offsets=None,
+    sell_mom_change_pct=None,
+    strategy_name=None,
+    initial_capital=None,
+):
+    if price_display_df is None or price_display_df.empty:
+        return None
+
+    price_series = pd.to_numeric(price_display_df["CloseDisplay"], errors="coerce").dropna()
+    price_series = price_series[price_series > 0.0].sort_index()
+    if price_series.empty:
+        return None
+
+    latest_date = pd.Timestamp(price_series.index.max())
+    start_date = latest_date - pd.DateOffset(years=int(years))
+    price_series = price_series[price_series.index >= start_date]
+    monthly_prices = price_series.resample("MS").last().dropna()
+    if monthly_prices.size < 2:
+        return None
+
+    if initial_capital is None:
+        initial_btc = max(float(settings.btc_amount), 0.0)
+    else:
+        initial_capital = max(float(initial_capital), 0.0)
+        first_price = float(monthly_prices.iloc[0])
+        initial_btc = initial_capital / first_price if first_price > 0.0 else 0.0
+    strategy_btc = initial_btc
+    net_cash_flow = 0.0
+    sell_pct = (
+        float(settings.monthly_mom_change_pct)
+        if sell_mom_change_pct is None
+        else float(sell_mom_change_pct)
+    )
+    sell_ratio = min(max(sell_pct / 100.0, 0.0), 10.0)
+    monthly_cash_flow = float(settings.monthly_buy_amount)
+    if not np.isfinite(monthly_cash_flow):
+        monthly_cash_flow = 0.0
+
+    floor_prices = None
+    if (
+        current_gen_date is not None
+        and intercept_a is not None
+        and slope_b is not None
+        and percentile_offsets is not None
+    ):
+        monthly_days = np.maximum(
+            (monthly_prices.index - pd.Timestamp(current_gen_date)).days.astype(float),
+            1.0,
+        )
+        fair_prices, _, _ = evaluate_powerlaw_values(
+            np.log10(monthly_days),
+            float(intercept_a),
+            float(slope_b),
+        )
+        floor_prices = pd.Series(
+            fair_prices * np.power(10.0, float(percentile_offsets[0])),
+            index=monthly_prices.index,
+            dtype=float,
+        )
+
+    rows = []
+    previous_actual_price = None
+    previous_floor_price = None
+    for date, price in monthly_prices.items():
+        price = float(price)
+        hold_value = initial_btc * price
+        if floor_prices is None:
+            positive_price_growth = (
+                max(price - previous_actual_price, 0.0)
+                if previous_actual_price is not None
+                else 0.0
+            )
+        else:
+            floor_price = float(floor_prices.loc[date])
+            positive_price_growth = (
+                max(floor_price - previous_floor_price, 0.0)
+                if previous_floor_price is not None
+                else 0.0
+            )
+            previous_floor_price = floor_price
+        withdrawal = positive_price_growth * strategy_btc * sell_ratio
+        period_cash_flow = monthly_cash_flow - withdrawal
+        if period_cash_flow >= 0.0:
+            strategy_btc += period_cash_flow / price
+        else:
+            sell_btc = min(strategy_btc, abs(period_cash_flow) / price)
+            period_cash_flow = -(sell_btc * price)
+            strategy_btc -= sell_btc
+        net_cash_flow += period_cash_flow
+        strategy_value = strategy_btc * price
+
+        rows.append(
+            {
+                "Date": pd.Timestamp(date),
+                "ActualPrice": price,
+                "HoldValue": hold_value,
+                "StrategyValue": strategy_value,
+                "MonthlyBuy": max(period_cash_flow, 0.0),
+                "MonthlyWithdrawal": max(-period_cash_flow, 0.0),
+                "NetCashFlow": net_cash_flow,
+                "StrategyBTC": strategy_btc,
+            }
+        )
+        previous_actual_price = price
+
+    backtest_df = pd.DataFrame(rows)
+    start_value = float(backtest_df["HoldValue"].iloc[0])
+    hold_last_value = float(backtest_df["HoldValue"].iloc[-1])
+    strategy_last_value = float(backtest_df["StrategyValue"].iloc[-1])
+    total_return_pct = (
+        ((hold_last_value - start_value) / start_value) * 100.0 if start_value else 0.0
+    )
+    strategy_basis = start_value + max(net_cash_flow, 0.0)
+    strategy_return_pct = (
+        ((strategy_last_value - strategy_basis) / strategy_basis) * 100.0
+        if strategy_basis > 0.0
+        else 0.0
+    )
+
+    monthly_withdrawal_label = f"-2σ monthly withdrawal ({currency_unit})"
+    if floor_prices is None:
+        monthly_withdrawal_label = f"Historical monthly withdrawal ({currency_unit})"
+    table_df = backtest_df.copy()
+    table_df["Date"] = table_df["Date"].dt.strftime("%Y-%m")
+    table_df = table_df.rename(
+        columns={
+            "ActualPrice": f"Actual BTC price ({currency_unit})",
+            "HoldValue": f"Hold-only value ({currency_unit})",
+            "StrategyValue": f"Strategy value ({currency_unit})",
+            "MonthlyBuy": f"Monthly buy ({currency_unit})",
+            "MonthlyWithdrawal": monthly_withdrawal_label,
+            "NetCashFlow": f"Net cash flow ({currency_unit})",
+            "StrategyBTC": "BTC after strategy",
+        }
+    )
+
+    return PortfolioBacktestResult(
+        strategy_name=strategy_name or f"Sell {sell_pct:.0f}% of monthly growth",
+        sell_mom_change_pct=float(sell_pct),
+        backtest_df=backtest_df,
+        table_df=table_df[
+            [
+                "Date",
+                f"Actual BTC price ({currency_unit})",
+                f"Hold-only value ({currency_unit})",
+                f"Strategy value ({currency_unit})",
+                f"Monthly buy ({currency_unit})",
+                monthly_withdrawal_label,
+                f"Net cash flow ({currency_unit})",
+                "BTC after strategy",
+            ]
+        ],
+        start_value=start_value,
+        hold_last_value=hold_last_value,
+        strategy_last_value=strategy_last_value,
+        net_cash_flow=float(net_cash_flow),
+        strategy_btc=float(strategy_btc),
+        total_return_pct=float(total_return_pct),
+        strategy_return_pct=float(strategy_return_pct),
+        monthly_withdrawal_label=monthly_withdrawal_label,
     )
 
 

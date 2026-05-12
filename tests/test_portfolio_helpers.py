@@ -6,6 +6,7 @@ import pandas as pd
 from core.utils import (
     PortfolioProjectionResult,
     PortfolioSettings,
+    build_portfolio_real_data_backtest,
     build_portfolio_projection,
     build_portfolio_view_model,
     estimate_current_monthly_pension,
@@ -527,6 +528,101 @@ class TestPortfolioHelpers(unittest.TestCase):
             get_growth_change_labels("Month", "EUR"),
             ("MoM Change (EUR)", "MoM Change (%)"),
         )
+
+    def test_build_portfolio_real_data_backtest_applies_historical_strategy(self):
+        dates = pd.date_range("2021-01-01", periods=72, freq="MS")
+        price_df = pd.DataFrame(
+            {"CloseDisplay": np.linspace(100.0, 200.0, len(dates))},
+            index=dates,
+        )
+        settings = PortfolioSettings(
+            btc_amount=2.0,
+            monthly_buy_amount=10.0,
+            monthly_mom_change_pct=50.0,
+            forecast_unit="Month",
+            forecast_horizon=12,
+        )
+
+        result = build_portfolio_real_data_backtest(price_df, settings, "USD", years=5)
+
+        self.assertIsNotNone(result)
+        self.assertGreaterEqual(len(result.backtest_df), 60)
+        self.assertIn("Strategy value (USD)", result.table_df.columns)
+        self.assertIn("Historical monthly withdrawal (USD)", result.table_df.columns)
+        self.assertIn("BTC after strategy", result.table_df.columns)
+        self.assertGreaterEqual(result.strategy_btc, 0.0)
+        self.assertTrue((result.backtest_df["MonthlyWithdrawal"] >= 0.0).all())
+
+    def test_build_portfolio_real_data_backtest_can_sell_floor_growth(self):
+        dates = pd.date_range("2021-01-01", periods=72, freq="MS")
+        price_df = pd.DataFrame({"CloseDisplay": np.full(len(dates), 100.0)}, index=dates)
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=0.0,
+            forecast_unit="Month",
+            forecast_horizon=12,
+        )
+
+        full_sell = build_portfolio_real_data_backtest(
+            price_df,
+            settings,
+            "USD",
+            years=5,
+            current_gen_date=pd.Timestamp("2020-01-01"),
+            intercept_a=0.0,
+            slope_b=1.0,
+            percentile_offsets=(0.0, 0.0, 0.0, 0.0),
+            sell_mom_change_pct=100.0,
+            strategy_name="-2σ floor: sell 100% growth",
+        )
+        half_sell = build_portfolio_real_data_backtest(
+            price_df,
+            settings,
+            "USD",
+            years=5,
+            current_gen_date=pd.Timestamp("2020-01-01"),
+            intercept_a=0.0,
+            slope_b=1.0,
+            percentile_offsets=(0.0, 0.0, 0.0, 0.0),
+            sell_mom_change_pct=50.0,
+            strategy_name="-2σ floor: sell 50% growth",
+        )
+
+        self.assertIsNotNone(full_sell)
+        self.assertIsNotNone(half_sell)
+        self.assertEqual(full_sell.monthly_withdrawal_label, "-2σ monthly withdrawal (USD)")
+        self.assertGreater(full_sell.backtest_df["MonthlyWithdrawal"].sum(), 0.0)
+        self.assertGreater(
+            full_sell.backtest_df["MonthlyWithdrawal"].sum(),
+            half_sell.backtest_df["MonthlyWithdrawal"].sum(),
+        )
+        self.assertLess(full_sell.strategy_btc, half_sell.strategy_btc)
+
+    def test_build_portfolio_real_data_backtest_uses_starting_capital(self):
+        dates = pd.date_range("2021-01-01", periods=72, freq="MS")
+        price_df = pd.DataFrame({"CloseDisplay": np.full(len(dates), 100.0)}, index=dates)
+        settings = PortfolioSettings(
+            btc_amount=999.0,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=0.0,
+            forecast_unit="Month",
+            forecast_horizon=12,
+        )
+
+        result = build_portfolio_real_data_backtest(
+            price_df,
+            settings,
+            "USD",
+            years=5,
+            sell_mom_change_pct=150.0,
+            initial_capital=250.0,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertTrue(np.isclose(result.start_value, 250.0))
+        self.assertTrue(np.isclose(result.strategy_btc, 2.5))
+        self.assertEqual(result.sell_mom_change_pct, 150.0)
 
 
 if __name__ == "__main__":

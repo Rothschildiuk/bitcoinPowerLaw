@@ -29,6 +29,10 @@ from core.constants import (
     KEY_LOGPERIODIC_SERIES,
     KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     KEY_POWERLAW_SERIES,
+    KEY_PORTFOLIO_BACKTEST_HAS_RUN,
+    KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL,
+    KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT,
+    KEY_PORTFOLIO_BACKTEST_YEARS,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_UNIT,
@@ -68,6 +72,7 @@ from core.series_registry import (
 from core.simulation import build_bitcoin_network_simulation
 from core.utils import (
     PortfolioSettings,
+    build_portfolio_real_data_backtest,
     build_portfolio_projection,
     build_portfolio_view_model,
     calculate_expanding_powerlaw_parameters,
@@ -214,6 +219,41 @@ def style_portfolio_table(table_df, style_format, currency_unit, portfolio_view)
             table_styles,
             overwrite=False,
         )
+    )
+
+
+def style_backtest_table(table_df, style_format, currency_unit, monthly_withdrawal_label):
+    column_colors = {
+        f"Actual BTC price ({currency_unit})": "#f0b90b",
+        f"Hold-only value ({currency_unit})": "#f0b90b",
+        f"Strategy value ({currency_unit})": "#14b8a6",
+        monthly_withdrawal_label: "#38bdf8",
+        f"Net cash flow ({currency_unit})": "#8b5cf6",
+    }
+
+    def color_column_values(data):
+        styled = pd.DataFrame("", index=data.index, columns=data.columns)
+        for column_name, color in column_colors.items():
+            if column_name in styled.columns:
+                styled[column_name] = f"color: {color}; font-weight: 700;"
+        return styled
+
+    table_styles = [
+        {
+            "selector": f"th.col{table_df.columns.get_loc(column_name)}",
+            "props": [
+                ("color", color),
+                ("border-bottom", f"2px solid {color}"),
+                ("box-shadow", f"inset 0 -2px 0 {color}"),
+            ],
+        }
+        for column_name, color in column_colors.items()
+        if column_name in table_df.columns
+    ]
+    return (
+        table_df.style.format(style_format)
+        .apply(color_column_values, axis=None)
+        .set_table_styles(table_styles, overwrite=False)
     )
 
 
@@ -525,6 +565,198 @@ def render_portfolio_view(
         width="stretch",
         hide_index=True,
     )
+
+    st.markdown("#### Strategy tester")
+    if KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT not in st.session_state:
+        st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT] = 100.0
+    if KEY_PORTFOLIO_BACKTEST_YEARS not in st.session_state:
+        st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS] = 5
+    if KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL not in st.session_state:
+        st.session_state[KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL] = float(
+            settings.btc_amount * df_display["CloseDisplay"].iloc[-1]
+        )
+    if KEY_PORTFOLIO_BACKTEST_HAS_RUN not in st.session_state:
+        st.session_state[KEY_PORTFOLIO_BACKTEST_HAS_RUN] = False
+
+    strategy_labels = {
+        50.0: "-2σ floor: sell 50% growth",
+        100.0: "-2σ floor: sell 100% growth",
+        150.0: "-2σ floor: sell 150% growth",
+    }
+    strategy_colors = {
+        50.0: "#38bdf8",
+        100.0: "#14b8a6",
+        150.0: "#f97316",
+    }
+
+    with st.form("portfolio_strategy_tester"):
+        s1, s2, s3, s4 = st.columns([1.4, 1.0, 1.2, 0.8])
+        with s1:
+            st.selectbox(
+                "Strategy",
+                list(strategy_labels.keys()),
+                format_func=lambda value: strategy_labels[float(value)],
+                key=KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT,
+            )
+        with s2:
+            st.slider(
+                "Years to test",
+                min_value=1,
+                max_value=10,
+                step=1,
+                key=KEY_PORTFOLIO_BACKTEST_YEARS,
+            )
+        with s3:
+            st.number_input(
+                f"Starting capital ({currency_unit})",
+                min_value=0.0,
+                step=1000.0,
+                format="%.2f",
+                key=KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL,
+            )
+        with s4:
+            st.markdown("**Currency**")
+            st.markdown(f"`{currency_unit}`")
+        submitted = st.form_submit_button("Test strategy", type="primary", width="stretch")
+        if submitted:
+            st.session_state[KEY_PORTFOLIO_BACKTEST_HAS_RUN] = True
+
+    if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False):
+        selected_sell_pct = float(st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT])
+        backtest_years = int(st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS])
+        initial_capital = float(st.session_state[KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL])
+        result = build_portfolio_real_data_backtest(
+            df_display,
+            settings,
+            currency_unit,
+            years=backtest_years,
+            current_gen_date=current_gen_date,
+            intercept_a=a_active,
+            slope_b=b_active,
+            percentile_offsets=percentile_offsets,
+            sell_mom_change_pct=selected_sell_pct,
+            strategy_name=strategy_labels[selected_sell_pct],
+            initial_capital=initial_capital,
+        )
+    else:
+        st.caption("Choose a strategy, period, and starting capital, then click Test strategy.")
+
+    if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False) and result is not None:
+        st.markdown(f"##### Last {backtest_years} years: {result.strategy_name}")
+        total_withdrawal = float(result.backtest_df["MonthlyWithdrawal"].sum())
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Starting capital", format_portfolio_money(result.start_value))
+        m2.metric(
+            "Hold-only today",
+            format_portfolio_money(result.hold_last_value),
+            delta=f"{result.total_return_pct:+.1f}%",
+        )
+        m3.metric(
+            "Strategy today",
+            format_portfolio_money(result.strategy_last_value),
+            delta=f"{result.strategy_btc:.4f} BTC left",
+        )
+        m4.metric("Total withdrawn", format_portfolio_money(total_withdrawal))
+
+        backtest_fig = go.Figure()
+        backtest_fig.add_trace(
+            go.Scatter(
+                x=result.backtest_df["Date"],
+                y=result.backtest_df["HoldValue"],
+                mode="lines+markers",
+                name="Hold-only value",
+                line=dict(color="#f0b90b", width=2),
+                hovertemplate=(
+                    "<b>%{x|%Y-%m}</b><br>Hold-only: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        selected_color = strategy_colors[selected_sell_pct]
+        backtest_fig.add_trace(
+            go.Scatter(
+                x=result.backtest_df["Date"],
+                y=result.backtest_df["StrategyValue"],
+                mode="lines+markers",
+                name=result.strategy_name,
+                line=dict(color=selected_color, width=2),
+                hovertemplate=(
+                    f"<b>%{{x|%Y-%m}}</b><br>{result.strategy_name}: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        backtest_fig.add_trace(
+            go.Scatter(
+                x=result.backtest_df["Date"],
+                y=result.backtest_df["MonthlyWithdrawal"],
+                mode="lines",
+                name=f"Monthly withdrawal {result.sell_mom_change_pct:.0f}%",
+                line=dict(color="#38bdf8", width=1.8, dash="dot"),
+                hovertemplate=(
+                    f"<b>%{{x|%Y-%m}}</b><br>Withdrawal {result.sell_mom_change_pct:.0f}%: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        backtest_fig.add_trace(
+            go.Scatter(
+                x=result.backtest_df["Date"],
+                y=result.backtest_df["NetCashFlow"],
+                mode="lines",
+                name="Cumulative net cash flow",
+                line=dict(color="#8b5cf6", width=1.8, dash="dash"),
+                hovertemplate=(
+                    "<b>%{x|%Y-%m}</b><br>Net cash flow: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        backtest_fig.update_layout(
+            height=320,
+            margin=dict(t=10, b=0, l=50, r=20),
+            template=pl_template,
+            font=dict(color=pl_text_color),
+            paper_bgcolor=pl_bg_color,
+            plot_bgcolor=pl_bg_color,
+            xaxis=dict(gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color)),
+            yaxis=dict(gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color)),
+            hoverlabel=dict(
+                bgcolor=c_hover_bg,
+                bordercolor=c_border,
+                font=dict(color=c_hover_text, size=13),
+            ),
+        )
+        st.plotly_chart(
+            backtest_fig,
+            width="stretch",
+            theme=None,
+            config={"displayModeBar": False},
+            key=f"portfolio_backtest_{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}",
+        )
+
+        backtest_format = {
+            f"Actual BTC price ({currency_unit})": money_fmt,
+            f"Hold-only value ({currency_unit})": money_fmt,
+            f"Strategy value ({currency_unit})": money_fmt,
+            f"Monthly buy ({currency_unit})": money_fmt,
+            result.monthly_withdrawal_label: money_fmt,
+            f"Net cash flow ({currency_unit})": money_fmt,
+            "BTC after strategy": "{:,.6f}",
+        }
+        st.dataframe(
+            style_backtest_table(
+                result.table_df,
+                backtest_format,
+                currency_unit,
+                result.monthly_withdrawal_label,
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+        st.caption(
+            "Backtest starts by converting the starting capital into BTC at the first historical monthly price. Withdrawals are calculated from one month of model growth on the -2σ floor, then sold at the real historical monthly BTC price."
+        )
 
 
 # --- Page Configuration ---
