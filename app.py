@@ -28,6 +28,7 @@ from core.constants import (
     KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_SERIES,
     KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
+    KEY_POWERLAW_ENVELOPE_SIGMA,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BACKTEST_HAS_RUN,
     KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT,
@@ -120,6 +121,7 @@ def initialize_app_session_state():
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_HARMONICS: int(OSC_DEFAULTS.get("harmonic_count", 1)),
         KEY_LOGPERIODIC_SHOW_DECAYED_DSI: True,
+        KEY_POWERLAW_ENVELOPE_SIGMA: 1.0,
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
         KEY_PORTFOLIO_SIGMA_LEVEL: 0,
@@ -169,18 +171,25 @@ def calculate_residual_sigma_log(display_df):
     return sigma if np.isfinite(sigma) else 0.0
 
 
-def calculate_peak_powerlaw_overlay(display_df, genesis_offset_days, model_days, percentile_offsets):
+def calculate_peak_powerlaw_overlay(
+    display_df,
+    genesis_offset_days,
+    model_days,
+    percentile_offsets,
+    sigma_threshold,
+):
     close_values = pd.to_numeric(display_df["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
     log_prices = np.full(close_values.shape, np.nan, dtype=float)
     positive_mask = close_values > 0.0
     log_prices[positive_mask] = np.log10(close_values[positive_mask])
+    sigma_threshold = abs(float(sigma_threshold))
     sigma_levels = [-2.0, -1.0, 0.0, 1.0, 2.0]
     sigma_offsets = [*percentile_offsets[:2], 0.0, *percentile_offsets[2:]]
     lower_offset = float(
-        np.interp(-1.0, sigma_levels, sigma_offsets)
+        np.interp(-sigma_threshold, sigma_levels, sigma_offsets)
     )
     upper_offset = float(
-        np.interp(1.0, sigma_levels, sigma_offsets)
+        np.interp(sigma_threshold, sigma_levels, sigma_offsets)
     )
     residuals = pd.to_numeric(display_df["Res"], errors="coerce").to_numpy(dtype=float)
     peak_overlay = power_law.fit_peak_powerlaw_envelope(
@@ -1335,6 +1344,7 @@ if mode == MODE_POWERLAW:
         genesis_offset,
         m_x,
         (p2_5, p16_5, p83_5, p97_5),
+        st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0),
     )
 
 if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:

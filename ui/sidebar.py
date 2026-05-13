@@ -16,6 +16,7 @@ from core.constants import (
     KEY_LOGPERIODIC_LAST_SERIES,
     KEY_MODE_SELECTOR,
     KEY_LOGPERIODIC_SERIES,
+    KEY_POWERLAW_ENVELOPE_SIGMA,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -355,6 +356,16 @@ def render_sidebar_panel(
                         label_visibility="collapsed",
                         width="stretch",
                     )
+            st.markdown("**Envelope sigma**")
+            st.slider(
+                "Envelope sigma",
+                min_value=0.25,
+                max_value=2.0,
+                value=float(st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0)),
+                step=0.25,
+                key=KEY_POWERLAW_ENVELOPE_SIGMA,
+                label_visibility="collapsed",
+            )
         is_non_price_series = not series_supports_currency_selector(
             mode, powerlaw_series, logperiodic_series
         )

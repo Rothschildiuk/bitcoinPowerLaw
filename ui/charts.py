@@ -298,6 +298,7 @@ def render_main_model_chart(
             p97_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_p2",
+            visible="legendonly",
         )
         add_model_line(
             optional_sigma_series[1.5],
@@ -311,6 +312,7 @@ def render_main_model_chart(
             p83_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_p1",
+            visible="legendonly",
         )
         add_model_line(
             optional_sigma_series[0.5],
@@ -419,6 +421,7 @@ def render_main_model_chart(
             p16_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_m1",
+            visible="legendonly",
         )
         add_model_line(
             optional_sigma_series[-1.5],
@@ -432,11 +435,13 @@ def render_main_model_chart(
             p2_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_m2",
+            visible="legendonly",
         )
         add_legend_item(
             p2_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_m2",
+            visible="legendonly",
         )
         add_legend_item(
             _format_sigma_line_name(-1.5),
@@ -448,6 +453,7 @@ def render_main_model_chart(
             p16_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_m1",
+            visible="legendonly",
         )
         add_legend_item(
             _format_sigma_line_name(-0.5),
@@ -484,6 +490,7 @@ def render_main_model_chart(
             p83_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_p1",
+            visible="legendonly",
         )
         add_legend_item(
             _format_sigma_line_name(1.5),
@@ -495,6 +502,7 @@ def render_main_model_chart(
             p97_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_p2",
+            visible="legendonly",
         )
         if show_halving_lines:
             for halving_date in HALVING_DATES:
