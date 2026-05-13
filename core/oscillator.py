@@ -214,28 +214,16 @@ def compute_sidebar_logperiodic_r2(
     lambda_bounds,
     show_decayed_regression,
 ):
-    if show_decayed_regression:
-        stats = optimize_dsi_regression_lambda(
-            log_days,
-            residual_series,
-            harmonic_count,
-            min_lambda=lambda_bounds[0],
-            max_lambda=lambda_bounds[1],
-            days_since_genesis=days_since_genesis,
-            decay_model="reciprocal_age",
-        )
-        return float(stats.r2)
-
-    return compute_oscillator_fit_r2(
+    decay_model = "reciprocal_age" if show_decayed_regression else "none"
+    stats = compute_dsi_regression_stats(
         log_days,
         residual_series,
-        current_params["t1_age"],
         current_params["lambda_val"],
-        current_params["amp_factor_top"],
-        current_params["amp_factor_bottom"],
-        current_params["impulse_damping"],
         harmonic_count,
+        days_since_genesis=days_since_genesis,
+        decay_model=decay_model,
     )
+    return float(stats.r2)
 
 
 def compute_oscillator_model_stats(
@@ -323,15 +311,15 @@ def _format_metric_value(value, precision):
     return f"{value:.{precision}f}"
 
 
-def _best_aic_row_index(stats_rows):
+def _best_r2_row_index(stats_rows):
     finite_rows = [
-        (index, float(row.aic))
+        (index, float(row["r2"]))
         for index, row in enumerate(stats_rows)
-        if row is not None and np.isfinite(row.aic)
+        if row is not None and np.isfinite(row["r2"])
     ]
     if not finite_rows:
         return None
-    return min(finite_rows, key=lambda item: item[1])[0]
+    return max(finite_rows, key=lambda item: item[1])[0]
 
 
 def _compute_prediction_stats(observed_values, predicted_values, parameter_count):
@@ -590,37 +578,60 @@ def compute_perrenod_comparison_stats_table(
     return rows
 
 
-def render_regression_comparison_stats_table(stats_rows):
-    best_index = _best_aic_row_index(stats_rows)
+def render_logperiodic_regression_stats_table(
+    logperiodic_stats_rows, perrenod_stats_rows
+):
+    combined_rows = []
+    for row in logperiodic_stats_rows or []:
+        combined_rows.append(
+            {
+                "model": f"Current λ DSI {_format_mode_label(row.mode_multipliers)}",
+                "fit": "current λ",
+                "params": row.parameter_count,
+                "r2": row.r2,
+            }
+        )
+    for row in perrenod_stats_rows or []:
+        if row is None:
+            continue
+        combined_rows.append(
+            {
+                "model": row.label,
+                "fit": row.parameter_label,
+                "params": row.parameter_count,
+                "r2": row.r2,
+            }
+        )
+
+    if not combined_rows:
+        return
+
+    best_index = _best_r2_row_index(combined_rows)
     rows_html = "".join(
         (
             f"<tr class='{'is-best' if index == best_index else ''}'>"
-            f"<td>{row.label}</td>"
-            f"<td>{row.parameter_label}</td>"
-            f"<td>{row.parameter_count}</td>"
-            f"<td>{_format_metric_value(row.r2, 2)}</td>"
-            f"<td>{_format_metric_value(row.aic, 1)}</td>"
-            f"<td>{_format_metric_value(row.bic, 1)}</td>"
-            f"<td>{_format_metric_value(row.rmse, 4)}</td>"
+            f"<td>{row['model']}</td>"
+            f"<td>{row['fit']}</td>"
+            f"<td>{row['params']}</td>"
+            f"<td>{_format_metric_value(row['r2'], 2)}</td>"
             "</tr>"
         )
-        for index, row in enumerate(stats_rows)
-        if row is not None
+        for index, row in enumerate(combined_rows)
     )
     st.markdown(
         (
             "<section class='lp-stats-panel'>"
             "<div class='lp-stats-panel-header'>"
             "<div>"
-            "<div class='lp-stats-eyebrow'>Perrenod-style</div>"
+            "<div class='lp-stats-eyebrow'>LogPeriodic</div>"
             "<div class='lp-stats-title'>Regression comparison</div>"
             "</div>"
-            "<div class='lp-stats-badge'>best AIC highlighted</div>"
+            "<div class='lp-stats-badge'>best R² highlighted</div>"
             "</div>"
             "<div class='lp-stats-table-wrap'>"
-            "<table class='lp-stats-table lp-regression-table'>"
+            "<table class='lp-stats-table lp-combined-table'>"
             "<thead><tr>"
-            "<th>Model</th><th>Fit</th><th>Params</th><th>R²%</th><th>AIC</th><th>BIC</th><th>RMSE</th>"
+            "<th>Model</th><th>Fit</th><th>Params</th><th>R²%</th>"
             "</tr></thead>"
             f"<tbody>{rows_html}</tbody>"
             "</table>"
@@ -629,45 +640,14 @@ def render_regression_comparison_stats_table(stats_rows):
         ),
         unsafe_allow_html=True,
     )
+
+
+def render_regression_comparison_stats_table(stats_rows):
+    render_logperiodic_regression_stats_table(None, stats_rows)
 
 
 def render_oscillator_model_stats_table(stats_rows):
-    best_index = _best_aic_row_index(stats_rows)
-    rows_html = "".join(
-        (
-            f"<tr class='{'is-best' if index == best_index else ''}'>"
-            f"<td>{_format_mode_label(row.mode_multipliers)}</td>"
-            f"<td>{row.parameter_count}</td>"
-            f"<td>{_format_metric_value(row.r2, 2)}</td>"
-            f"<td>{_format_metric_value(row.aic, 1)}</td>"
-            f"<td>{_format_metric_value(row.bic, 1)}</td>"
-            f"<td>{_format_metric_value(row.rmse, 4)}</td>"
-            "</tr>"
-        )
-        for index, row in enumerate(stats_rows)
-    )
-    st.markdown(
-        (
-            "<section class='lp-stats-panel lp-stats-panel-compact'>"
-            "<div class='lp-stats-panel-header'>"
-            "<div>"
-            "<div class='lp-stats-eyebrow'>LogPeriodic</div>"
-            "<div class='lp-stats-title'>DSI mode fit</div>"
-            "</div>"
-            "<div class='lp-stats-badge'>best AIC highlighted</div>"
-            "</div>"
-            "<div class='lp-stats-table-wrap'>"
-            "<table class='lp-stats-table lp-mode-table'>"
-            "<thead><tr>"
-            "<th>Modes</th><th>Params</th><th>R²%</th><th>AIC</th><th>BIC</th><th>RMSE</th>"
-            "</tr></thead>"
-            f"<tbody>{rows_html}</tbody>"
-            "</table>"
-            "</div>"
-            "</section>"
-        ),
-        unsafe_allow_html=True,
-    )
+    render_logperiodic_regression_stats_table(stats_rows, None)
 
 
 def compute_oscillator_overlay(
@@ -1101,10 +1081,13 @@ def render_sidebar(
         label_visibility="collapsed",
     )
     if KEY_LOGPERIODIC_SHOW_DECAYED_DSI not in st.session_state:
-        st.session_state[KEY_LOGPERIODIC_SHOW_DECAYED_DSI] = True
-    st.toggle(
-        "Show decayed DSI regression",
+        st.session_state[KEY_LOGPERIODIC_SHOW_DECAYED_DSI] = False
+    st.radio(
+        "DSI regression",
+        [False, True],
+        format_func=lambda use_decay: "Decayed" if use_decay else "Standard",
         key=KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
+        horizontal=True,
     )
     # Keep advanced amplitude/damping parameters fixed to defaults in LogPeriodic sidebar.
     st.session_state["amp_factor_top"] = float(defaults["amp_factor_top"])

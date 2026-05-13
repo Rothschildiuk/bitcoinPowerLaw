@@ -46,7 +46,8 @@ def _resolve_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
     if not np.all(np.isfinite(scenario_offsets)):
         return None
     return {
-        level: float(np.interp(level, scenario_levels, scenario_offsets)) for level in SIGMA_LEVELS
+        level: float(np.interp(level, scenario_levels, scenario_offsets))
+        for level in SIGMA_LEVELS
     }
 
 
@@ -163,13 +164,11 @@ def render_model_kpis(
     )
     _kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
 
-    if logperiodic_stats_rows:
-        from core.oscillator import render_oscillator_model_stats_table
+    if logperiodic_stats_rows or perrenod_stats_rows:
+        from core.oscillator import render_logperiodic_regression_stats_table
 
-        render_oscillator_model_stats_table(logperiodic_stats_rows)
-    if perrenod_stats_rows:
-        from core.oscillator import render_regression_comparison_stats_table
-
-        render_regression_comparison_stats_table(perrenod_stats_rows)
+        render_logperiodic_regression_stats_table(
+            logperiodic_stats_rows, perrenod_stats_rows
+        )
 
     _render_sigma_band_chart(band_shares)

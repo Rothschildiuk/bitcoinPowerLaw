@@ -300,7 +300,7 @@ class TestOscillator(unittest.TestCase):
 
         self.assertTrue(np.allclose(prediction, expected_prediction))
 
-    def test_sidebar_logperiodic_r2_uses_decayed_regression_when_enabled(self):
+    def test_sidebar_logperiodic_r2_toggles_current_dsi_decay_model(self):
         days = np.linspace(365.25, 365.25 * 10.0, 300)
         log_days = np.log10(days)
         lambda_val = 2.4
@@ -325,20 +325,81 @@ class TestOscillator(unittest.TestCase):
             },
             harmonic_count=3,
             lambda_bounds=(2.0, 2.8),
-            show_decayed_regression=True,
+            show_decayed_regression=False,
         )
-        expected_stats = oscillator.optimize_dsi_regression_lambda(
+        decayed_sidebar_r2 = oscillator.compute_sidebar_logperiodic_r2(
             log_days,
             residuals,
+            days,
+            {
+                "t1_age": 1.0,
+                "lambda_val": 2.0,
+                "amp_factor_top": 1.0,
+                "amp_factor_bottom": 1.0,
+                "impulse_damping": 0.0,
+            },
             harmonic_count=3,
-            min_lambda=2.0,
-            max_lambda=2.8,
+            lambda_bounds=(2.0, 2.8),
+            show_decayed_regression=True,
+        )
+        current_dsi_stats = oscillator.compute_dsi_regression_stats(
+            log_days,
+            residuals,
+            2.0,
+            harmonic_count=3,
+        )
+        current_decayed_stats = oscillator.compute_dsi_regression_stats(
+            log_days,
+            residuals,
+            2.0,
+            harmonic_count=3,
             days_since_genesis=days,
             decay_model="reciprocal_age",
         )
 
-        self.assertAlmostEqual(sidebar_r2, expected_stats.r2)
-        self.assertGreater(sidebar_r2, 99.0)
+        self.assertAlmostEqual(sidebar_r2, current_dsi_stats.r2)
+        self.assertAlmostEqual(decayed_sidebar_r2, current_decayed_stats.r2)
+        self.assertNotAlmostEqual(sidebar_r2, decayed_sidebar_r2)
+
+    def test_sidebar_logperiodic_r2_changes_with_selected_dsi_modes(self):
+        days = np.linspace(365.25, 365.25 * 12.0, 360)
+        log_days = np.log10(days)
+        lambda_val = 2.6
+        omega = 2 * np.pi / np.log10(lambda_val)
+        residuals = (
+            0.3
+            + 0.4 * np.cos(omega * log_days)
+            - 0.2 * np.sin(2.0 * omega * log_days)
+            + 0.8 * np.cos(4.0 * omega * log_days)
+        )
+        params = {
+            "t1_age": 1.0,
+            "lambda_val": lambda_val,
+            "amp_factor_top": 1.0,
+            "amp_factor_bottom": 1.0,
+            "impulse_damping": 0.0,
+        }
+
+        two_mode_r2 = oscillator.compute_sidebar_logperiodic_r2(
+            log_days,
+            residuals,
+            days,
+            params,
+            harmonic_count=2,
+            lambda_bounds=(2.0, 2.8),
+            show_decayed_regression=True,
+        )
+        three_mode_r2 = oscillator.compute_sidebar_logperiodic_r2(
+            log_days,
+            residuals,
+            days,
+            params,
+            harmonic_count=3,
+            lambda_bounds=(2.0, 2.8),
+            show_decayed_regression=True,
+        )
+
+        self.assertGreater(three_mode_r2, two_mode_r2)
 
     def test_optimized_dsi_regression_lambda_prefers_signal_lambda(self):
         log_days = np.linspace(0.5, 3.0, 300)

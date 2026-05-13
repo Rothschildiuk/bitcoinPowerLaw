@@ -272,6 +272,9 @@ footer {visibility: hidden; display: none;}
 .lp-regression-table {
     min-width: 1080px;
 }
+.lp-combined-table {
+    min-width: 760px;
+}
 .lp-mode-table th:first-child,
 .lp-mode-table td:first-child {
     width: 30%;
@@ -283,6 +286,14 @@ footer {visibility: hidden; display: none;}
 .lp-regression-table th:nth-child(2),
 .lp-regression-table td:nth-child(2) {
     width: 13%;
+}
+.lp-combined-table th:first-child,
+.lp-combined-table td:first-child {
+    width: 42%;
+}
+.lp-combined-table th:nth-child(2),
+.lp-combined-table td:nth-child(2) {
+    width: 20%;
 }
 
 div[data-testid="stSidebar"] .stRadio div[role="radiogroup"],
