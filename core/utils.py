@@ -352,6 +352,7 @@ def estimate_current_monthly_pension(
     btc_amount,
     sell_mom_change_pct,
     percentile_offsets,
+    floor_sigma_level=-2.0,
 ):
     current_price = float(current_price)
     current_model_log = float(current_model_log)
@@ -376,7 +377,20 @@ def estimate_current_monthly_pension(
         intercept_a,
         slope_b,
     )
-    current_floor_offset = float(percentile_offsets[0])
+    scenario_levels = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
+    scenario_offsets = np.array(
+        [
+            percentile_offsets[0],
+            percentile_offsets[1],
+            0.0,
+            percentile_offsets[2],
+            percentile_offsets[3],
+        ],
+        dtype=float,
+    )
+    current_floor_offset = float(
+        np.interp(float(floor_sigma_level), scenario_levels, scenario_offsets)
+    )
     current_floor_price = float(np.power(10.0, current_model_log + current_floor_offset))
     next_month_floor_price = float(next_month_fair_price[0] * np.power(10.0, current_floor_offset))
     next_month_price = float(next_month_fair_price[0] * np.power(10.0, current_log_offset))
@@ -749,6 +763,10 @@ def build_portfolio_real_data_backtest(
     sell_mom_change_pct=None,
     strategy_name=None,
     initial_capital=None,
+    floor_intercept_a=None,
+    floor_slope_b=None,
+    floor_log_offset=0.0,
+    floor_model_label=None,
 ):
     if price_display_df is None or price_display_df.empty:
         return None
@@ -786,21 +804,29 @@ def build_portfolio_real_data_backtest(
     floor_prices = None
     if (
         current_gen_date is not None
-        and intercept_a is not None
-        and slope_b is not None
-        and percentile_offsets is not None
+        and (
+            (floor_intercept_a is not None and floor_slope_b is not None)
+            or (intercept_a is not None and slope_b is not None and percentile_offsets is not None)
+        )
     ):
         monthly_days = np.maximum(
             (monthly_prices.index - pd.Timestamp(current_gen_date)).days.astype(float),
             1.0,
         )
+        floor_a = float(floor_intercept_a) if floor_intercept_a is not None else float(intercept_a)
+        floor_b = float(floor_slope_b) if floor_slope_b is not None else float(slope_b)
+        floor_offset = (
+            float(floor_log_offset)
+            if floor_intercept_a is not None and floor_slope_b is not None
+            else float(percentile_offsets[0])
+        )
         fair_prices, _, _ = evaluate_powerlaw_values(
             np.log10(monthly_days),
-            float(intercept_a),
-            float(slope_b),
+            floor_a,
+            floor_b,
         )
         floor_prices = pd.Series(
-            fair_prices * np.power(10.0, float(percentile_offsets[0])),
+            fair_prices * np.power(10.0, floor_offset),
             index=monthly_prices.index,
             dtype=float,
         )
@@ -864,7 +890,11 @@ def build_portfolio_real_data_backtest(
         else 0.0
     )
 
-    monthly_withdrawal_label = f"-2σ monthly withdrawal ({currency_unit})"
+    monthly_withdrawal_label = (
+        f"{floor_model_label} monthly withdrawal ({currency_unit})"
+        if floor_model_label
+        else f"-2σ monthly withdrawal ({currency_unit})"
+    )
     if floor_prices is None:
         monthly_withdrawal_label = f"Historical monthly withdrawal ({currency_unit})"
     table_df = backtest_df.copy()

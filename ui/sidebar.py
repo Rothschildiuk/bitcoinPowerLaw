@@ -25,6 +25,7 @@ from core.constants import (
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
     KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
     KEY_PORTFOLIO_SIGMA_LEVEL,
+    KEY_PORTFOLIO_STRATEGY_VIEW,
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -38,6 +39,11 @@ from core.constants import (
     POWERLAW_SLOPE_MAX,
     POWERLAW_SLOPE_MIN,
     PORTFOLIO_SIGMA_CURRENT,
+    PORTFOLIO_SIGMA_PEAK_POWERLAW,
+    PORTFOLIO_SIGMA_TROUGH_POWERLAW,
+    PORTFOLIO_VIEW_ACCUMULATION,
+    PORTFOLIO_VIEW_PENSION,
+    PORTFOLIO_VIEW_STRATEGY_TESTER,
     TIME_LOG,
     TIME_LIN,
 )
@@ -53,6 +59,27 @@ from core.series_registry import (
 
 
 def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_max):
+    portfolio_view_options = [
+        PORTFOLIO_VIEW_ACCUMULATION,
+        PORTFOLIO_VIEW_PENSION,
+        PORTFOLIO_VIEW_STRATEGY_TESTER,
+    ]
+    selected_portfolio_view = st.session_state.get(
+        KEY_PORTFOLIO_STRATEGY_VIEW, PORTFOLIO_VIEW_ACCUMULATION
+    )
+    if selected_portfolio_view not in portfolio_view_options:
+        selected_portfolio_view = PORTFOLIO_VIEW_ACCUMULATION
+        st.session_state[KEY_PORTFOLIO_STRATEGY_VIEW] = selected_portfolio_view
+
+    st.markdown("**Portfolio strategy**")
+    selected_portfolio_view = st.radio(
+        "Portfolio strategy",
+        portfolio_view_options,
+        index=portfolio_view_options.index(selected_portfolio_view),
+        horizontal=False,
+        key=KEY_PORTFOLIO_STRATEGY_VIEW,
+        label_visibility="collapsed",
+    )
     st.markdown("**BTC quantity**")
     st.number_input(
         "BTC quantity",
@@ -63,113 +90,148 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         key=KEY_PORTFOLIO_BTC_AMOUNT,
         label_visibility="collapsed",
     )
-    st.markdown("**Experimental: monthly buy/sell amount**")
-    st.number_input(
-        "Experimental: monthly buy/sell amount",
-        value=int(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0)),
-        step=10,
-        format="%d",
-        key=KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
-        label_visibility="collapsed",
-    )
-    st.caption(
-        "Adds a second portfolio line using fixed monthly cash flow in the current currency."
-    )
-    st.markdown("**Experimental: sell % of MoM Change**")
-    sell_mom_pct = float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0))
-    sell_mom_pct = min(max(sell_mom_pct, 0.0), 100.0)
-    st.session_state[KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT] = sell_mom_pct
-    st.number_input(
-        "Experimental: sell % of MoM Change",
-        min_value=0.0,
-        max_value=100.0,
-        value=sell_mom_pct,
-        step=1.0,
-        format="%.1f",
-        key=KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
-        label_visibility="collapsed",
-    )
-    st.caption("Sells this percentage of positive hold-only MoM Change each month.")
-    st.markdown("**Price scenario**")
-    sigma_options = [
-        PORTFOLIO_SIGMA_CURRENT,
-        -2.0,
-        -1.5,
-        -1.0,
-        -0.5,
-        0.0,
-        0.5,
-        1.0,
-        1.5,
-        2.0,
-    ]
 
-    def format_sigma_option(value):
-        if value == PORTFOLIO_SIGMA_CURRENT:
-            return "Current sigma"
-        if value == 0.0:
-            return "0 sigma"
-        return f"{value:+g} sigma"
-
-    selected_sigma = st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
-    if selected_sigma not in sigma_options:
-        selected_sigma = 0.0
-        st.session_state[KEY_PORTFOLIO_SIGMA_LEVEL] = selected_sigma
-
-    st.radio(
-        "Price scenario",
-        sigma_options,
-        index=sigma_options.index(selected_sigma),
-        format_func=format_sigma_option,
-        horizontal=True,
-        key=KEY_PORTFOLIO_SIGMA_LEVEL,
-        label_visibility="collapsed",
-    )
-    st.markdown("**Forecast unit**")
-    forecast_unit = st.radio(
-        "Forecast unit",
-        ["Year", "Month", "Day"],
-        horizontal=True,
-        key=KEY_PORTFOLIO_FORECAST_UNIT,
-        label_visibility="collapsed",
-    )
-    default_horizon = int(
-        st.session_state.get(
-            KEY_PORTFOLIO_FORECAST_HORIZON,
-            st.session_state.get(KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY, DEFAULT_FORECAST_HORIZON),
+    if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
+        st.markdown("**Monthly buy amount**")
+        st.number_input(
+            "Monthly buy amount",
+            value=int(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0)),
+            step=10,
+            format="%d",
+            key=KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
+            label_visibility="collapsed",
         )
-    )
-    st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON] = max(
-        forecast_horizon_min, min(forecast_horizon_max, default_horizon)
-    )
+        st.caption("Adds a second capital-growth line using fixed monthly cash flow.")
 
-    horizon_label_map = {"Day": "days", "Month": "months", "Year": "years"}
-    horizon_label = horizon_label_map.get(forecast_unit, "months")
-    st.markdown(f"**Forecast horizon ({horizon_label})**")
+    if selected_portfolio_view == PORTFOLIO_VIEW_PENSION:
+        st.markdown("**Sell % of MoM Change**")
+        sell_mom_pct = float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0))
+        sell_mom_pct = min(max(sell_mom_pct, 0.0), 100.0)
+        st.session_state[KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT] = sell_mom_pct
+        st.number_input(
+            "Sell % of MoM Change",
+            min_value=0.0,
+            max_value=100.0,
+            value=sell_mom_pct,
+            step=1.0,
+            format="%.1f",
+            key=KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
+            label_visibility="collapsed",
+        )
+        st.caption("Used by pension calculations as the selected sell strategy.")
 
-    def on_horizon_minus():
+    if selected_portfolio_view in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]:
+        st.markdown(
+            "**Price scenario**"
+            if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION
+            else "**Pension sigma**"
+        )
+        sigma_options = [
+            PORTFOLIO_SIGMA_CURRENT,
+            -2.0,
+            -1.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.0,
+            1.5,
+            2.0,
+        ]
+        if selected_portfolio_view in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]:
+            sigma_options.extend(
+                [
+                    PORTFOLIO_SIGMA_PEAK_POWERLAW,
+                    PORTFOLIO_SIGMA_TROUGH_POWERLAW,
+                ]
+            )
+
+        def format_sigma_option(value):
+            if value == PORTFOLIO_SIGMA_CURRENT:
+                return "Current sigma"
+            if value == PORTFOLIO_SIGMA_PEAK_POWERLAW:
+                return "Peak PowerLaw"
+            if value == PORTFOLIO_SIGMA_TROUGH_POWERLAW:
+                return "Trough PowerLaw"
+            if value == 0.0:
+                return "0 sigma"
+            return f"{value:+g} sigma"
+
+        selected_sigma = st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
+        if selected_sigma not in sigma_options:
+            selected_sigma = -2.0 if selected_portfolio_view == PORTFOLIO_VIEW_PENSION else 0.0
+            st.session_state[KEY_PORTFOLIO_SIGMA_LEVEL] = selected_sigma
+
+        st.radio(
+            "Price scenario"
+            if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION
+            else "Pension sigma",
+            sigma_options,
+            index=sigma_options.index(selected_sigma),
+            format_func=format_sigma_option,
+            horizontal=True,
+            key=KEY_PORTFOLIO_SIGMA_LEVEL,
+            label_visibility="collapsed",
+        )
+    if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
+        st.markdown("**Envelope sigma**")
+        st.slider(
+            "Envelope sigma",
+            min_value=0.25,
+            max_value=2.0,
+            value=float(st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0)),
+            step=0.25,
+            key=KEY_POWERLAW_ENVELOPE_SIGMA,
+            label_visibility="collapsed",
+        )
+    if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
+        st.markdown("**Forecast unit**")
+        forecast_unit = st.radio(
+            "Forecast unit",
+            ["Year", "Month", "Day"],
+            horizontal=True,
+            key=KEY_PORTFOLIO_FORECAST_UNIT,
+            label_visibility="collapsed",
+        )
+        default_horizon = int(
+            st.session_state.get(
+                KEY_PORTFOLIO_FORECAST_HORIZON,
+                st.session_state.get(
+                    KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY, DEFAULT_FORECAST_HORIZON
+                ),
+            )
+        )
         st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON] = max(
-            forecast_horizon_min,
-            int(st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON]) - 1,
+            forecast_horizon_min, min(forecast_horizon_max, default_horizon)
         )
 
-    def on_horizon_plus():
-        st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON] = min(
-            forecast_horizon_max,
-            int(st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON]) + 1,
-        )
+        horizon_label_map = {"Day": "days", "Month": "months", "Year": "years"}
+        horizon_label = horizon_label_map.get(forecast_unit, "months")
+        st.markdown(f"**Forecast horizon ({horizon_label})**")
 
-    h1, h2, h3 = st.columns([1, 2.5, 1])
-    h1.button("➖", key="portfolio_horizon_m", on_click=on_horizon_minus)
-    h3.button("➕", key="portfolio_horizon_p", on_click=on_horizon_plus)
-    h2.slider(
-        f"Forecast horizon ({horizon_label})",
-        min_value=forecast_horizon_min,
-        max_value=forecast_horizon_max,
-        step=1,
-        key=KEY_PORTFOLIO_FORECAST_HORIZON,
-        label_visibility="collapsed",
-    )
+        def on_horizon_minus():
+            st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON] = max(
+                forecast_horizon_min,
+                int(st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON]) - 1,
+            )
+
+        def on_horizon_plus():
+            st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON] = min(
+                forecast_horizon_max,
+                int(st.session_state[KEY_PORTFOLIO_FORECAST_HORIZON]) + 1,
+            )
+
+        h1, h2, h3 = st.columns([1, 2.5, 1])
+        h1.button("➖", key="portfolio_horizon_m", on_click=on_horizon_minus)
+        h3.button("➕", key="portfolio_horizon_p", on_click=on_horizon_plus)
+        h2.slider(
+            f"Forecast horizon ({horizon_label})",
+            min_value=forecast_horizon_min,
+            max_value=forecast_horizon_max,
+            step=1,
+            key=KEY_PORTFOLIO_FORECAST_HORIZON,
+            label_visibility="collapsed",
+        )
 
 
 def _render_powerlaw_series_selector(powerlaw_series):

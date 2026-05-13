@@ -31,6 +31,7 @@ from core.constants import (
     KEY_POWERLAW_ENVELOPE_SIGMA,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BACKTEST_HAS_RUN,
+    KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL,
     KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT,
     KEY_PORTFOLIO_BACKTEST_YEARS,
     KEY_PORTFOLIO_BTC_AMOUNT,
@@ -38,7 +39,9 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
     KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
+    KEY_PORTFOLIO_PENSION_DIVISOR,
     KEY_PORTFOLIO_SIGMA_LEVEL,
+    KEY_PORTFOLIO_STRATEGY_VIEW,
     KEY_THEME_MODE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -61,6 +64,11 @@ from core.constants import (
     POWERLAW_SERIES_RUSSIAN_M2,
     POWERLAW_SERIES_US_M2,
     PORTFOLIO_SIGMA_CURRENT,
+    PORTFOLIO_SIGMA_PEAK_POWERLAW,
+    PORTFOLIO_SIGMA_TROUGH_POWERLAW,
+    PORTFOLIO_VIEW_ACCUMULATION,
+    PORTFOLIO_VIEW_PENSION,
+    PORTFOLIO_VIEW_STRATEGY_TESTER,
     TIME_LOG,
 )
 from core.series_registry import (
@@ -126,6 +134,8 @@ def initialize_app_session_state():
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
         KEY_PORTFOLIO_SIGMA_LEVEL: 0,
         KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT: 0.0,
+        KEY_PORTFOLIO_PENSION_DIVISOR: 2.0,
+        KEY_PORTFOLIO_STRATEGY_VIEW: PORTFOLIO_VIEW_ACCUMULATION,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -353,20 +363,71 @@ def render_portfolio_view(
     def format_portfolio_money(value):
         return f"{currency_prefix}{value:,.{display_currency_decimals}f}{currency_suffix}"
 
-    st.markdown("### Portfolio Growth (Fair Price / Power Law)")
-    selected_sigma_level = st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
+    portfolio_strategy_view = st.session_state.get(
+        KEY_PORTFOLIO_STRATEGY_VIEW, PORTFOLIO_VIEW_ACCUMULATION
+    )
+    if portfolio_strategy_view not in [
+        PORTFOLIO_VIEW_ACCUMULATION,
+        PORTFOLIO_VIEW_PENSION,
+        PORTFOLIO_VIEW_STRATEGY_TESTER,
+    ]:
+        portfolio_strategy_view = PORTFOLIO_VIEW_ACCUMULATION
+        st.session_state[KEY_PORTFOLIO_STRATEGY_VIEW] = portfolio_strategy_view
+
+    title_by_view = {
+        PORTFOLIO_VIEW_ACCUMULATION: "Portfolio Accumulation",
+        PORTFOLIO_VIEW_PENSION: "Portfolio Pension",
+        PORTFOLIO_VIEW_STRATEGY_TESTER: "Portfolio Strategy Tester",
+    }
+    st.markdown(f"### {title_by_view[portfolio_strategy_view]}")
+    selected_sigma_level = (
+        st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
+        if portfolio_strategy_view in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]
+        else 0.0
+    )
     use_current_sigma_scenario = selected_sigma_level == PORTFOLIO_SIGMA_CURRENT
+    use_peak_powerlaw_scenario = selected_sigma_level == PORTFOLIO_SIGMA_PEAK_POWERLAW
+    use_trough_powerlaw_scenario = selected_sigma_level == PORTFOLIO_SIGMA_TROUGH_POWERLAW
+    projection_intercept_a = a_active
+    projection_slope_b = b_active
+    selected_envelope = None
+    if use_peak_powerlaw_scenario or use_trough_powerlaw_scenario:
+        envelope_overlay = calculate_peak_powerlaw_overlay(
+            df_display,
+            genesis_offset,
+            df_display["Days"].to_numpy(dtype=float),
+            percentile_offsets,
+            st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0),
+        )
+        selected_envelope = envelope_overlay.get(
+            "peak" if use_peak_powerlaw_scenario else "trough"
+        )
+        if selected_envelope is not None:
+            projection_intercept_a = float(selected_envelope["intercept"])
+            projection_slope_b = float(selected_envelope["slope"])
+        else:
+            st.warning(
+                "Selected envelope scenario has too few fit points for the current sigma threshold. Falling back to base PowerLaw."
+            )
     scenario_sigma_level = (
         resolve_current_sigma_level(df_display, percentile_offsets)
         if use_current_sigma_scenario
+        else 0.0
+        if use_peak_powerlaw_scenario or use_trough_powerlaw_scenario
         else float(selected_sigma_level)
     )
 
     settings = PortfolioSettings(
         btc_amount=float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)),
-        monthly_buy_amount=float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0.0)),
+        monthly_buy_amount=(
+            float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0.0))
+            if portfolio_strategy_view == PORTFOLIO_VIEW_ACCUMULATION
+            else 0.0
+        ),
         monthly_mom_change_pct=float(
             st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0)
+            if portfolio_strategy_view == PORTFOLIO_VIEW_PENSION
+            else 0.0
         ),
         forecast_unit=st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Year"),
         forecast_horizon=int(
@@ -374,13 +435,17 @@ def render_portfolio_view(
         ),
         sigma_level=scenario_sigma_level,
         residual_sigma_log=calculate_residual_sigma_log(df_display),
-        residual_percentile_offsets_log=tuple(float(value) for value in percentile_offsets),
+        residual_percentile_offsets_log=(
+            None
+            if use_peak_powerlaw_scenario or use_trough_powerlaw_scenario
+            else tuple(float(value) for value in percentile_offsets)
+        ),
     )
     projection_result = prepare_portfolio_projection(
         df_display.index,
         current_gen_date,
-        a_active,
-        b_active,
+        projection_intercept_a,
+        projection_slope_b,
         settings,
     )
     portfolio_view = build_portfolio_view_model(
@@ -400,95 +465,265 @@ def render_portfolio_view(
         )
         return
 
-    g1, g2, g3 = st.columns(3)
+    money_fmt = f"{currency_prefix}{{:,.{display_currency_decimals}f}}{currency_suffix}"
     scenario_multiplier = np.power(10.0, resolve_portfolio_scenario_log_offset(settings))
-    current_scenario_price = float(df_display["FairDisplay"].iloc[-1]) * float(scenario_multiplier)
-    if use_current_sigma_scenario:
+    current_projection_day = max(
+        float((df_display.index[-1] - current_gen_date).days),
+        1.0,
+    )
+    current_scenario_base, _, _ = evaluate_powerlaw_values(
+        np.array([np.log10(current_projection_day)]),
+        projection_intercept_a,
+        projection_slope_b,
+    )
+    current_scenario_price = float(current_scenario_base[0]) * float(scenario_multiplier)
+    if use_peak_powerlaw_scenario:
+        current_price_label = "Current Peak PowerLaw Price"
+    elif use_trough_powerlaw_scenario:
+        current_price_label = "Current Trough PowerLaw Price"
+    elif use_current_sigma_scenario:
         current_price_label = f"Current Sigma Price ({settings.sigma_level:+.2f}σ)"
     elif settings.sigma_level == 0:
         current_price_label = "Current Fair Price"
     else:
         current_price_label = f"Current {settings.sigma_level:+g} sigma Price"
-    g1.metric(current_price_label, format_portfolio_money(current_scenario_price))
-    if portfolio_view.dca_enabled:
-        g2.metric(
-            "Hold-only portfolio",
-            format_portfolio_money(portfolio_view.last_value),
-            delta=f"{portfolio_view.total_growth_pct:+.1f}%",
-        )
-        g3.metric(
-            "With monthly cash flow",
-            format_portfolio_money(portfolio_view.last_dca_value),
-            delta=format_portfolio_money(portfolio_view.last_dca_value - portfolio_view.last_value),
-        )
-        st.caption(
-            f"Net cash flow by horizon: {format_portfolio_money(portfolio_view.last_dca_invested_capital)}"
-        )
-        st.caption(
-            "Experimental scenario: monthly cash flow starts from the next calendar month and uses the current selected currency."
-        )
-    else:
-        g2.metric(
-            "Portfolio (end of horizon)",
-            format_portfolio_money(portfolio_view.last_value),
-        )
-        g3.metric("Total Growth", f"{portfolio_view.total_growth_pct:+.1f}%")
 
-    if st.button("Calculate current monthly pension", use_container_width=False):
-        st.session_state["show_current_monthly_pension"] = True
-    if st.session_state.get("show_current_monthly_pension", False):
+    if portfolio_strategy_view == PORTFOLIO_VIEW_ACCUMULATION:
+        g1, g2, g3 = st.columns(3)
+        g1.metric(current_price_label, format_portfolio_money(current_scenario_price))
+        if portfolio_view.dca_enabled:
+            g2.metric(
+                "Hold-only portfolio",
+                format_portfolio_money(portfolio_view.last_value),
+                delta=f"{portfolio_view.total_growth_pct:+.1f}%",
+            )
+            g3.metric(
+                "With monthly cash flow",
+                format_portfolio_money(portfolio_view.last_dca_value),
+                delta=format_portfolio_money(
+                    portfolio_view.last_dca_value - portfolio_view.last_value
+                ),
+            )
+            st.caption(
+                f"Net cash flow by horizon: {format_portfolio_money(portfolio_view.last_dca_invested_capital)}"
+            )
+            st.caption(
+                "Monthly cash flow starts from the next calendar month and uses the current selected currency."
+            )
+        else:
+            g2.metric(
+                "Portfolio (end of horizon)",
+                format_portfolio_money(portfolio_view.last_value),
+            )
+            g3.metric("Total Growth", f"{portfolio_view.total_growth_pct:+.1f}%")
+
+        portfolio_fig = go.Figure()
+        portfolio_fig.add_trace(
+            go.Scatter(
+                x=portfolio_view.portfolio_display_df["Date"],
+                y=portfolio_view.portfolio_display_df["PortfolioDisplay"],
+                mode="lines+markers",
+                name="Portfolio by fair price",
+                line=dict(color="#f0b90b", width=2),
+                hovertemplate=(
+                    "<b>%{x|%d.%m.%Y}</b><br>Portfolio: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
+        if use_current_sigma_scenario:
+            st.caption(
+                f"Portfolio scenario uses today's exact market position: {settings.sigma_level:+.2f} sigma."
+            )
+        elif use_peak_powerlaw_scenario:
+            st.caption("Portfolio scenario uses the fitted Peak PowerLaw envelope.")
+        elif use_trough_powerlaw_scenario:
+            st.caption("Portfolio scenario uses the fitted Trough PowerLaw envelope.")
+        elif settings.sigma_level != 0:
+            st.caption(
+                f"Portfolio scenario uses {settings.sigma_level:+g} sigma historical log-residual offset."
+            )
+        if portfolio_view.dca_enabled:
+            portfolio_fig.add_trace(
+                go.Scatter(
+                    x=portfolio_view.portfolio_display_df["Date"],
+                    y=portfolio_view.portfolio_display_df["DcaPortfolioDisplay"],
+                    mode="lines+markers",
+                    name="Portfolio with monthly cash flow",
+                    line=dict(color="#14b8a6", width=2),
+                    hovertemplate=(
+                        "<b>%{x|%d.%m.%Y}</b><br>Portfolio + monthly cash flow: "
+                        f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                    ),
+                )
+            )
+            portfolio_fig.add_trace(
+                go.Scatter(
+                    x=portfolio_view.portfolio_display_df["Date"],
+                    y=portfolio_view.portfolio_display_df["DcaPeriodCashFlowDisplay"],
+                    mode="lines+markers",
+                    name=portfolio_view.period_cash_flow_label,
+                    line=dict(color="#38bdf8", width=2),
+                    hovertemplate=(
+                        f"<b>%{{x|%d.%m.%Y}}</b><br>{portfolio_view.period_cash_flow_label}: "
+                        f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                    ),
+                )
+            )
+            portfolio_fig.add_trace(
+                go.Scatter(
+                    x=portfolio_view.portfolio_display_df["Date"],
+                    y=portfolio_view.portfolio_display_df["DcaInvestedCapitalDisplay"],
+                    mode="lines+markers",
+                    name="Cumulative net cash flow",
+                    line=dict(color="#8b5cf6", width=2, dash="dash"),
+                    hovertemplate=(
+                        "<b>%{x|%d.%m.%Y}</b><br>Net cash flow: "
+                        f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                    ),
+                )
+            )
+        portfolio_fig.update_layout(
+            height=320,
+            margin=dict(t=10, b=0, l=50, r=20),
+            template=pl_template,
+            font=dict(color=pl_text_color),
+            paper_bgcolor=pl_bg_color,
+            plot_bgcolor=pl_bg_color,
+            xaxis=dict(
+                gridcolor=pl_grid_color,
+                tickfont=dict(color=pl_text_color),
+                range=[
+                    portfolio_view.portfolio_display_df["Date"].min() - pd.Timedelta(days=90),
+                    portfolio_view.portfolio_display_df["Date"].max(),
+                ],
+            ),
+            yaxis=dict(gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color)),
+            hoverlabel=dict(
+                bgcolor=c_hover_bg,
+                bordercolor=c_border,
+                font=dict(color=c_hover_text, size=13),
+            ),
+        )
+        st.plotly_chart(
+            portfolio_fig,
+            width="stretch",
+            theme=None,
+            config={"displayModeBar": False},
+            key=f"portfolio_{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}",
+        )
+
+        st.markdown(f"#### {portfolio_view.table_title}")
+        style_format = {
+            f"Fair Price ({currency_unit})": money_fmt,
+            f"Portfolio ({currency_unit})": money_fmt,
+            portfolio_view.period_change_usd_label: money_fmt,
+            portfolio_view.period_change_pct_label: "{:+.2f}%",
+        }
+        if portfolio_view.dca_enabled:
+            style_format[f"Portfolio + monthly cash flow ({currency_unit})"] = money_fmt
+            style_format[portfolio_view.period_cash_flow_label] = money_fmt
+            style_format[f"Net cash flow ({currency_unit})"] = money_fmt
+            style_format["BTC after monthly cash flow"] = "{:,.6f}"
+        st.dataframe(
+            style_portfolio_table(
+                portfolio_view.table_df,
+                style_format,
+                currency_unit,
+                portfolio_view,
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+    elif portfolio_strategy_view == PORTFOLIO_VIEW_PENSION:
+        pension_floor_sigma = float(settings.sigma_level)
+        if use_peak_powerlaw_scenario:
+            pension_floor_label = "Peak PowerLaw"
+        elif use_trough_powerlaw_scenario:
+            pension_floor_label = "Trough PowerLaw"
+        elif use_current_sigma_scenario:
+            pension_floor_label = f"current {pension_floor_sigma:+.2f}σ"
+        else:
+            pension_floor_label = f"{pension_floor_sigma:g}σ"
         pension_estimate = estimate_current_monthly_pension(
             current_price=df_display["CloseDisplay"].iloc[-1],
-            current_model_log=df_display["ModelLog"].iloc[-1],
+            current_model_log=(
+                projection_intercept_a
+                + projection_slope_b
+                * np.log10(max(float(df_display["Days"].iloc[-1]), 1.0))
+            ),
             current_date=df_display.index[-1],
             current_gen_date=current_gen_date,
-            intercept_a=a_active,
-            slope_b=b_active,
+            intercept_a=projection_intercept_a,
+            slope_b=projection_slope_b,
             btc_amount=settings.btc_amount,
             sell_mom_change_pct=settings.monthly_mom_change_pct,
             percentile_offsets=percentile_offsets,
+            floor_sigma_level=pension_floor_sigma,
         )
         st.markdown("#### Monthly BTC pension estimate")
-        conservative_monthly_withdrawal = pension_estimate.minimum_monthly_withdrawal / 2.0
-        conservative_btc_to_sell = pension_estimate.minimum_btc_to_sell / 2.0
-        conservative_btc_to_sell_today = pension_estimate.minimum_btc_to_sell_today / 2.0
-        p1, p2, p3, p4 = st.columns(4)
-        p1.metric("Market position today", f"{pension_estimate.current_sigma_level:+.3f}σ")
-        p1.markdown(
+        divisor_col, _ = st.columns([1, 3])
+        with divisor_col:
+            st.number_input(
+                "Conservative divisor",
+                min_value=1.0,
+                max_value=100.0,
+                value=float(st.session_state.get(KEY_PORTFOLIO_PENSION_DIVISOR, 2.0)),
+                step=0.5,
+                format="%.1f",
+                key=KEY_PORTFOLIO_PENSION_DIVISOR,
+            )
+        pension_divisor = max(float(st.session_state.get(KEY_PORTFOLIO_PENSION_DIVISOR, 2.0)), 1.0)
+        conservative_monthly_withdrawal = (
+            pension_estimate.minimum_monthly_withdrawal / pension_divisor
+        )
+        conservative_btc_to_sell = pension_estimate.minimum_btc_to_sell / pension_divisor
+        conservative_btc_to_sell_today = (
+            pension_estimate.minimum_btc_to_sell_today / pension_divisor
+        )
+        st.markdown(
             (
+                "<div class='pension-metric-grid'>"
+                "<div class='pension-metric-card'>"
+                "<div class='pension-metric-label'>Market position today</div>"
+                f"<div class='pension-metric-value'>{pension_estimate.current_sigma_level:+.3f}σ</div>"
                 "<div class='pension-rating' "
                 f"style='border-color:{pension_estimate.withdrawal_rating_color};"
                 f"color:{pension_estimate.withdrawal_rating_color};'>"
                 f"{pension_estimate.withdrawal_rating}</div>"
-            ),
-            unsafe_allow_html=True,
-        )
-        p2.metric(
-            "Conservative monthly pension",
-            format_portfolio_money(conservative_monthly_withdrawal),
-            delta=f"sell {conservative_btc_to_sell:.4f} BTC at -2σ floor / 2",
-        )
-        p2.markdown(
-            (
-                "<div class='pension-detail'>"
+                "</div>"
+                "<div class='pension-metric-card'>"
+                "<div class='pension-metric-label'>Conservative monthly pension</div>"
+                f"<div class='pension-metric-value'>{format_portfolio_money(conservative_monthly_withdrawal)}</div>"
+                "<div class='pension-metric-delta'>"
+                f"↑ sell {conservative_btc_to_sell:.4f} BTC at {pension_floor_label} / {pension_divisor:g}"
+                "</div>"
+                "<div class='pension-metric-note'>"
                 f"Today: sell {conservative_btc_to_sell_today:.4f} BTC "
                 f"({pension_estimate.minimum_btc_sell_reduction_pct:.1f}% less BTC)"
+                "</div>"
+                "</div>"
+                "<div class='pension-metric-card'>"
+                "<div class='pension-metric-label'>Normal monthly pension</div>"
+                f"<div class='pension-metric-value'>{format_portfolio_money(pension_estimate.minimum_monthly_withdrawal)}</div>"
+                "<div class='pension-metric-delta'>"
+                f"↑ sell {pension_estimate.minimum_btc_to_sell:.4f} BTC at {pension_floor_label}"
+                "</div>"
+                "</div>"
+                "<div class='pension-metric-card'>"
+                "<div class='pension-metric-label'>Model-based monthly pension</div>"
+                f"<div class='pension-metric-value'>{format_portfolio_money(pension_estimate.max_monthly_withdrawal)}</div>"
+                "<div class='pension-metric-delta'>"
+                f"↑ sell {pension_estimate.model_btc_to_sell:.4f} BTC at today's σ"
+                "</div>"
+                "</div>"
                 "</div>"
             ),
             unsafe_allow_html=True,
         )
-        p3.metric(
-            "Normal monthly pension",
-            format_portfolio_money(pension_estimate.minimum_monthly_withdrawal),
-            delta=f"sell {pension_estimate.minimum_btc_to_sell:.4f} BTC at -2σ floor",
-        )
-        p4.metric(
-            "Model-based monthly pension",
-            format_portfolio_money(pension_estimate.max_monthly_withdrawal),
-            delta=f"sell {pension_estimate.model_btc_to_sell:.4f} BTC at today's σ",
-        )
         st.caption(
-            "Conservative pension uses half of one month of model growth on the -2σ floor. Normal pension uses the full -2σ floor growth. Model-based pension uses one month of growth on today's market-position line."
+            f"Conservative pension uses one month of model growth on {pension_floor_label} divided by {pension_divisor:g}. Normal pension uses the full {pension_floor_label} growth. Model-based pension uses one month of growth on today's market-position line."
         )
         st.caption(pension_estimate.withdrawal_rating_note)
         if settings.monthly_mom_change_pct != 100.0:
@@ -497,137 +732,26 @@ def render_portfolio_view(
                 f"{format_portfolio_money(pension_estimate.selected_monthly_withdrawal)}."
             )
 
-    portfolio_fig = go.Figure()
-    portfolio_fig.add_trace(
-        go.Scatter(
-            x=portfolio_view.portfolio_display_df["Date"],
-            y=portfolio_view.portfolio_display_df["PortfolioDisplay"],
-            mode="lines+markers",
-            name="Portfolio by fair price",
-            line=dict(color="#f0b90b", width=2),
-            hovertemplate=(
-                "<b>%{x|%d.%m.%Y}</b><br>Portfolio: "
-                f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
-            ),
-        )
-    )
-    if use_current_sigma_scenario:
-        st.caption(
-            f"Portfolio scenario uses today's exact market position: {settings.sigma_level:+.2f} sigma."
-        )
-    elif settings.sigma_level != 0:
-        st.caption(
-            f"Portfolio scenario uses {settings.sigma_level:+g} sigma historical log-residual offset."
-        )
-    if portfolio_view.dca_enabled:
-        portfolio_fig.add_trace(
-            go.Scatter(
-                x=portfolio_view.portfolio_display_df["Date"],
-                y=portfolio_view.portfolio_display_df["DcaPortfolioDisplay"],
-                mode="lines+markers",
-                name="Portfolio with monthly cash flow",
-                line=dict(color="#14b8a6", width=2),
-                hovertemplate=(
-                    "<b>%{x|%d.%m.%Y}</b><br>Portfolio + monthly cash flow: "
-                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
-            )
-        )
-        portfolio_fig.add_trace(
-            go.Scatter(
-                x=portfolio_view.portfolio_display_df["Date"],
-                y=portfolio_view.portfolio_display_df["DcaPeriodCashFlowDisplay"],
-                mode="lines+markers",
-                name=portfolio_view.period_cash_flow_label,
-                line=dict(color="#38bdf8", width=2),
-                hovertemplate=(
-                    f"<b>%{{x|%d.%m.%Y}}</b><br>{portfolio_view.period_cash_flow_label}: "
-                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
-            )
-        )
-        portfolio_fig.add_trace(
-            go.Scatter(
-                x=portfolio_view.portfolio_display_df["Date"],
-                y=portfolio_view.portfolio_display_df["DcaInvestedCapitalDisplay"],
-                mode="lines+markers",
-                name="Cumulative net cash flow",
-                line=dict(color="#8b5cf6", width=2, dash="dash"),
-                hovertemplate=(
-                    "<b>%{x|%d.%m.%Y}</b><br>Net cash flow: "
-                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
-                ),
-            )
-        )
-    portfolio_fig.update_layout(
-        height=320,
-        margin=dict(t=10, b=0, l=50, r=20),
-        template=pl_template,
-        font=dict(color=pl_text_color),
-        paper_bgcolor=pl_bg_color,
-        plot_bgcolor=pl_bg_color,
-        xaxis=dict(
-            gridcolor=pl_grid_color,
-            tickfont=dict(color=pl_text_color),
-            range=[
-                portfolio_view.portfolio_display_df["Date"].min() - pd.Timedelta(days=90),
-                portfolio_view.portfolio_display_df["Date"].max(),
-            ],
-        ),
-        yaxis=dict(gridcolor=pl_grid_color, tickfont=dict(color=pl_text_color)),
-        hoverlabel=dict(
-            bgcolor=c_hover_bg,
-            bordercolor=c_border,
-            font=dict(color=c_hover_text, size=13),
-        ),
-    )
-    st.plotly_chart(
-        portfolio_fig,
-        width="stretch",
-        theme=None,
-        config={"displayModeBar": False},
-        key=f"portfolio_{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}",
-    )
-
-    st.markdown(f"#### {portfolio_view.table_title}")
-    money_fmt = f"{currency_prefix}{{:,.{display_currency_decimals}f}}{currency_suffix}"
-    style_format = {
-        f"Fair Price ({currency_unit})": money_fmt,
-        f"Portfolio ({currency_unit})": money_fmt,
-        portfolio_view.period_change_usd_label: money_fmt,
-        portfolio_view.period_change_pct_label: "{:+.2f}%",
-    }
-    if portfolio_view.dca_enabled:
-        style_format[f"Portfolio + monthly cash flow ({currency_unit})"] = money_fmt
-        style_format[portfolio_view.period_cash_flow_label] = money_fmt
-        style_format[f"Net cash flow ({currency_unit})"] = money_fmt
-        style_format["BTC after monthly cash flow"] = "{:,.6f}"
-    st.dataframe(
-        style_portfolio_table(
-            portfolio_view.table_df,
-            style_format,
-            currency_unit,
-            portfolio_view,
-        ),
-        width="stretch",
-        hide_index=True,
-    )
+    if portfolio_strategy_view != PORTFOLIO_VIEW_STRATEGY_TESTER:
+        return
 
     st.markdown("#### Strategy tester")
     if KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT not in st.session_state:
         st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT] = 100.0
+    if KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL not in st.session_state:
+        st.session_state[KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL] = "-2σ"
     if KEY_PORTFOLIO_BACKTEST_YEARS not in st.session_state:
         st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS] = 6
     if KEY_PORTFOLIO_BACKTEST_HAS_RUN not in st.session_state:
         st.session_state[KEY_PORTFOLIO_BACKTEST_HAS_RUN] = False
 
     strategy_labels = {
-        10.0: "-2σ floor: sell 10% growth",
-        25.0: "-2σ floor: sell 25% growth",
-        50.0: "-2σ floor: sell 50% growth",
-        75.0: "-2σ floor: sell 75% growth",
-        100.0: "-2σ floor: sell 100% growth",
-        150.0: "-2σ floor: sell 150% growth",
+        10.0: "Sell 10% growth",
+        25.0: "Sell 25% growth",
+        50.0: "Sell 50% growth",
+        75.0: "Sell 75% growth",
+        100.0: "Sell 100% growth",
+        150.0: "Sell 150% growth",
     }
     strategy_colors = {
         10.0: "#818cf8",
@@ -637,9 +761,13 @@ def render_portfolio_view(
         100.0: "#14b8a6",
         150.0: "#f97316",
     }
+    floor_model_options = {
+        "-2σ": "-2σ",
+        "trough_envelope_sigma_1": "Trough PowerLaw Envelope σ1",
+    }
 
     with st.form("portfolio_strategy_tester"):
-        s1, s2, s3 = st.columns([1.6, 1.0, 0.8])
+        s1, s2, s3, s4 = st.columns([1.35, 1.45, 0.9, 0.65])
         with s1:
             st.selectbox(
                 "Strategy",
@@ -648,6 +776,13 @@ def render_portfolio_view(
                 key=KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT,
             )
         with s2:
+            st.selectbox(
+                "Withdrawal floor",
+                list(floor_model_options.keys()),
+                format_func=lambda value: floor_model_options[value],
+                key=KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL,
+            )
+        with s3:
             st.slider(
                 "Years to test",
                 min_value=1,
@@ -655,7 +790,7 @@ def render_portfolio_view(
                 step=1,
                 key=KEY_PORTFOLIO_BACKTEST_YEARS,
             )
-        with s3:
+        with s4:
             st.markdown("**Currency**")
             st.markdown(f"`{currency_unit}`")
         submitted = st.form_submit_button("Test strategy", type="primary", width="stretch")
@@ -665,6 +800,26 @@ def render_portfolio_view(
     if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False):
         selected_sell_pct = float(st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT])
         backtest_years = int(st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS])
+        selected_floor_model = st.session_state.get(KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL, "-2σ")
+        floor_intercept_a = None
+        floor_slope_b = None
+        floor_model_label = floor_model_options.get(selected_floor_model, "-2σ")
+        if selected_floor_model == "trough_envelope_sigma_1":
+            trough_overlay = calculate_peak_powerlaw_overlay(
+                df_display,
+                genesis_offset,
+                df_display["Days"].to_numpy(dtype=float),
+                percentile_offsets,
+                1.0,
+            ).get("trough")
+            if trough_overlay is None:
+                st.warning(
+                    "Trough PowerLaw Envelope σ1 has too few fit points. Falling back to -2σ floor."
+                )
+                floor_model_label = "-2σ"
+            else:
+                floor_intercept_a = float(trough_overlay["intercept"])
+                floor_slope_b = float(trough_overlay["slope"])
         result = build_portfolio_real_data_backtest(
             df_display,
             settings,
@@ -675,7 +830,10 @@ def render_portfolio_view(
             slope_b=b_active,
             percentile_offsets=percentile_offsets,
             sell_mom_change_pct=selected_sell_pct,
-            strategy_name=strategy_labels[selected_sell_pct],
+            strategy_name=f"{floor_model_label}: sell {selected_sell_pct:.0f}% growth",
+            floor_intercept_a=floor_intercept_a,
+            floor_slope_b=floor_slope_b,
+            floor_model_label=floor_model_label,
         )
     else:
         st.caption("Choose a strategy and period, then click Test strategy.")
@@ -755,6 +913,21 @@ def render_portfolio_view(
                 ),
             )
         )
+        total_strategy_value = result.backtest_df["StrategyValue"] - result.backtest_df["NetCashFlow"]
+        backtest_fig.add_trace(
+            go.Scatter(
+                x=result.backtest_df["Date"],
+                y=total_strategy_value,
+                mode="lines+markers",
+                name="Strategy value + cumulative withdrawals",
+                line=dict(color="#22c55e", width=2.2),
+                visible="legendonly",
+                hovertemplate=(
+                    "<b>%{x|%Y-%m}</b><br>Total strategy value: "
+                    f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                ),
+            )
+        )
         backtest_fig.update_layout(
             height=320,
             margin=dict(t=10, b=0, l=50, r=20),
@@ -798,7 +971,7 @@ def render_portfolio_view(
             hide_index=True,
         )
         st.caption(
-            "Backtest starts with the sidebar BTC quantity. Withdrawals are calculated from one month of model growth on the -2σ floor, then sold at the real historical monthly BTC price."
+            f"Backtest starts with the sidebar BTC quantity. Withdrawals are calculated from one month of model growth on the selected {result.monthly_withdrawal_label.replace(f' ({currency_unit})', '')}, then sold at the real historical monthly BTC price."
         )
 
 

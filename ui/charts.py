@@ -335,7 +335,6 @@ def render_main_model_chart(
                 "Peak PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "peak_powerlaw",
-                visible="legendonly",
             )
             peak_days = np.asarray(peak_overlay["peak_days"], dtype=float)
             peak_x = (
@@ -356,7 +355,6 @@ def render_main_model_chart(
                     ),
                     name="Peak fit points",
                     legendgroup="peak_powerlaw",
-                    visible="legendonly",
                     customdata=[
                         (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
                         for day in peak_days
@@ -376,7 +374,6 @@ def render_main_model_chart(
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "trough_powerlaw",
-                visible="legendonly",
             )
             trough_days = np.asarray(trough_overlay["trough_days"], dtype=float)
             trough_x = (
@@ -397,7 +394,6 @@ def render_main_model_chart(
                     ),
                     name="Trough fit points",
                     legendgroup="trough_powerlaw",
-                    visible="legendonly",
                     customdata=[
                         (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
                         for day in trough_days
@@ -471,14 +467,12 @@ def render_main_model_chart(
                 "Peak PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "peak_powerlaw",
-                visible="legendonly",
             )
         if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
             add_legend_item(
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "trough_powerlaw",
-                visible="legendonly",
             )
         add_legend_item(
             _format_sigma_line_name(0.5),
