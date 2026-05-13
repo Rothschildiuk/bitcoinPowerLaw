@@ -113,18 +113,40 @@ class TestUIChartsHelpers(unittest.TestCase):
 
         self.assertEqual(start_date, pd.Timestamp("2015-03-17"))
 
-    def test_resolve_model_view_max_limits_horizon_to_five_years_after_latest_data(self):
+    def test_resolve_model_view_max_extends_ten_years_after_today(self):
         current_gen_date = pd.Timestamp("2009-01-03")
         df_display = pd.DataFrame(
             {"Days": [100.0, 200.0]},
             index=pd.to_datetime(["2025-03-05", "2026-03-05"]),
         )
 
-        view_max = _resolve_model_view_max(df_display, current_gen_date)
+        view_max = _resolve_model_view_max(
+            df_display,
+            current_gen_date,
+            today=pd.Timestamp("2026-05-13"),
+        )
 
         self.assertEqual(
             view_max,
-            float(((pd.Timestamp("2031-03-05") - current_gen_date).days)),
+            float(((pd.Timestamp("2036-05-13") - current_gen_date).days)),
+        )
+
+    def test_resolve_model_view_max_uses_latest_data_when_newer_than_today(self):
+        current_gen_date = pd.Timestamp("2009-01-03")
+        df_display = pd.DataFrame(
+            {"Days": [100.0, 200.0]},
+            index=pd.to_datetime(["2026-03-05", "2027-03-05"]),
+        )
+
+        view_max = _resolve_model_view_max(
+            df_display,
+            current_gen_date,
+            today=pd.Timestamp("2026-05-13"),
+        )
+
+        self.assertEqual(
+            view_max,
+            float(((pd.Timestamp("2037-03-05") - current_gen_date).days)),
         )
 
     def test_resolve_optional_sigma_offsets_interpolates_half_sigma_lines(self):
@@ -180,6 +202,7 @@ class TestUIChartsHelpers(unittest.TestCase):
                 p16_5=-0.1,
                 p83_5=0.1,
                 p97_5=0.2,
+                peak_powerlaw_overlay=None,
                 osc_t1_age=1.0,
                 osc_lambda=2.0,
                 selected_harmonic_count=1,
@@ -257,6 +280,7 @@ class TestUIChartsHelpers(unittest.TestCase):
                 p16_5=-0.1,
                 p83_5=0.1,
                 p97_5=0.2,
+                peak_powerlaw_overlay=None,
                 osc_t1_age=1.0,
                 osc_lambda=2.0,
                 selected_harmonic_count=3,

@@ -30,7 +30,6 @@ from core.constants import (
     KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BACKTEST_HAS_RUN,
-    KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL,
     KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT,
     KEY_PORTFOLIO_BACKTEST_YEARS,
     KEY_PORTFOLIO_BTC_AMOUNT,
@@ -115,7 +114,7 @@ def initialize_app_session_state():
     defaults = {
         KEY_THEME_MODE: DEFAULT_THEME,
         KEY_LAST_MODE: MODE_POWERLAW,
-        KEY_CURRENCY_SELECTOR: CURRENCY_DOLLAR,
+        KEY_CURRENCY_SELECTOR: CURRENCY_EURO,
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
@@ -168,6 +167,42 @@ def calculate_residual_sigma_log(display_df):
         return 0.0
     sigma = float(np.std(residuals))
     return sigma if np.isfinite(sigma) else 0.0
+
+
+def calculate_peak_powerlaw_overlay(display_df, genesis_offset_days, model_days, percentile_offsets):
+    close_values = pd.to_numeric(display_df["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
+    log_prices = np.full(close_values.shape, np.nan, dtype=float)
+    positive_mask = close_values > 0.0
+    log_prices[positive_mask] = np.log10(close_values[positive_mask])
+    sigma_levels = [-2.0, -1.0, 0.0, 1.0, 2.0]
+    sigma_offsets = [*percentile_offsets[:2], 0.0, *percentile_offsets[2:]]
+    lower_offset = float(
+        np.interp(-1.0, sigma_levels, sigma_offsets)
+    )
+    upper_offset = float(
+        np.interp(1.0, sigma_levels, sigma_offsets)
+    )
+    residuals = pd.to_numeric(display_df["Res"], errors="coerce").to_numpy(dtype=float)
+    peak_overlay = power_law.fit_peak_powerlaw_envelope(
+        display_df["AbsDays"].to_numpy(dtype=float),
+        log_prices,
+        genesis_offset_days,
+        model_days,
+        residuals=residuals,
+        threshold_offset=upper_offset,
+    )
+    trough_overlay = power_law.fit_trough_powerlaw_envelope(
+        display_df["AbsDays"].to_numpy(dtype=float),
+        log_prices,
+        genesis_offset_days,
+        model_days,
+        residuals=residuals,
+        threshold_offset=lower_offset,
+    )
+    return {
+        "peak": peak_overlay,
+        "trough": trough_overlay,
+    }
 
 
 def resolve_current_sigma_level(df_display, percentile_offsets):
@@ -405,6 +440,9 @@ def render_portfolio_view(
             percentile_offsets=percentile_offsets,
         )
         st.markdown("#### Monthly BTC pension estimate")
+        conservative_monthly_withdrawal = pension_estimate.minimum_monthly_withdrawal / 2.0
+        conservative_btc_to_sell = pension_estimate.minimum_btc_to_sell / 2.0
+        conservative_btc_to_sell_today = pension_estimate.minimum_btc_to_sell_today / 2.0
         p1, p2, p3, p4 = st.columns(4)
         p1.metric("Market position today", f"{pension_estimate.current_sigma_level:+.3f}σ")
         p1.markdown(
@@ -418,30 +456,30 @@ def render_portfolio_view(
         )
         p2.metric(
             "Conservative monthly pension",
-            format_portfolio_money(pension_estimate.minimum_monthly_withdrawal),
-            delta=f"sell {pension_estimate.minimum_btc_to_sell:.4f} BTC at -2σ floor",
+            format_portfolio_money(conservative_monthly_withdrawal),
+            delta=f"sell {conservative_btc_to_sell:.4f} BTC at -2σ floor / 2",
         )
         p2.markdown(
             (
                 "<div class='pension-detail'>"
-                f"Today: sell {pension_estimate.minimum_btc_to_sell_today:.4f} BTC "
+                f"Today: sell {conservative_btc_to_sell_today:.4f} BTC "
                 f"({pension_estimate.minimum_btc_sell_reduction_pct:.1f}% less BTC)"
                 "</div>"
             ),
             unsafe_allow_html=True,
         )
         p3.metric(
+            "Normal monthly pension",
+            format_portfolio_money(pension_estimate.minimum_monthly_withdrawal),
+            delta=f"sell {pension_estimate.minimum_btc_to_sell:.4f} BTC at -2σ floor",
+        )
+        p4.metric(
             "Model-based monthly pension",
             format_portfolio_money(pension_estimate.max_monthly_withdrawal),
             delta=f"sell {pension_estimate.model_btc_to_sell:.4f} BTC at today's σ",
         )
-        p4.metric(
-            "Projected BTC price next month",
-            format_portfolio_money(pension_estimate.next_month_price),
-            delta=f"if market stays at {pension_estimate.current_sigma_level:+.2f}σ",
-        )
         st.caption(
-            "Conservative pension uses one month of model growth on the -2σ floor. Model-based pension uses one month of growth on today's market-position line."
+            "Conservative pension uses half of one month of model growth on the -2σ floor. Normal pension uses the full -2σ floor growth. Model-based pension uses one month of growth on today's market-position line."
         )
         st.caption(pension_estimate.withdrawal_rating_note)
         if settings.monthly_mom_change_pct != 100.0:
@@ -570,27 +608,29 @@ def render_portfolio_view(
     if KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT not in st.session_state:
         st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT] = 100.0
     if KEY_PORTFOLIO_BACKTEST_YEARS not in st.session_state:
-        st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS] = 5
-    if KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL not in st.session_state:
-        st.session_state[KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL] = float(
-            settings.btc_amount * df_display["CloseDisplay"].iloc[-1]
-        )
+        st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS] = 6
     if KEY_PORTFOLIO_BACKTEST_HAS_RUN not in st.session_state:
         st.session_state[KEY_PORTFOLIO_BACKTEST_HAS_RUN] = False
 
     strategy_labels = {
+        10.0: "-2σ floor: sell 10% growth",
+        25.0: "-2σ floor: sell 25% growth",
         50.0: "-2σ floor: sell 50% growth",
+        75.0: "-2σ floor: sell 75% growth",
         100.0: "-2σ floor: sell 100% growth",
         150.0: "-2σ floor: sell 150% growth",
     }
     strategy_colors = {
+        10.0: "#818cf8",
+        25.0: "#60a5fa",
         50.0: "#38bdf8",
+        75.0: "#22d3ee",
         100.0: "#14b8a6",
         150.0: "#f97316",
     }
 
     with st.form("portfolio_strategy_tester"):
-        s1, s2, s3, s4 = st.columns([1.4, 1.0, 1.2, 0.8])
+        s1, s2, s3 = st.columns([1.6, 1.0, 0.8])
         with s1:
             st.selectbox(
                 "Strategy",
@@ -607,14 +647,6 @@ def render_portfolio_view(
                 key=KEY_PORTFOLIO_BACKTEST_YEARS,
             )
         with s3:
-            st.number_input(
-                f"Starting capital ({currency_unit})",
-                min_value=0.0,
-                step=1000.0,
-                format="%.2f",
-                key=KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL,
-            )
-        with s4:
             st.markdown("**Currency**")
             st.markdown(f"`{currency_unit}`")
         submitted = st.form_submit_button("Test strategy", type="primary", width="stretch")
@@ -624,7 +656,6 @@ def render_portfolio_view(
     if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False):
         selected_sell_pct = float(st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT])
         backtest_years = int(st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS])
-        initial_capital = float(st.session_state[KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL])
         result = build_portfolio_real_data_backtest(
             df_display,
             settings,
@@ -636,16 +667,19 @@ def render_portfolio_view(
             percentile_offsets=percentile_offsets,
             sell_mom_change_pct=selected_sell_pct,
             strategy_name=strategy_labels[selected_sell_pct],
-            initial_capital=initial_capital,
         )
     else:
-        st.caption("Choose a strategy, period, and starting capital, then click Test strategy.")
+        st.caption("Choose a strategy and period, then click Test strategy.")
 
     if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False) and result is not None:
         st.markdown(f"##### Last {backtest_years} years: {result.strategy_name}")
         total_withdrawal = float(result.backtest_df["MonthlyWithdrawal"].sum())
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Starting capital", format_portfolio_money(result.start_value))
+        m1.metric(
+            "Starting BTC",
+            f"{max(float(settings.btc_amount), 0.0):,.4f} BTC",
+            delta=format_portfolio_money(result.start_value),
+        )
         m2.metric(
             "Hold-only today",
             format_portfolio_money(result.hold_last_value),
@@ -702,12 +736,12 @@ def render_portfolio_view(
         backtest_fig.add_trace(
             go.Scatter(
                 x=result.backtest_df["Date"],
-                y=result.backtest_df["NetCashFlow"],
+                y=-result.backtest_df["NetCashFlow"],
                 mode="lines",
-                name="Cumulative net cash flow",
+                name="Cumulative withdrawals",
                 line=dict(color="#8b5cf6", width=1.8, dash="dash"),
                 hovertemplate=(
-                    "<b>%{x|%Y-%m}</b><br>Net cash flow: "
+                    "<b>%{x|%Y-%m}</b><br>Cumulative withdrawals: "
                     f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -755,7 +789,7 @@ def render_portfolio_view(
             hide_index=True,
         )
         st.caption(
-            "Backtest starts by converting the starting capital into BTC at the first historical monthly price. Withdrawals are calculated from one month of model growth on the -2σ floor, then sold at the real historical monthly BTC price."
+            "Backtest starts with the sidebar BTC quantity. Withdrawals are calculated from one month of model growth on the -2σ floor, then sold at the real historical monthly BTC price."
         )
 
 
@@ -853,7 +887,7 @@ except Exception as e:
     st.stop()
 
 if KEY_CURRENCY_SELECTOR not in st.session_state:
-    st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
+    st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_EURO
 
 raw_df_usd = raw_df_usd[raw_df_usd["Close"] > 0].copy()
 raw_df_usd["LogClose"] = np.log10(raw_df_usd["Close"])
@@ -1294,6 +1328,14 @@ is_log_time = time_scale == TIME_LOG
 plot_x_model = m_x if is_log_time else m_dates
 plot_x_main = df_display["Days"] if is_log_time else df_display.index
 plot_x_osc = df_display["Days"] if is_log_time else df_display.index
+peak_powerlaw_overlay = None
+if mode == MODE_POWERLAW:
+    peak_powerlaw_overlay = calculate_peak_powerlaw_overlay(
+        df_display,
+        genesis_offset,
+        m_x,
+        (p2_5, p16_5, p83_5, p97_5),
+    )
 
 if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
     render_main_model_chart(
@@ -1320,6 +1362,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         p16_5=p16_5,
         p83_5=p83_5,
         p97_5=p97_5,
+        peak_powerlaw_overlay=peak_powerlaw_overlay,
         osc_t1_age=osc_settings.t1_age,
         osc_lambda=osc_settings.lambda_val,
         selected_harmonic_count=selected_harmonic_count,

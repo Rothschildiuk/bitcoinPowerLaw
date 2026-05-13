@@ -37,6 +37,162 @@ def fit_powerlaw_regression(absolute_days, log_prices, genesis_offset_days):
     return slope_b, intercept_a, r2_score
 
 
+def _select_residual_episode_indices(
+    valid_days,
+    residual_values,
+    threshold,
+    direction,
+    min_duration_days,
+):
+    if direction == "above":
+        extreme_mask = residual_values >= float(threshold)
+        choose_index = np.argmax
+    else:
+        extreme_mask = residual_values <= float(threshold)
+        choose_index = np.argmin
+
+    if float(min_duration_days) <= 1.0:
+        return list(np.flatnonzero(extreme_mask))
+
+    selected_indices = []
+    episode_start = None
+    previous_idx = None
+    for idx, is_extreme in enumerate(extreme_mask):
+        if is_extreme:
+            if episode_start is None:
+                episode_start = idx
+            previous_idx = idx
+            continue
+
+        if episode_start is not None and previous_idx is not None:
+            episode_days = valid_days[previous_idx] - valid_days[episode_start] + 1.0
+            if episode_days >= float(min_duration_days):
+                episode_slice = slice(episode_start, previous_idx + 1)
+                local_values = residual_values[episode_slice]
+                selected_indices.append(episode_start + int(choose_index(local_values)))
+        episode_start = None
+        previous_idx = None
+
+    if episode_start is not None and previous_idx is not None:
+        episode_days = valid_days[previous_idx] - valid_days[episode_start] + 1.0
+        if episode_days >= float(min_duration_days):
+            episode_slice = slice(episode_start, previous_idx + 1)
+            local_values = residual_values[episode_slice]
+            selected_indices.append(episode_start + int(choose_index(local_values)))
+
+    return selected_indices
+
+
+def fit_peak_powerlaw_envelope(
+    absolute_days,
+    log_prices,
+    genesis_offset_days,
+    model_days,
+    min_peak_count=2,
+    sigma_threshold=1.0,
+    min_duration_days=1.0,
+    residuals=None,
+    threshold_offset=None,
+):
+    days_since_offset = np.asarray(absolute_days, dtype=float) - float(genesis_offset_days)
+    log_prices = np.asarray(log_prices, dtype=float)
+    valid_mask = (days_since_offset > 0.0) & np.isfinite(log_prices)
+    if np.sum(valid_mask) < int(min_peak_count):
+        return None
+
+    valid_days = days_since_offset[valid_mask]
+    valid_logs = log_prices[valid_mask]
+    if residuals is None:
+        baseline_slope, baseline_intercept = np.polyfit(np.log10(valid_days), valid_logs, 1)
+        residual_values = valid_logs - (baseline_intercept + baseline_slope * np.log10(valid_days))
+    else:
+        residual_values = np.asarray(residuals, dtype=float)[valid_mask]
+    if threshold_offset is None:
+        residual_sigma = float(np.std(residual_values))
+        if not np.isfinite(residual_sigma) or residual_sigma <= 0.0:
+            return None
+        threshold_offset = float(sigma_threshold) * residual_sigma
+    peak_indices = _select_residual_episode_indices(
+        valid_days,
+        residual_values,
+        threshold=threshold_offset,
+        direction="above",
+        min_duration_days=min_duration_days,
+    )
+
+    if len(peak_indices) < int(min_peak_count):
+        return None
+
+    peak_days = valid_days[peak_indices]
+    peak_logs = valid_logs[peak_indices]
+    slope_b, intercept_a = np.polyfit(np.log10(peak_days), peak_logs, 1)
+    model_days = np.asarray(model_days, dtype=float)
+    model_log = intercept_a + slope_b * np.log10(np.maximum(model_days, 1.0))
+    model_values = np.power(10.0, model_log)
+    return {
+        "intercept": float(intercept_a),
+        "slope": float(slope_b),
+        "peak_days": peak_days,
+        "peak_values": np.power(10.0, peak_logs),
+        "model_values": model_values,
+    }
+
+
+def fit_trough_powerlaw_envelope(
+    absolute_days,
+    log_prices,
+    genesis_offset_days,
+    model_days,
+    min_trough_count=2,
+    sigma_threshold=-1.0,
+    min_duration_days=1.0,
+    residuals=None,
+    threshold_offset=None,
+):
+    days_since_offset = np.asarray(absolute_days, dtype=float) - float(genesis_offset_days)
+    log_prices = np.asarray(log_prices, dtype=float)
+    valid_mask = (days_since_offset > 0.0) & np.isfinite(log_prices)
+    if np.sum(valid_mask) < int(min_trough_count):
+        return None
+
+    valid_days = days_since_offset[valid_mask]
+    valid_logs = log_prices[valid_mask]
+    if residuals is None:
+        baseline_slope, baseline_intercept = np.polyfit(np.log10(valid_days), valid_logs, 1)
+        residual_values = valid_logs - (baseline_intercept + baseline_slope * np.log10(valid_days))
+    else:
+        residual_values = np.asarray(residuals, dtype=float)[valid_mask]
+    if threshold_offset is None:
+        residual_sigma = float(np.std(residual_values))
+        if not np.isfinite(residual_sigma) or residual_sigma <= 0.0:
+            return None
+        threshold_offset = float(sigma_threshold) * residual_sigma
+    trough_indices = _select_residual_episode_indices(
+        valid_days,
+        residual_values,
+        threshold=threshold_offset,
+        direction="below",
+        min_duration_days=min_duration_days,
+    )
+
+    if len(trough_indices) < int(min_trough_count):
+        return None
+
+    trough_days = valid_days[trough_indices]
+    trough_logs = valid_logs[trough_indices]
+    slope_b, intercept_a = np.polyfit(np.log10(trough_days), trough_logs, 1)
+    model_days = np.asarray(model_days, dtype=float)
+    model_log = intercept_a + slope_b * np.log10(np.maximum(model_days, 1.0))
+    model_values = np.power(10.0, model_log)
+    return {
+        "intercept": float(intercept_a),
+        "slope": float(slope_b),
+        "trough_days": trough_days,
+        "trough_values": np.power(10.0, trough_logs),
+        "model_values": model_values,
+    }
+
+
 def calculate_r2_for_manual_params(
     absolute_days, log_prices, genesis_offset_days, intercept_a, slope_b
 ):

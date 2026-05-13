@@ -7,6 +7,7 @@ import pandas as pd
 from core.power_law import (
     calculate_r2_for_manual_params,
     find_best_fit_params_for_offset,
+    fit_peak_powerlaw_envelope,
     fit_powerlaw_regression,
 )
 from core.utils import (
@@ -52,6 +53,24 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertTrue(np.isclose(slope, true_slope, atol=1e-10))
         self.assertTrue(np.allclose(trend, log_prices))
         self.assertTrue(np.allclose(residuals, 0.0))
+
+    def test_fit_peak_powerlaw_envelope_uses_local_highs(self):
+        absolute_days = np.array([10.0, 20.0, 30.0, 100.0, 110.0, 120.0, 200.0, 210.0])
+        log_prices = np.array([1.0, 1.4, 1.1, 2.0, 2.4, 2.1, 3.0, 3.4])
+        model_days = np.array([10.0, 100.0, 200.0])
+
+        result = fit_peak_powerlaw_envelope(
+            absolute_days,
+            log_prices,
+            genesis_offset_days=0.0,
+            model_days=model_days,
+            window_days=40.0,
+            min_peak_count=3,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertTrue(np.allclose(result["peak_days"], np.array([20.0, 110.0, 210.0])))
+        self.assertEqual(len(result["model_values"]), len(model_days))
 
     def test_resolve_trend_parameters_preserves_supplied_values_in_powerlaw_mode(self):
         log_days = np.linspace(1.0, 3.0, 10)

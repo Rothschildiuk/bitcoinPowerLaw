@@ -1,118 +1,35 @@
 # Data Sources
 
-## Overview
-Prepared datasets are loaded through `services/price_service.py`. The module normalizes upstream payloads into frames with:
-- `Close`
-- `AbsDays`
-- `LogClose`
+Read this file only when changing loaders, cache behavior, snapshot refreshes, or source-specific reliability logic. Runtime loaders live in `services/price_service.py`; checked-in snapshots live in `data/snapshots/`.
 
-Most prepared datasets are cached on disk under `output/data_cache/`.
-Checked-in runtime snapshots are stored under `data/snapshots/`.
+## Data Model
+- Prepared frames expose `Close`, `AbsDays`, and `LogClose`.
+- Runtime prefers checked-in snapshots to avoid page-load network fetches.
+- Runtime cache lives under ignored `output/data_cache/` with adjacent `.meta.json` files and schema-version invalidation.
+- Avoid broad searches in `data/snapshots/**`; inspect specific files only when snapshot contents matter.
 
-## Main Sources
+## Sources
+- Bitcoin price: GitHub CSV mirror; tail fallback order is `yfinance` `BTC-USD`, CoinGecko range API, then CoinCap history API.
+- Bitcoin volatility: derived from BTC/USD as 30-day rolling std of daily log returns times 100.
+- FX/gold references: `yfinance` symbols `EURUSD=X`, `UAH=X`, `GC=F`, fallback `XAUUSD=X`.
+- Filecoin/Monero/Litecoin/Dogecoin BTC pairs: CryptoCompare USD history converted through BTC/USD.
+- Miner revenue, Difficulty, Hashrate: Blockchain.com headerless CSV chart endpoints.
+- Lightning nodes/capacity: `bitcoinvisuals.com/static/data/data_daily.csv`.
+- Liquid BTC/transactions: Liquid reserves API plus `liquid.net/api/getChartsData`.
+- U.S. M2: FRED `M2SL`, billions USD, monthly.
+- Russian M2: Bank of Russia workbook primary; FRED `MYAGM2RUM189N` fallback, trillions RUB, monthly.
 
-### Bitcoin Price
-- Primary history: GitHub CSV mirror
-- Tail refresh fallback order:
-  1. `yfinance` (`BTC-USD`)
-  2. CoinGecko range API
-  3. CoinCap history API
+## Origins and Filters
+- Filecoin origin: official mainnet genesis reset timestamp `2020-08-24T22:00:00Z`.
+- Monero origin: first mined mainnet block date `2014-04-18` because block 0 timestamp is `0`.
+- Litecoin origin: block 0 timestamp `2011-10-07`.
+- Dogecoin origin: block 0 timestamp `2013-12-06`.
+- Lightning origin: first checked-in snapshot row `2018-01-19`.
+- Liquid BTC origin: first checked-in row `2018-09-01`; Liquid transactions origin: `2018-09-24`.
+- Difficulty/Hashrate raw early rows can be noisy; app analysis starts at `2010-01-01`.
 
-### Bitcoin Volatility
-- Source: derived from the prepared Bitcoin price series.
-- Metric: rolling 30-day standard deviation of daily BTC/USD log returns, expressed as a daily percentage.
-- Formula: `std(log(close / close.shift(1)), 30) * 100`.
-- No external volatility API is required at runtime.
-
-### FX and Gold Reference Series
-- `yfinance`
-- Symbols:
-  - `EURUSD=X`
-  - `UAH=X`
-  - `GC=F`
-  - fallback `XAUUSD=X`
-
-### Shitcoins BTC Pairs
-- History source: CryptoCompare daily history in `USD`, converted to `BTC` via `BTC/USD`
-- Covered series:
-  - Filecoin / BTC
-  - Monero / BTC
-  - Litecoin / BTC
-  - Dogecoin / BTC
-- Model origins use each chain's genesis or first usable launch block reference:
-  - Filecoin: official mainnet genesis reset timestamp `2020-08-24T22:00:00Z`
-  - Monero: genesis block timestamp is hardcoded as `0`, so the model uses the first mined mainnet block date `2014-04-18`
-  - Litecoin: block 0 timestamp `2011-10-07`
-  - Dogecoin: block 0 timestamp `2013-12-06`
-
-### Miner Revenue / Difficulty / Hashrate
-- Source: Blockchain.com CSV chart endpoints
-- These endpoints behave like headerless CSV payloads and must be parsed with explicit column names.
-
-### Lightning
-- Source: `bitcoinvisuals.com/static/data/data_daily.csv`
-- Derived prepared series:
-  - Lightning nodes
-  - Lightning capacity
-- Model origin: first checked-in Lightning snapshot row (`2018-01-19`), consistent with early 2018 mainnet usage and before the first `lnd` mainnet beta release on `2018-03-15`.
-
-### Liquid
-- Official reserves:
-  - `https://liquid.network/api/v1/liquid/reserves`
-  - `https://liquid.network/api/v1/liquid/reserves/month`
-- Site chart data:
-  - `https://liquid.net/api/getChartsData`
-- Derived prepared series:
-  - Liquid BTC
-  - Liquid transactions
-- Network reference: Blockstream says the Liquid blockchain went live on `2018-09-27`.
-- Model origins follow the first checked-in rows instead of the later launch reference when the source provides earlier aggregate rows: Liquid BTC starts at `2018-09-01`; Liquid transactions starts at `2018-09-24`.
-
-### U.S. M2 Money Supply
-- Source: FRED CSV endpoint for `M2SL`
-- URL: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL`
-- Unit: billions of U.S. dollars
-- Frequency: monthly
-- The app uses M2 because it is the broadest current official Federal Reserve money stock aggregate published through H.6/FRED. M3 was discontinued by the Federal Reserve in 2006, and broader M4/Divisia aggregates require third-party methodology.
-
-### Russian M2 Money Supply
-- Primary source: Bank of Russia monetary aggregates workbook
-- URL: `https://www.cbr.ru/vfs/eng/statistics/credit_statistics/monetary_agg_e.xlsx`
-- Fallback source: FRED CSV endpoint for `MYAGM2RUM189N`
-- Fallback URL: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=MYAGM2RUM189N`
-- Unit: trillions of Russian rubles
-- Frequency: monthly
-- The app uses national M2 because it is the broad local-currency aggregate with the longest official current row available from CBR. The FRED row is shorter and is kept only as a resilience fallback.
-
-## Cache Model
-- Disk cache dir: `output/data_cache/`
-- Cache metadata is stored as `.meta.json` alongside cached CSV files.
-- Cache schema version is used to invalidate stale serialization/layout assumptions.
-- If refresh fails and a valid cached snapshot exists, the app serves cached data.
-- Cache files are local runtime artifacts and are intentionally ignored by git.
-
-## Snapshot Model
-- Runtime-preferred datasets live in `data/snapshots/`.
-- The Streamlit app reads these checked-in snapshots first to avoid external fetches on page load.
-- Refresh workflow:
-  - `make update-data-snapshots`
-  - `venv/bin/python scripts/update_data_snapshots.py`
-- Snapshot refresh is an explicit maintenance step and can be run periodically instead of per-request.
-
-## Refresh Intervals
-- Fast series: 1 hour
-- Slow series: 6 hours
-- Reference series: 12 hours
-
-## Reliability Notes
-- Blockchain.com early difficulty/hashrate rows contain noisy startup-era data.
-- Difficulty/hashrate analysis is filtered from `2010-01-01` onward in the app layer.
-- Some upstreams are unofficial or undocumented and should be treated as operational dependencies, not strict contracts.
-
-## Default Refresh Workflow
-- `make update-defaults` recomputes checked-in defaults from the current cached/live datasets.
-- The script updates:
-  - PowerLaw `A/B` defaults
-  - LogPeriodic defaults for Bitcoin, Difficulty, and Hashrate
-- Safe preview command:
-  - `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`
+## Maintenance
+- Refresh snapshots: `make update-data-snapshots` or `venv/bin/python scripts/update_data_snapshots.py`.
+- Refresh model defaults: `make update-defaults`.
+- Preview defaults: `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`.
+- Default refresh rewrites PowerLaw `A/B` and LogPeriodic defaults in `core/constants.py`.

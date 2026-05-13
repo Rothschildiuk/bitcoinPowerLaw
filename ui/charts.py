@@ -14,7 +14,7 @@ HALVING_DATES = [
     pd.Timestamp("2024-04-20"),
 ]
 TIME_AXIS_LEADING_PADDING_DAYS = 90
-MODEL_FORWARD_YEARS = 5
+MODEL_FORWARD_YEARS = 10
 OPTIONAL_SIGMA_LEVELS = (-1.5, -0.5, 0.5, 1.5)
 
 
@@ -34,9 +34,18 @@ def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PAD
     return first_data_date - pd.Timedelta(days=int(padding_days))
 
 
-def _resolve_model_view_max(df_display, current_gen_date, forward_years=MODEL_FORWARD_YEARS):
+def _resolve_model_view_max(
+    df_display,
+    current_gen_date,
+    forward_years=MODEL_FORWARD_YEARS,
+    today=None,
+):
     latest_data_date = pd.Timestamp(df_display.index.max()).normalize()
-    horizon_end_date = latest_data_date + pd.DateOffset(years=int(forward_years))
+    today_date = (
+        pd.Timestamp.today().normalize() if today is None else pd.Timestamp(today).normalize()
+    )
+    anchor_date = max(latest_data_date, today_date)
+    horizon_end_date = anchor_date + pd.DateOffset(years=int(forward_years))
     return max(1.0, float((horizon_end_date - current_gen_date).days))
 
 
@@ -155,6 +164,7 @@ def render_main_model_chart(
     p16_5,
     p83_5,
     p97_5,
+    peak_powerlaw_overlay,
     osc_t1_age,
     osc_lambda,
     selected_harmonic_count,
@@ -315,6 +325,88 @@ def render_main_model_chart(
             dict(color="#f0b90b", width=1.8),
             "power_regression",
         )
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
+            peak_overlay = peak_powerlaw_overlay["peak"]
+            peak_values = peak_overlay["model_values"]
+            add_model_line(
+                peak_values,
+                "Peak PowerLaw",
+                dict(color="#22c55e", width=1.6, dash="longdash"),
+                "peak_powerlaw",
+                visible="legendonly",
+            )
+            peak_days = np.asarray(peak_overlay["peak_days"], dtype=float)
+            peak_x = (
+                peak_days
+                if is_log_time
+                else [current_gen_date + pd.Timedelta(days=float(day)) for day in peak_days]
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=peak_x,
+                    y=peak_overlay["peak_values"],
+                    mode="markers",
+                    marker=dict(
+                        color="#f97316",
+                        size=9,
+                        symbol="circle",
+                        line=dict(color="#fff7ed", width=1.4),
+                    ),
+                    name="Peak fit points",
+                    legendgroup="peak_powerlaw",
+                    visible="legendonly",
+                    customdata=[
+                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
+                        for day in peak_days
+                    ],
+                    hovertemplate=(
+                        f"<b>Peak fit point</b>: "
+                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                        "<br>%{customdata}<extra></extra>"
+                    ),
+                )
+            )
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
+            trough_overlay = peak_powerlaw_overlay["trough"]
+            trough_values = trough_overlay["model_values"]
+            add_model_line(
+                trough_values,
+                "Trough PowerLaw",
+                dict(color="#22c55e", width=1.6, dash="longdash"),
+                "trough_powerlaw",
+                visible="legendonly",
+            )
+            trough_days = np.asarray(trough_overlay["trough_days"], dtype=float)
+            trough_x = (
+                trough_days
+                if is_log_time
+                else [current_gen_date + pd.Timedelta(days=float(day)) for day in trough_days]
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=trough_x,
+                    y=trough_overlay["trough_values"],
+                    mode="markers",
+                    marker=dict(
+                        color="#f97316",
+                        size=9,
+                        symbol="circle",
+                        line=dict(color="#fff7ed", width=1.4),
+                    ),
+                    name="Trough fit points",
+                    legendgroup="trough_powerlaw",
+                    visible="legendonly",
+                    customdata=[
+                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
+                        for day in trough_days
+                    ],
+                    hovertemplate=(
+                        f"<b>Trough fit point</b>: "
+                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                        "<br>%{customdata}<extra></extra>"
+                    ),
+                )
+            )
         add_model_line(
             optional_sigma_series[-0.5],
             _format_sigma_line_name(-0.5),
@@ -368,6 +460,20 @@ def render_main_model_chart(
             dict(color="#f0b90b", width=1.8),
             "power_regression",
         )
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
+            add_legend_item(
+                "Peak PowerLaw",
+                dict(color="#22c55e", width=1.6, dash="longdash"),
+                "peak_powerlaw",
+                visible="legendonly",
+            )
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
+            add_legend_item(
+                "Trough PowerLaw",
+                dict(color="#22c55e", width=1.6, dash="longdash"),
+                "trough_powerlaw",
+                visible="legendonly",
+            )
         add_legend_item(
             _format_sigma_line_name(0.5),
             _optional_sigma_line_style(0.5),

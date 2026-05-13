@@ -1,46 +1,28 @@
 # AGENTS.md
 
-## Scope
-- Python Streamlit app workflow (run, format, test).
-- Node placeholder test workflow.
+## Workflows
+- Setup: `python3 -m venv venv`, `make install`, `npm install`.
+- Discover commands: `make help`.
+- Run app: `make run`; macOS shortcut: `./run.command`.
+- Format/check/test: `make format`, `make check`, `make test`.
+- JS tests: `npm test` is a placeholder and exits 0 with "No JS tests configured".
+- Refresh defaults: `make update-defaults`; preview with `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`.
+- Cleanup: `make clean`.
 
-## Verified Workflows
-- Initial setup (fresh clone):
-  - `python3 -m venv venv`
-  - `make install`
-  - `npm install`
-- Command discovery:
-  - `make help`
-- Run app:
-  - `make run`
-  - macOS shortcut: `./run.command`
-- Format and style checks:
-  - `make format`
-  - `make check`
-- Tests:
-  - `make test`
-  - `npm test` (placeholder; exits 0 with "No JS tests configured")
-- Default refresh:
-  - `make update-defaults`
-  - `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`
-- Cleanup:
-  - `make clean`
-- Node helper package:
-  - `npm test` (placeholder; exits 0 with "No JS tests configured")
+## Project Notes
+- Streamlit app. Python deps come from `config/requirements.txt`; transitive pins live in `config/constraints.txt`.
+- Root `requirements.txt` delegates to `config/requirements.txt`; keep the constraints reference relative to `config/` for Streamlit Cloud.
+- `run.command` runs `make install` when `venv/bin/streamlit` is missing.
+- `make update-defaults` rewrites PowerLaw `A/B` and LogPeriodic defaults in `core/constants.py`.
+- `scripts/playwright/` exists, but no committed entry command is present.
 
-## Grounded Notes
-- Python dependencies are sourced from `config/requirements.txt`.
-- Transitive Python versions are pinned via `config/constraints.txt` for reproducible installs.
-- `requirements.txt` points to `config/requirements.txt` via `-r`.
-- `config/requirements.txt` must reference `constraints.txt` with a path relative to `config/`, otherwise Streamlit Cloud resolves it incorrectly.
-- `npm test` is a placeholder and currently does not run JS tests.
-- `run.command` runs `make install` automatically when `venv/bin/streamlit` is missing.
-- `make update-defaults` rewrites both PowerLaw `A/B` defaults and LogPeriodic oscillator defaults in `core/constants.py`.
+## Context Budget
+- Start with `ARCHITECTURE.md` for module flow.
+- Read `DATA_SOURCES.md` only for source/cache/refresh work.
+- Read `SERIES_GUIDE.md` only for series behavior, units, or new-series work.
+- Avoid searching `data/snapshots/**` unless the task is specifically about snapshot contents; those CSVs dominate token output.
 
-## Fast Context Files
-- `ARCHITECTURE.md` explains the runtime flow and main modules.
-- `DATA_SOURCES.md` lists external APIs, cache behavior, and reliability notes.
-- `SERIES_GUIDE.md` explains series families, units, filters, and mode support.
-
-## TODO
-- `scripts/playwright/` exists, but no committed entry command is present yet.
+## Test Budget
+- Do not run tests after every small change.
+- For low-risk edits, rely on code inspection and minimal diff review.
+- For risky changes, mention the targeted test command first; run it only when requested or when the app is clearly broken.

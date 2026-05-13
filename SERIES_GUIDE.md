@@ -1,114 +1,35 @@
 # Series Guide
 
-## Purpose
-This file explains how series are organized in the app and where their behavior is defined.
+Read this file only for series behavior, units, filters, mode support, or adding a new series. The canonical source of truth is `core/series_registry.py`.
 
-## Canonical Source of Truth
-Series metadata lives in `core/series_registry.py`.
+## Registry Fields
+Each series config owns its session keys, defaults, display label/unit, currency behavior, mode availability, chart behavior, optional analysis cutoff, and LogPeriodic parameter bounds.
 
-Each series config defines:
-- session keys for `A` and `B`
-- default model parameters
-- display name and unit
-- currency behavior
-- PowerLaw / LogPeriodic availability
-- chart behavior such as halving lines
-- optional analysis cutoff when a series intentionally excludes early rows
-- LogPeriodic parameter bounds overrides where needed
+## Families
+- Bitcoin network: Bitcoin, Miner revenue, Bitcoin volatility, Difficulty, Hashrate.
+- Lightning: Lightning nodes, Lightning BTC.
+- Liquid: Liquid BTC, Liquid transactions.
+- Fiat money: U.S. M2, Russian M2.
+- BTC pairs: Filecoin/BTC, Monero/BTC, Litecoin/BTC, Dogecoin/BTC.
 
-## Series Families
+## Special Behavior
+- Bitcoin is the only series with currency switching (`EUR`, `USD`, `UAH`, `GOLD`) and supports both PowerLaw and LogPeriodic.
+- LogPeriodic fits residuals in log time after removing the PowerLaw trend; DSI comparisons use `omega`, `omega,2omega`, and `omega,2omega,4omega`.
+- Difficulty and Hashrate support both modes, force log scale, start analysis at `2010-01-01`, and use wider LogPeriodic `Lambda` bounds.
+- Bitcoin volatility is PowerLaw-only, log scale, and derived from 30-day daily BTC/USD log-return volatility.
+- Lightning BTC and Liquid BTC display BTC units; Lightning nodes and Liquid transactions display raw units.
+- Fiat M2 series are monthly, log scale, no currency conversion, and count PowerLaw time from their own first row.
+- BTC-pair series count PowerLaw time from each chain's genesis or first usable launch reference, not Bitcoin genesis.
 
-### Bitcoin Network
-- Bitcoin
-- Miner revenue
-- Bitcoin volatility
-- Difficulty
-- Hashrate
+## Adding a Series
+1. Add keys/defaults in `core/constants.py`.
+2. Add metadata in `core/series_registry.py`.
+3. Add loader/prep in `services/price_service.py`.
+4. Wire raw/sidebar data in `app.py`.
+5. Add focused tests for registry and loader behavior.
 
-### Lightning Network
-- Lightning nodes
-- Lightning BTC
-
-### Liquid
-- Liquid BTC
-- Liquid transactions
-
-### Fiat Money
-- U.S. M2
-- Russian M2
-
-## Special Handling
-
-### Bitcoin
-- Only series that supports currency switching (`EUR`, `USD`, `UAH`, `GOLD`)
-- Available in both PowerLaw and LogPeriodic
-- Uses the base LogPeriodic parameter bounds
-
-### LogPeriodic DSI
-- LogPeriodic mode fits residual structure in logarithmic time after removing the PowerLaw trend.
-- DSI mode options use `ω`, `ω,2ω`, and `ω,2ω,4ω` bases.
-- The sidebar reports R², AIC, BIC, and RMSE for 1-, 2-, and 3-mode DSI comparisons.
-
-### Difficulty and Hashrate
-- Available in PowerLaw and LogPeriodic
-- Force log price scale
-- Use startup-era analysis cutoff from `2010-01-01`
-- Early raw 2009 history may still exist in the cache, but chart/model analysis starts from the cutoff
-- Use wider LogPeriodic `Lambda` bounds than Bitcoin
-- Their checked-in LogPeriodic defaults are intended to be refreshed from current data
-
-### Bitcoin Volatility
-- Derived from BTC/USD close history using rolling 30-day daily log-return standard deviation.
-- Displayed as a daily percent, matching non-annualized volatility views such as BTC volatility index charts.
-- Available in PowerLaw only.
-- Forces log price scale because the values are positive percentages.
-
-### Lightning BTC and Liquid BTC
-- Displayed with `BTC` suffix and 3 decimals
-- Lightning BTC and Lightning nodes PowerLaw time is counted from the first Lightning snapshot row
-- Liquid BTC PowerLaw time is counted from the first Liquid BTC snapshot row
-
-### Shitcoins
-- BTC-pair PowerLaw time is counted from each chain's genesis or first usable launch block reference, not from Bitcoin genesis
-- Filecoin uses the official mainnet genesis reset timestamp
-- Monero uses the first mined mainnet block date because its hardcoded genesis block timestamp is `0`
-
-### Liquid Transactions / Lightning Nodes
-- Raw unit display, no currency conversion
-- Liquid transactions PowerLaw time is counted from the first Liquid transaction row, not from Bitcoin genesis
-
-### U.S. M2
-- Uses FRED `M2SL`
-- Displayed in billions of U.S. dollars
-- Monthly data, no currency conversion
-- Forces log price scale
-- PowerLaw time is counted from the U.S. M2 row start, not from Bitcoin genesis
-- M2 is used instead of M3/M4 because it is the current official broad Fed/FRED money stock series.
-
-### Russian M2
-- Uses Bank of Russia monetary aggregates as the primary source
-- Falls back to FRED `MYAGM2RUM189N` if the CBR workbook is unavailable
-- Displayed in trillions of Russian rubles
-- Monthly data, no currency conversion
-- Forces log price scale
-- PowerLaw time is counted from the Russian M2 row start, not from Bitcoin genesis
-- M2 is used because it is the broad official local-currency aggregate with a current CBR-published history.
-
-## When Adding a New Series
-1. Add defaults and keys in `core/constants.py`
-2. Add metadata in `core/series_registry.py`
-3. Add loader in `services/price_service.py`
-4. Register raw/sidebar data in `app.py`
-5. Add tests for registry and loader behavior
-
-## Default Maintenance
-- Checked-in defaults are not purely hand-tuned anymore.
-- Use `make update-defaults` to refresh:
-  - PowerLaw `A/B`
-  - LogPeriodic defaults for supported series
-- Review the resulting `core/constants.py` diff before committing.
-
-## Preferred Refactor Direction
-- Put series-specific rules in the registry
-- Keep sidebar and chart behavior derived from the same config
-- Avoid reintroducing hand-written `if/elif` routing across multiple files
+## Maintenance Direction
+- Keep series-specific rules in the registry.
+- Derive sidebar and chart behavior from the same config.
+- Avoid spreading new series routing across hand-written `if/elif` branches.
+- Use `make update-defaults` for checked-in PowerLaw and LogPeriodic defaults, then review the `core/constants.py` diff.
