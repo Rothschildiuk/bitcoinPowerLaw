@@ -116,6 +116,18 @@ footer {visibility: hidden; display: none;}
     overflow-wrap: anywhere;
 }
 
+.pension-metric-note-positive {
+    color: #8df5a3;
+    background: rgba(34, 197, 94, 0.16);
+    border-color: rgba(34, 197, 94, 0.22);
+}
+
+.pension-metric-note-negative {
+    color: #ff8a8a;
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.24);
+}
+
 [data-testid="stMain"] [data-testid="stMetric"],
 [data-testid="stMain"] [data-testId="stMetric"] {
     background: linear-gradient(180deg, rgba(30, 34, 45, 0.96), rgba(25, 29, 39, 0.96));
@@ -399,6 +411,38 @@ div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checke
 
 [data-testid="stMain"] .stRadio label[data-baseweb="radio"][aria-checked="true"] p {
     color: #111827 !important;
+}
+
+[data-testid="stMain"] .st-key-portfolio_pension_payout_radio .stRadio > div[role="radiogroup"] {
+    gap: 1.25rem;
+    margin: 0 0 0.8rem 0;
+    width: auto;
+    justify-content: flex-start;
+}
+
+[data-testid="stMain"] .st-key-portfolio_pension_payout_radio .stRadio label[data-baseweb="radio"] {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+}
+
+[data-testid="stMain"] .st-key-portfolio_pension_payout_radio .stRadio label[data-baseweb="radio"] > div:first-child {
+    display: flex;
+}
+
+[data-testid="stMain"] .st-key-portfolio_pension_payout_radio .stRadio label[data-baseweb="radio"] p {
+    font-size: 17px !important;
+    color: __C_TEXT_MAIN__ !important;
+}
+
+[data-testid="stMain"] .st-key-portfolio_pension_payout_radio .stRadio label[data-baseweb="radio"][aria-checked="true"] {
+    background: transparent;
+    border-color: transparent;
+}
+
+[data-testid="stMain"] .st-key-portfolio_pension_payout_radio .stRadio label[data-baseweb="radio"][aria-checked="true"] p {
+    color: __C_TEXT_MAIN__ !important;
 }
 
 /* Keep Plotly modebar above overlays and make buttons reliably clickable in Streamlit. */

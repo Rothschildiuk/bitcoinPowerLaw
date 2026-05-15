@@ -77,6 +77,7 @@ class CurrentMonthlyPensionEstimate:
     minimum_btc_to_sell: float
     minimum_btc_to_sell_today: float
     minimum_btc_sell_reduction_pct: float
+    minimum_btc_sell_today_delta_pct: float
     model_btc_to_sell: float
     selected_monthly_withdrawal: float
     next_month_date: pd.Timestamp
@@ -409,6 +410,11 @@ def estimate_current_monthly_pension(
         if minimum_btc_to_sell > 0.0
         else 0.0
     )
+    minimum_btc_sell_today_delta_pct = (
+        ((current_price / current_floor_price) - 1.0) * 100.0
+        if current_floor_price > 0.0
+        else 0.0
+    )
     model_btc_to_sell = max_monthly_withdrawal / next_month_price if next_month_price > 0.0 else 0.0
     sell_ratio = min(max(float(sell_mom_change_pct) / 100.0, 0.0), 1.0)
 
@@ -428,6 +434,7 @@ def estimate_current_monthly_pension(
         minimum_btc_to_sell=minimum_btc_to_sell,
         minimum_btc_to_sell_today=minimum_btc_to_sell_today,
         minimum_btc_sell_reduction_pct=minimum_btc_sell_reduction_pct,
+        minimum_btc_sell_today_delta_pct=minimum_btc_sell_today_delta_pct,
         model_btc_to_sell=model_btc_to_sell,
         selected_monthly_withdrawal=max_monthly_withdrawal * sell_ratio,
         next_month_date=next_month_date,

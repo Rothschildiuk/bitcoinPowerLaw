@@ -92,9 +92,9 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     )
 
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
-        st.markdown("**Monthly buy amount**")
+        st.markdown("**Monthly buy/sell amount**")
         st.number_input(
-            "Monthly buy amount",
+            "Monthly buy/sell amount",
             value=int(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0)),
             step=10,
             format="%d",
@@ -103,7 +103,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         )
         st.caption("Adds a second capital-growth line using fixed monthly cash flow.")
 
-    if selected_portfolio_view == PORTFOLIO_VIEW_PENSION:
         st.markdown("**Sell % of MoM Change**")
         sell_mom_pct = float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0))
         sell_mom_pct = min(max(sell_mom_pct, 0.0), 100.0)
@@ -118,7 +117,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             key=KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
             label_visibility="collapsed",
         )
-        st.caption("Used by pension calculations as the selected sell strategy.")
+        st.caption("Adds a second capital-growth line using monthly model growth sells.")
 
     if selected_portfolio_view in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]:
         st.markdown(

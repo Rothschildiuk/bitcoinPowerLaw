@@ -135,7 +135,7 @@ def initialize_app_session_state():
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
         KEY_PORTFOLIO_SIGMA_LEVEL: 0,
         KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT: 0.0,
-        KEY_PORTFOLIO_PENSION_PAYOUT_PCT: 50.0,
+        KEY_PORTFOLIO_PENSION_PAYOUT_PCT: 100.0,
         KEY_PORTFOLIO_STRATEGY_VIEW: PORTFOLIO_VIEW_ACCUMULATION,
     }
     for key, value in defaults.items():
@@ -432,7 +432,7 @@ def render_portfolio_view(
         ),
         monthly_mom_change_pct=float(
             st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0)
-            if portfolio_strategy_view == PORTFOLIO_VIEW_PENSION
+            if portfolio_strategy_view == PORTFOLIO_VIEW_ACCUMULATION
             else 0.0
         ),
         forecast_unit=st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Year"),
@@ -669,27 +669,34 @@ def render_portfolio_view(
         )
         st.markdown("#### Monthly BTC pension estimate")
         if KEY_PORTFOLIO_PENSION_PAYOUT_PCT not in st.session_state:
-            legacy_divisor = max(
-                float(st.session_state.get(KEY_PORTFOLIO_PENSION_DIVISOR, 2.0)),
-                1.0,
-            )
-            st.session_state[KEY_PORTFOLIO_PENSION_PAYOUT_PCT] = min(
-                max(100.0 / legacy_divisor, 1.0),
-                100.0,
-            )
+            st.session_state[KEY_PORTFOLIO_PENSION_PAYOUT_PCT] = 100
         divisor_col, _ = st.columns([1, 3])
         with divisor_col:
-            st.number_input(
-                "Conservative payout (%)",
-                min_value=1.0,
-                max_value=100.0,
-                value=float(st.session_state.get(KEY_PORTFOLIO_PENSION_PAYOUT_PCT, 50.0)),
-                step=1.0,
-                format="%.1f",
-                key=KEY_PORTFOLIO_PENSION_PAYOUT_PCT,
+            payout_options = [25, 50, 75, 100]
+            current_payout_pct = int(
+                min(
+                    payout_options,
+                    key=lambda option: abs(
+                        option
+                        - float(
+                            st.session_state.get(
+                                KEY_PORTFOLIO_PENSION_PAYOUT_PCT,
+                                100.0,
+                            )
+                        )
+                    ),
+                )
             )
+            with st.container(key="portfolio_pension_payout_radio"):
+                st.radio(
+                    "Conservative payout (%)",
+                    options=payout_options,
+                    index=payout_options.index(current_payout_pct),
+                    horizontal=True,
+                    key=KEY_PORTFOLIO_PENSION_PAYOUT_PCT,
+                )
         conservative_payout_pct = min(
-            max(float(st.session_state.get(KEY_PORTFOLIO_PENSION_PAYOUT_PCT, 50.0)), 1.0),
+            max(float(st.session_state.get(KEY_PORTFOLIO_PENSION_PAYOUT_PCT, 100.0)), 1.0),
             100.0,
         )
         conservative_payout_ratio = conservative_payout_pct / 100.0
@@ -699,6 +706,17 @@ def render_portfolio_view(
         conservative_btc_to_sell = pension_estimate.minimum_btc_to_sell * conservative_payout_ratio
         conservative_btc_to_sell_today = (
             pension_estimate.minimum_btc_to_sell_today * conservative_payout_ratio
+        )
+        today_btc_sell_delta_pct = pension_estimate.minimum_btc_sell_today_delta_pct
+        today_btc_sell_delta_label = (
+            f"more expensive than {pension_floor_label}"
+            if today_btc_sell_delta_pct >= 0.0
+            else f"cheaper than {pension_floor_label}"
+        )
+        today_btc_sell_delta_class = (
+            "pension-metric-note-positive"
+            if today_btc_sell_delta_pct >= 0.0
+            else "pension-metric-note-negative"
         )
         st.markdown(
             (
@@ -717,23 +735,9 @@ def render_portfolio_view(
                 "<div class='pension-metric-delta'>"
                 f"↑ sell {conservative_btc_to_sell:.4f} BTC at {pension_floor_label} ({conservative_payout_pct:g}%)"
                 "</div>"
-                "<div class='pension-metric-note'>"
+                f"<div class='pension-metric-note {today_btc_sell_delta_class}'>"
                 f"Today: sell {conservative_btc_to_sell_today:.4f} BTC "
-                f"({pension_estimate.minimum_btc_sell_reduction_pct:.1f}% less BTC)"
-                "</div>"
-                "</div>"
-                "<div class='pension-metric-card'>"
-                "<div class='pension-metric-label'>Normal monthly pension</div>"
-                f"<div class='pension-metric-value'>{format_portfolio_money(pension_estimate.minimum_monthly_withdrawal)}</div>"
-                "<div class='pension-metric-delta'>"
-                f"↑ sell {pension_estimate.minimum_btc_to_sell:.4f} BTC at {pension_floor_label}"
-                "</div>"
-                "</div>"
-                "<div class='pension-metric-card'>"
-                "<div class='pension-metric-label'>Model-based monthly pension</div>"
-                f"<div class='pension-metric-value'>{format_portfolio_money(pension_estimate.max_monthly_withdrawal)}</div>"
-                "<div class='pension-metric-delta'>"
-                f"↑ sell {pension_estimate.model_btc_to_sell:.4f} BTC at today's σ"
+                f"({abs(today_btc_sell_delta_pct):.1f}% {today_btc_sell_delta_label})"
                 "</div>"
                 "</div>"
                 "</div>"
@@ -741,14 +745,9 @@ def render_portfolio_view(
             unsafe_allow_html=True,
         )
         st.caption(
-            f"Conservative pension uses {conservative_payout_pct:g}% of one month of model growth on {pension_floor_label}. Normal pension uses the full {pension_floor_label} growth. Model-based pension uses one month of growth on today's market-position line."
+            f"Conservative pension uses {conservative_payout_pct:g}% of one month of model growth on {pension_floor_label}."
         )
         st.caption(pension_estimate.withdrawal_rating_note)
-        if settings.monthly_mom_change_pct != 100.0:
-            st.caption(
-                f"At selected sell {settings.monthly_mom_change_pct:.1f}%: "
-                f"{format_portfolio_money(pension_estimate.selected_monthly_withdrawal)}."
-            )
 
     if portfolio_strategy_view != PORTFOLIO_VIEW_STRATEGY_TESTER:
         return
