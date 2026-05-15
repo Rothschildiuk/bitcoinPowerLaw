@@ -4,7 +4,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from core.constants import MODE_LOGPERIODIC, TIME_LOG
+from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
 from ui.charts import (
     _main_chart_plotly_config,
     _resolve_optional_sigma_offsets,
@@ -159,6 +159,111 @@ class TestUIChartsHelpers(unittest.TestCase):
 
         self.assertEqual([level for level, _ in offsets], [-1.5, -0.5, 0.5, 1.5])
         self.assertTrue(np.allclose([offset for _, offset in offsets], [-0.7, -0.2, 0.3, 0.9]))
+
+    def test_powerlaw_chart_defaults_hide_fit_points_and_show_major_sigma_lines(self):
+        dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
+        days = np.array([4000.0, 4001.0, 4002.0])
+        df_display = pd.DataFrame(
+            {
+                "Days": days,
+                "CloseDisplay": [100.0, 101.0, 102.0],
+            },
+            index=dates,
+        )
+        overlay = {
+            "peak": {
+                "model_values": np.array([140.0, 141.0, 142.0]),
+                "peak_days": np.array([4000.0, 4002.0]),
+                "peak_values": np.array([120.0, 122.0]),
+            },
+            "trough": {
+                "model_values": np.array([80.0, 81.0, 82.0]),
+                "trough_days": np.array([4000.0, 4002.0]),
+                "trough_values": np.array([90.0, 92.0]),
+            },
+        }
+        captured = {}
+
+        def capture_plotly_chart(fig, **kwargs):
+            captured["fig"] = fig
+
+        with patch("ui.charts.st.plotly_chart", side_effect=capture_plotly_chart):
+            render_main_model_chart(
+                mode=MODE_POWERLAW,
+                time_scale=TIME_LOG,
+                price_scale=TIME_LOG,
+                df_display=df_display,
+                current_gen_date=pd.Timestamp("2009-01-03"),
+                view_max=5000.0,
+                plot_x_model=days,
+                plot_x_main=days,
+                plot_x_osc=days,
+                m_log_d=np.log10(days),
+                m_dates=dates,
+                m_dates_str=np.array(["01.01.2020", "02.01.2020", "03.01.2020"]),
+                m_fair_display=np.array([100.0, 101.0, 102.0]),
+                historical_powerlaw_slopes=np.array([5.5, 5.6, 5.7]),
+                show_historical_powerlaw_slope=False,
+                m_osc_y=np.array([0.1, 0.2, 0.3]),
+                m_osc_y_by_harmonic=None,
+                perrenod_curve=None,
+                residual_sigma_log=1.0,
+                p2_5=-0.2,
+                p16_5=-0.1,
+                p83_5=0.1,
+                p97_5=0.2,
+                peak_powerlaw_overlay=overlay,
+                osc_t1_age=1.0,
+                osc_lambda=2.0,
+                selected_harmonic_count=1,
+                pl_template="plotly_dark",
+                pl_bg_color="#000",
+                pl_grid_color="#333",
+                pl_btc_color="#fff",
+                pl_legend_color="#fff",
+                pl_text_color="#fff",
+                c_hover_bg="#111",
+                c_hover_text="#fff",
+                c_border="#333",
+                currency_prefix="$",
+                currency_suffix="",
+                currency_decimals=0,
+                target_series_name="Bitcoin",
+                target_series_unit="USD",
+                show_halving_lines=False,
+                chart_key="test-powerlaw-default-visibility",
+            )
+
+        traces_by_name = {str(trace.name): trace for trace in captured["fig"].data}
+        for name in {
+            "+2σ (97.5th percentile)",
+            "+1σ (83.5th percentile)",
+            "-1σ (16.5th percentile)",
+            "-2σ (2.5th percentile)",
+        }:
+            self.assertIn(traces_by_name[name].visible, (None, True))
+
+        self.assertEqual(traces_by_name["Peak PowerLaw"].visible, "legendonly")
+        self.assertEqual(traces_by_name["Trough PowerLaw"].visible, "legendonly")
+        self.assertEqual(traces_by_name["Peak fit points"].visible, "legendonly")
+        self.assertEqual(traces_by_name["Peak fit points"].legendgroup, "peak_fit_points")
+        self.assertEqual(traces_by_name["Trough fit points"].visible, "legendonly")
+        self.assertEqual(traces_by_name["Trough fit points"].legendgroup, "trough_fit_points")
+        self.assertLess(
+            traces_by_name["Peak PowerLaw"].legendrank,
+            traces_by_name["Peak fit points"].legendrank,
+        )
+        self.assertLess(
+            traces_by_name["Peak fit points"].legendrank,
+            traces_by_name["Trough PowerLaw"].legendrank,
+        )
+        self.assertLess(
+            traces_by_name["Trough PowerLaw"].legendrank,
+            traces_by_name["Trough fit points"].legendrank,
+        )
+        self.assertEqual(captured["fig"].layout.legend.y, 1.0)
+        self.assertEqual(captured["fig"].layout.legend.yanchor, "top")
+        self.assertGreaterEqual(captured["fig"].layout.margin.t, 80)
 
     def test_logperiodic_powerlaw_slope_trace_is_hidden_by_default(self):
         dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])

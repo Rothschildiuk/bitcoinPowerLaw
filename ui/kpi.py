@@ -3,7 +3,8 @@ import streamlit as st
 
 from core.utils import evaluate_powerlaw_values
 
-SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.0, 2.0 + 0.25, 0.25))
+SIGMA_STEP = 0.125
+SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.0, 2.0 + SIGMA_STEP, SIGMA_STEP))
 
 
 def _kpi_card(col, label, value, delta=None, d_color=None):
@@ -25,12 +26,29 @@ def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
 def _empty_band_shares():
     return [
         {
-            "lower_level": lower_level,
-            "upper_level": upper_level,
-            "label": f"{_format_sigma_level(lower_level)} to {_format_sigma_level(upper_level)}",
+            "lower_level": None,
+            "upper_level": SIGMA_LEVELS[0],
+            "label": f"< {_format_sigma_level(SIGMA_LEVELS[0])}",
+            "compact_label": _format_compact_sigma_band_label(None, SIGMA_LEVELS[0]),
             "share": 0.0,
-        }
-        for lower_level, upper_level in zip(SIGMA_LEVELS[:-1], SIGMA_LEVELS[1:])
+        },
+        *[
+            {
+                "lower_level": lower_level,
+                "upper_level": upper_level,
+                "label": f"{_format_sigma_level(lower_level)} to {_format_sigma_level(upper_level)}",
+                "compact_label": _format_compact_sigma_band_label(lower_level, upper_level),
+                "share": 0.0,
+            }
+            for lower_level, upper_level in zip(SIGMA_LEVELS[:-1], SIGMA_LEVELS[1:])
+        ],
+        {
+            "lower_level": SIGMA_LEVELS[-1],
+            "upper_level": None,
+            "label": f"> {_format_sigma_level(SIGMA_LEVELS[-1])}",
+            "compact_label": _format_compact_sigma_band_label(SIGMA_LEVELS[-1], None),
+            "share": 0.0,
+        },
     ]
 
 
@@ -38,6 +56,20 @@ def _format_sigma_level(value):
     if float(value) == 0.0:
         return "Power Law"
     return f"{value:+g}σ"
+
+
+def _format_compact_sigma_level(value):
+    if float(value) == 0.0:
+        return "0"
+    return f"{value:+g}"
+
+
+def _format_compact_sigma_band_label(lower_level, upper_level):
+    if lower_level is None:
+        return f"< {_format_compact_sigma_level(upper_level)}"
+    if upper_level is None:
+        return f"> {_format_compact_sigma_level(lower_level)}"
+    return f"{_format_compact_sigma_level(lower_level)}..{_format_compact_sigma_level(upper_level)}"
 
 
 def _resolve_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
@@ -65,25 +97,41 @@ def calculate_powerlaw_band_shares(df_display, p2_5, p16_5, p83_5, p97_5):
 
     total = float(valid_residuals.size)
     band_shares = []
+    lower_edge = sigma_offsets[SIGMA_LEVELS[0]]
+    upper_edge = sigma_offsets[SIGMA_LEVELS[-1]]
+    band_shares.append(
+        {
+            "lower_level": None,
+            "upper_level": SIGMA_LEVELS[0],
+            "label": f"< {_format_sigma_level(SIGMA_LEVELS[0])}",
+            "compact_label": _format_compact_sigma_band_label(None, SIGMA_LEVELS[0]),
+            "share": float(np.count_nonzero(valid_residuals < lower_edge) / total * 100.0),
+        }
+    )
     for lower_level, upper_level in zip(SIGMA_LEVELS[:-1], SIGMA_LEVELS[1:]):
         lower_offset = sigma_offsets[lower_level]
         upper_offset = sigma_offsets[upper_level]
-        if upper_level == SIGMA_LEVELS[-1]:
-            count = np.count_nonzero(
-                (valid_residuals >= lower_offset) & (valid_residuals <= upper_offset)
-            )
-        else:
-            count = np.count_nonzero(
-                (valid_residuals >= lower_offset) & (valid_residuals < upper_offset)
-            )
+        count = np.count_nonzero(
+            (valid_residuals >= lower_offset) & (valid_residuals < upper_offset)
+        )
         band_shares.append(
             {
                 "lower_level": lower_level,
                 "upper_level": upper_level,
                 "label": f"{_format_sigma_level(lower_level)} to {_format_sigma_level(upper_level)}",
+                "compact_label": _format_compact_sigma_band_label(lower_level, upper_level),
                 "share": float(count / total * 100.0),
             }
         )
+    band_shares.append(
+        {
+            "lower_level": SIGMA_LEVELS[-1],
+            "upper_level": None,
+            "label": f"> {_format_sigma_level(SIGMA_LEVELS[-1])}",
+            "compact_label": _format_compact_sigma_band_label(SIGMA_LEVELS[-1], None),
+            "share": float(np.count_nonzero(valid_residuals >= upper_edge) / total * 100.0),
+        }
+    )
     return band_shares
 
 
@@ -97,7 +145,7 @@ def _render_sigma_band_chart(band_shares):
             "<div class='sigma-bar-track'>"
             f"<div class='sigma-bar-fill' style='height:{(float(band['share']) / scale_max) * 100.0:.1f}%;'></div>"
             "</div>"
-            f"<div class='sigma-bar-label'>{band['label']}</div>"
+            f"<div class='sigma-bar-label' title='{band['label']}'>{band.get('compact_label', band['label'])}</div>"
             "</div>"
         )
         for band in band_shares

@@ -966,7 +966,6 @@ def fancy_control(
     auto_fit_label="AF",
     show_buttons=True,
 ):
-    has_auto_fit = on_auto_fit is not None and show_buttons
     if not show_buttons:
         step_text = f"{step:.10f}".rstrip("0")
         precision = len(step_text.split(".")[1]) if "." in step_text else 0
@@ -994,10 +993,6 @@ def fancy_control(
             on_change=on_slider_change,
         )
 
-    if has_auto_fit:
-        c1, c2, c3, c4 = st.columns([1, 2.5, 1, 1])
-    else:
-        c1, c2, c3 = st.columns([1, 2.5, 1])
     step_text = f"{step:.10f}".rstrip("0")
     precision = len(step_text.split(".")[1]) if "." in step_text else 0
     display_format = f"%.{precision}f"
@@ -1008,36 +1003,20 @@ def fancy_control(
         current_value = min_v
     st.session_state[key] = round(min(max_v, max(min_v, current_value)), precision)
 
-    def on_minus():
-        new_val = st.session_state[key] - step
-        st.session_state[key] = round(max(min_v, new_val), precision)
-        if on_manual_change is not None:
-            on_manual_change()
-
-    def on_plus():
-        new_val = st.session_state[key] + step
-        st.session_state[key] = round(min(max_v, new_val), precision)
-        if on_manual_change is not None:
-            on_manual_change()
-
     def on_slider_change():
         if on_manual_change is not None:
             on_manual_change()
 
-    minus_clicked = c1.button("➖", key=f"{key}_m", disabled=disabled)
-    plus_clicked = c3.button("➕", key=f"{key}_p", disabled=disabled)
-    auto_fit_clicked = (
-        c4.button(auto_fit_label, key=f"{key}_af", disabled=disabled) if has_auto_fit else False
-    )
+    if on_auto_fit is not None:
+        input_col, fit_col = st.columns([3.2, 0.9])
+    else:
+        input_col, fit_col = st, None
 
-    if minus_clicked:
-        on_minus()
-    if plus_clicked:
-        on_plus()
-    if auto_fit_clicked and on_auto_fit is not None:
-        on_auto_fit()
+    if fit_col is not None:
+        if fit_col.button(auto_fit_label, key=f"{key}_af", disabled=disabled):
+            on_auto_fit()
 
-    return c2.number_input(
+    value = input_col.number_input(
         key,
         min_value=min_v,
         max_value=max_v,
@@ -1048,3 +1027,5 @@ def fancy_control(
         disabled=disabled,
         on_change=on_slider_change,
     )
+
+    return value

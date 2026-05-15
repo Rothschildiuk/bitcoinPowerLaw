@@ -240,6 +240,7 @@ def render_main_model_chart(
                 mode="lines",
                 name=main_series_label,
                 line=dict(color=pl_btc_color, width=1.5),
+                legendrank=10,
                 customdata=df_display.index.strftime("%d.%m.%Y"),
                 hovertemplate=btc_hover,
             )
@@ -264,7 +265,7 @@ def render_main_model_chart(
                 )
             )
 
-        def add_legend_item(name, line, legendgroup, visible=True):
+        def add_legend_item(name, line, legendgroup, visible=True, legendrank=None):
             fig.add_trace(
                 go.Scatter(
                     x=[None],
@@ -273,6 +274,7 @@ def render_main_model_chart(
                     line=line,
                     name=name,
                     legendgroup=legendgroup,
+                    legendrank=legendrank,
                     visible=visible,
                     hoverinfo="skip",
                     showlegend=True,
@@ -298,7 +300,6 @@ def render_main_model_chart(
             p97_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_p2",
-            visible="legendonly",
         )
         add_model_line(
             optional_sigma_series[1.5],
@@ -312,7 +313,6 @@ def render_main_model_chart(
             p83_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_p1",
-            visible="legendonly",
         )
         add_model_line(
             optional_sigma_series[0.5],
@@ -335,6 +335,7 @@ def render_main_model_chart(
                 "Peak PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "peak_powerlaw",
+                visible="legendonly",
             )
             peak_days = np.asarray(peak_overlay["peak_days"], dtype=float)
             peak_x = (
@@ -354,7 +355,10 @@ def render_main_model_chart(
                         line=dict(color="#fff7ed", width=1.4),
                     ),
                     name="Peak fit points",
-                    legendgroup="peak_powerlaw",
+                    legendgroup="peak_fit_points",
+                    legendrank=31,
+                    visible="legendonly",
+                    showlegend=True,
                     customdata=[
                         (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
                         for day in peak_days
@@ -374,6 +378,7 @@ def render_main_model_chart(
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "trough_powerlaw",
+                visible="legendonly",
             )
             trough_days = np.asarray(trough_overlay["trough_days"], dtype=float)
             trough_x = (
@@ -393,7 +398,10 @@ def render_main_model_chart(
                         line=dict(color="#fff7ed", width=1.4),
                     ),
                     name="Trough fit points",
-                    legendgroup="trough_powerlaw",
+                    legendgroup="trough_fit_points",
+                    legendrank=41,
+                    visible="legendonly",
+                    showlegend=True,
                     customdata=[
                         (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
                         for day in trough_days
@@ -417,7 +425,6 @@ def render_main_model_chart(
             p16_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_m1",
-            visible="legendonly",
         )
         add_model_line(
             optional_sigma_series[-1.5],
@@ -431,72 +438,80 @@ def render_main_model_chart(
             p2_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_m2",
-            visible="legendonly",
         )
         add_legend_item(
             p2_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_m2",
-            visible="legendonly",
+            legendrank=100,
         )
         add_legend_item(
             _format_sigma_line_name(-1.5),
             _optional_sigma_line_style(-1.5),
             "sigma_m1_5",
             visible="legendonly",
+            legendrank=110,
         )
         add_legend_item(
             p16_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_m1",
-            visible="legendonly",
+            legendrank=120,
         )
         add_legend_item(
             _format_sigma_line_name(-0.5),
             _optional_sigma_line_style(-0.5),
             "sigma_m0_5",
             visible="legendonly",
+            legendrank=130,
         )
         add_legend_item(
             "Power regression",
             dict(color="#f0b90b", width=1.8),
             "power_regression",
+            legendrank=20,
         )
         if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
             add_legend_item(
                 "Peak PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "peak_powerlaw",
+                visible="legendonly",
+                legendrank=30,
             )
         if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
             add_legend_item(
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
                 "trough_powerlaw",
+                visible="legendonly",
+                legendrank=40,
             )
         add_legend_item(
             _format_sigma_line_name(0.5),
             _optional_sigma_line_style(0.5),
             "sigma_p0_5",
             visible="legendonly",
+            legendrank=140,
         )
         add_legend_item(
             p83_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
             "sigma_p1",
-            visible="legendonly",
+            legendrank=150,
         )
         add_legend_item(
             _format_sigma_line_name(1.5),
             _optional_sigma_line_style(1.5),
             "sigma_p1_5",
             visible="legendonly",
+            legendrank=160,
         )
         add_legend_item(
             p97_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
             "sigma_p2",
-            visible="legendonly",
+            legendrank=170,
         )
         if show_halving_lines:
             for halving_date in HALVING_DATES:
@@ -686,17 +701,19 @@ def render_main_model_chart(
 
     fig.update_layout(
         height=600,
-        margin=dict(t=30, b=10, l=50, r=20),
+        margin=dict(t=86, b=10, l=50, r=20),
         template=pl_template,
         font=dict(color=pl_text_color),
         legend=dict(
             orientation="h",
-            y=1.02,
-            x=0.5,
-            xanchor="center",
-            font=dict(size=14, color=pl_legend_color),
+            y=1.0,
+            yanchor="top",
+            x=0,
+            xanchor="left",
+            font=dict(size=11, color=pl_legend_color),
             bgcolor="rgba(0,0,0,0)",
             groupclick="togglegroup",
+            traceorder="normal",
         ),
         paper_bgcolor=pl_bg_color,
         plot_bgcolor=pl_bg_color,
