@@ -473,9 +473,12 @@ def calculate_monthly_buy_portfolio_values(
     ):
         return total_btc, fair_price_arr * total_btc, invested_capital
 
-    purchase_start = pd.Timestamp(purchase_anchor_day).to_period("M").to_timestamp()
-    if purchase_start < pd.Timestamp(purchase_anchor_day).normalize():
-        purchase_start += pd.offsets.MonthBegin(1)
+    anchor_date = pd.Timestamp(purchase_anchor_day).normalize()
+    current_month_start = anchor_date.to_period("M").to_timestamp()
+    cash_flow_start = current_month_start
+    if cash_flow_start < anchor_date:
+        cash_flow_start += pd.offsets.MonthBegin(1)
+    purchase_start = current_month_start if monthly_mom_change_ratio != 0.0 else cash_flow_start
 
     purchase_end = pd.Timestamp(projection_dates.max()).normalize()
     purchase_dates = pd.date_range(start=purchase_start, end=purchase_end, freq="MS")
@@ -512,6 +515,11 @@ def calculate_monthly_buy_portfolio_values(
     running_btc = float(initial_btc_amount)
     for index, purchase_price in enumerate(valid_purchase_prices):
         mom_change_cash_flow = 0.0
+        scheduled_cash_flow = (
+            monthly_cash_flow
+            if pd.Timestamp(valid_purchase_dates[index]) >= cash_flow_start
+            else 0.0
+        )
         previous_purchase_price = float(valid_previous_purchase_prices[index])
         if np.isfinite(previous_purchase_price) and previous_purchase_price > 0.0:
             current_position_mom_change = (float(purchase_price) - previous_purchase_price) * float(
@@ -521,7 +529,7 @@ def calculate_monthly_buy_portfolio_values(
                 max(current_position_mom_change, 0.0) * monthly_mom_change_ratio
             )
 
-        cash_flow = monthly_cash_flow + mom_change_cash_flow
+        cash_flow = scheduled_cash_flow + mom_change_cash_flow
         if cash_flow < 0.0:
             sell_btc = min(running_btc, abs(cash_flow) / float(purchase_price))
             purchased_btc[index] = -sell_btc
@@ -716,8 +724,8 @@ def build_portfolio_view_model(
     table_df = table_df.rename(
         columns={
             "FairPriceDisplay": f"Fair Price ({currency_unit})",
-            "PortfolioDisplay": f"Portfolio ({currency_unit})",
-            "DcaPortfolioDisplay": f"Portfolio + monthly cash flow ({currency_unit})",
+            "PortfolioDisplay": f"Portfolio if not selling ({currency_unit})",
+            "DcaPortfolioDisplay": f"Remaining BTC value ({currency_unit})",
             "DcaPeriodCashFlowDisplay": period_cash_flow_label,
             "DcaInvestedCapitalDisplay": f"Net cash flow ({currency_unit})",
             "DcaBTCDisplay": "BTC after monthly cash flow",
@@ -728,12 +736,12 @@ def build_portfolio_view_model(
     display_columns = [
         "Date",
         f"Fair Price ({currency_unit})",
-        f"Portfolio ({currency_unit})",
+        f"Portfolio if not selling ({currency_unit})",
     ]
     if dca_enabled:
         display_columns.extend(
             [
-                f"Portfolio + monthly cash flow ({currency_unit})",
+                f"Remaining BTC value ({currency_unit})",
                 period_cash_flow_label,
                 f"Net cash flow ({currency_unit})",
                 "BTC after monthly cash flow",

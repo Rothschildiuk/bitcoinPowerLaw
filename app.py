@@ -233,12 +233,12 @@ def resolve_current_sigma_level(df_display, percentile_offsets):
 def style_portfolio_table(table_df, style_format, currency_unit, portfolio_view):
     column_colors = {
         f"Fair Price ({currency_unit})": "#f0b90b",
-        f"Portfolio ({currency_unit})": "#f0b90b",
+        f"Portfolio if not selling ({currency_unit})": "#f0b90b",
     }
     if portfolio_view.dca_enabled:
         column_colors.update(
             {
-                f"Portfolio + monthly cash flow ({currency_unit})": "#14b8a6",
+                f"Remaining BTC value ({currency_unit})": "#14b8a6",
                 portfolio_view.period_cash_flow_label: "#38bdf8",
                 f"Net cash flow ({currency_unit})": "#8b5cf6",
             }
@@ -504,7 +504,7 @@ def render_portfolio_view(
                 delta=f"{portfolio_view.total_growth_pct:+.1f}%",
             )
             g3.metric(
-                "With monthly cash flow",
+                "Remaining BTC value",
                 format_portfolio_money(portfolio_view.last_dca_value),
                 delta=format_portfolio_money(
                     portfolio_view.last_dca_value - portfolio_view.last_value
@@ -514,7 +514,7 @@ def render_portfolio_view(
                 f"Net cash flow by horizon: {format_portfolio_money(portfolio_view.last_dca_invested_capital)}"
             )
             st.caption(
-                "Monthly cash flow starts from the next calendar month and uses the current selected currency."
+                "Monthly buy/sell starts from the next calendar month. MoM sell compares the current month start with the previous month start."
             )
         else:
             g2.metric(
@@ -529,10 +529,10 @@ def render_portfolio_view(
                 x=portfolio_view.portfolio_display_df["Date"],
                 y=portfolio_view.portfolio_display_df["PortfolioDisplay"],
                 mode="lines+markers",
-                name="Portfolio by fair price",
+                name="Portfolio if not selling",
                 line=dict(color="#f0b90b", width=2),
                 hovertemplate=(
-                    "<b>%{x|%d.%m.%Y}</b><br>Portfolio: "
+                    "<b>%{x|%d.%m.%Y}</b><br>Portfolio if not selling: "
                     f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
                 ),
             )
@@ -550,15 +550,47 @@ def render_portfolio_view(
                 f"Portfolio scenario uses {settings.sigma_level:+g} sigma historical log-residual offset."
             )
         if portfolio_view.dca_enabled:
+            cumulative_withdrawals_display = portfolio_view.portfolio_display_df[
+                "DcaPeriodCashFlowDisplay"
+            ].cumsum()
+            portfolio_fig.add_trace(
+                go.Scatter(
+                    x=portfolio_view.portfolio_display_df["Date"],
+                    y=(
+                        portfolio_view.portfolio_display_df["DcaPortfolioDisplay"]
+                        + cumulative_withdrawals_display
+                    ),
+                    mode="lines+markers",
+                    name="Portfolio + cumulative withdrawals",
+                    line=dict(color="#8b5cf6", width=2, dash="dash"),
+                    hovertemplate=(
+                        "<b>%{x|%d.%m.%Y}</b><br>Portfolio + withdrawals: "
+                        f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                    ),
+                )
+            )
             portfolio_fig.add_trace(
                 go.Scatter(
                     x=portfolio_view.portfolio_display_df["Date"],
                     y=portfolio_view.portfolio_display_df["DcaPortfolioDisplay"],
                     mode="lines+markers",
-                    name="Portfolio with monthly cash flow",
+                    name="Remaining BTC value",
                     line=dict(color="#14b8a6", width=2),
                     hovertemplate=(
-                        "<b>%{x|%d.%m.%Y}</b><br>Portfolio + monthly cash flow: "
+                        "<b>%{x|%d.%m.%Y}</b><br>Remaining BTC value: "
+                        f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                    ),
+                )
+            )
+            portfolio_fig.add_trace(
+                go.Scatter(
+                    x=portfolio_view.portfolio_display_df["Date"],
+                    y=cumulative_withdrawals_display,
+                    mode="lines+markers",
+                    name="Cumulative withdrawals",
+                    line=dict(color="#f97316", width=2, dash="dot"),
+                    hovertemplate=(
+                        "<b>%{x|%d.%m.%Y}</b><br>Cumulative withdrawals: "
                         f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
                     ),
                 )
@@ -572,19 +604,6 @@ def render_portfolio_view(
                     line=dict(color="#38bdf8", width=2),
                     hovertemplate=(
                         f"<b>%{{x|%d.%m.%Y}}</b><br>{portfolio_view.period_cash_flow_label}: "
-                        f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
-                    ),
-                )
-            )
-            portfolio_fig.add_trace(
-                go.Scatter(
-                    x=portfolio_view.portfolio_display_df["Date"],
-                    y=portfolio_view.portfolio_display_df["DcaInvestedCapitalDisplay"],
-                    mode="lines+markers",
-                    name="Cumulative net cash flow",
-                    line=dict(color="#8b5cf6", width=2, dash="dash"),
-                    hovertemplate=(
-                        "<b>%{x|%d.%m.%Y}</b><br>Net cash flow: "
                         f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
                     ),
                 )
@@ -622,12 +641,12 @@ def render_portfolio_view(
         st.markdown(f"#### {portfolio_view.table_title}")
         style_format = {
             f"Fair Price ({currency_unit})": money_fmt,
-            f"Portfolio ({currency_unit})": money_fmt,
+            f"Portfolio if not selling ({currency_unit})": money_fmt,
             portfolio_view.period_change_usd_label: money_fmt,
             portfolio_view.period_change_pct_label: "{:+.2f}%",
         }
         if portfolio_view.dca_enabled:
-            style_format[f"Portfolio + monthly cash flow ({currency_unit})"] = money_fmt
+            style_format[f"Remaining BTC value ({currency_unit})"] = money_fmt
             style_format[portfolio_view.period_cash_flow_label] = money_fmt
             style_format[f"Net cash flow ({currency_unit})"] = money_fmt
             style_format["BTC after monthly cash flow"] = "{:,.6f}"
@@ -652,12 +671,13 @@ def render_portfolio_view(
             pension_floor_label = f"current {pension_floor_sigma:+.2f}σ"
         else:
             pension_floor_label = f"{pension_floor_sigma:g}σ"
+        current_price_display = float(df_display["CloseDisplay"].iloc[-1])
+        current_model_log = projection_intercept_a + projection_slope_b * np.log10(
+            max(float(df_display["Days"].iloc[-1]), 1.0)
+        )
         pension_estimate = estimate_current_monthly_pension(
-            current_price=df_display["CloseDisplay"].iloc[-1],
-            current_model_log=(
-                projection_intercept_a
-                + projection_slope_b * np.log10(max(float(df_display["Days"].iloc[-1]), 1.0))
-            ),
+            current_price=current_price_display,
+            current_model_log=current_model_log,
             current_date=df_display.index[-1],
             current_gen_date=current_gen_date,
             intercept_a=projection_intercept_a,
@@ -708,16 +728,15 @@ def render_portfolio_view(
             pension_estimate.minimum_btc_to_sell_today * conservative_payout_ratio
         )
         today_btc_sell_delta_pct = pension_estimate.minimum_btc_sell_today_delta_pct
-        today_btc_sell_delta_label = (
-            f"more expensive than {pension_floor_label}"
-            if today_btc_sell_delta_pct >= 0.0
-            else f"cheaper than {pension_floor_label}"
-        )
-        today_btc_sell_delta_class = (
-            "pension-metric-note-positive"
-            if today_btc_sell_delta_pct >= 0.0
-            else "pension-metric-note-negative"
-        )
+        if abs(today_btc_sell_delta_pct) <= 1.0:
+            today_btc_sell_delta_label = f"near {pension_floor_label}"
+            today_btc_sell_delta_class = "pension-metric-note-neutral"
+        elif today_btc_sell_delta_pct > 0.0:
+            today_btc_sell_delta_label = f"more expensive than {pension_floor_label}"
+            today_btc_sell_delta_class = "pension-metric-note-positive"
+        else:
+            today_btc_sell_delta_label = f"cheaper than {pension_floor_label}"
+            today_btc_sell_delta_class = "pension-metric-note-negative"
         st.markdown(
             (
                 "<div class='pension-metric-grid'>"
@@ -740,6 +759,79 @@ def render_portfolio_view(
                 f"({abs(today_btc_sell_delta_pct):.1f}% {today_btc_sell_delta_label})"
                 "</div>"
                 "</div>"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+        sigma_table_levels = [
+            ("Current σ", None),
+            ("-2σ", -2.0),
+            ("-1σ", -1.0),
+            ("0σ", 0.0),
+            ("+1σ", 1.0),
+            ("+2σ", 2.0),
+        ]
+        sigma_scenario_levels = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
+        sigma_scenario_offsets = np.array(
+            [
+                percentile_offsets[0],
+                percentile_offsets[1],
+                0.0,
+                percentile_offsets[2],
+                percentile_offsets[3],
+            ],
+            dtype=float,
+        )
+        pension_floor_offset = float(
+            np.interp(pension_floor_sigma, sigma_scenario_levels, sigma_scenario_offsets)
+        )
+        sigma_table_rows = []
+        for sigma_label, sigma_level in sigma_table_levels:
+            if sigma_level is None:
+                sigma_price = current_price_display
+                sigma_next_price = pension_estimate.next_month_price
+                sigma_diff_pct = 0.0
+                sigma_label = f"Current σ ({pension_estimate.current_sigma_level:+.2f}σ)"
+            else:
+                sigma_offset = float(
+                    np.interp(sigma_level, sigma_scenario_levels, sigma_scenario_offsets)
+                )
+                sigma_price = float(np.power(10.0, current_model_log + sigma_offset))
+                sigma_next_price = float(
+                    pension_estimate.next_month_floor_price
+                    * np.power(10.0, sigma_offset - pension_floor_offset)
+                )
+                sigma_diff_pct = (
+                    ((current_price_display / sigma_price) - 1.0) * 100.0
+                    if sigma_price > 0.0
+                    else 0.0
+                )
+            sigma_monthly_pension = (
+                max(0.0, sigma_next_price - sigma_price)
+                * max(float(settings.btc_amount), 0.0)
+                * conservative_payout_ratio
+            )
+            if abs(sigma_diff_pct) <= 1.0:
+                sigma_diff_class = "pension-sigma-diff-neutral"
+            elif sigma_diff_pct > 0.0:
+                sigma_diff_class = "pension-sigma-diff-positive"
+            else:
+                sigma_diff_class = "pension-sigma-diff-negative"
+            sigma_table_rows.append(
+                "<tr>"
+                f"<td>{sigma_label}</td>"
+                f"<td>{format_portfolio_money(sigma_price)}</td>"
+                f"<td><span class='pension-sigma-diff {sigma_diff_class}'>{format_portfolio_money(sigma_monthly_pension)}</span></td>"
+                f"<td><span class='pension-sigma-diff {sigma_diff_class}'>{sigma_diff_pct:+.1f}%</span></td>"
+                "</tr>"
+            )
+        st.markdown(
+            (
+                "<div class='pension-sigma-table-wrap'>"
+                "<table class='pension-sigma-table'>"
+                "<thead><tr><th>Level</th><th>Today price</th><th>Monthly pension</th><th>Current price diff</th></tr></thead>"
+                f"<tbody>{''.join(sigma_table_rows)}</tbody>"
+                "</table>"
                 "</div>"
             ),
             unsafe_allow_html=True,

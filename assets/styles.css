@@ -128,6 +128,78 @@ footer {visibility: hidden; display: none;}
     border-color: rgba(239, 68, 68, 0.24);
 }
 
+.pension-metric-note-neutral {
+    color: #facc15;
+    background: rgba(250, 204, 21, 0.14);
+    border-color: rgba(250, 204, 21, 0.26);
+}
+
+.pension-sigma-table-wrap {
+    overflow-x: auto;
+    margin: 4px 0 14px;
+}
+
+.pension-sigma-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: __C_TEXT_MAIN__;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.pension-sigma-table th,
+.pension-sigma-table td {
+    border-bottom: 1px solid rgba(155, 163, 175, 0.18);
+    padding: 10px 12px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.pension-sigma-table th:first-child,
+.pension-sigma-table td:first-child {
+    text-align: left;
+}
+
+.pension-sigma-table th {
+    color: __C_TEXT_VAL__;
+    font-size: 12px;
+    font-weight: 850;
+    background: rgba(155, 163, 175, 0.10);
+}
+
+.pension-sigma-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.pension-sigma-diff {
+    display: inline-flex;
+    min-width: 72px;
+    justify-content: center;
+    border: 1px solid;
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-weight: 850;
+}
+
+.pension-sigma-diff-positive {
+    color: #8df5a3;
+    background: rgba(34, 197, 94, 0.16);
+    border-color: rgba(34, 197, 94, 0.22);
+}
+
+.pension-sigma-diff-negative {
+    color: #ff8a8a;
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.24);
+}
+
+.pension-sigma-diff-neutral {
+    color: #facc15;
+    background: rgba(250, 204, 21, 0.14);
+    border-color: rgba(250, 204, 21, 0.26);
+}
+
 [data-testid="stMain"] [data-testid="stMetric"],
 [data-testid="stMain"] [data-testId="stMetric"] {
     background: linear-gradient(180deg, rgba(30, 34, 45, 0.96), rgba(25, 29, 39, 0.96));
