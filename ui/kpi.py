@@ -69,7 +69,9 @@ def _format_compact_sigma_band_label(lower_level, upper_level):
         return f"< {_format_compact_sigma_level(upper_level)}"
     if upper_level is None:
         return f"> {_format_compact_sigma_level(lower_level)}"
-    return f"{_format_compact_sigma_level(lower_level)}..{_format_compact_sigma_level(upper_level)}"
+    return (
+        f"{_format_compact_sigma_level(lower_level)}<br>{_format_compact_sigma_level(upper_level)}"
+    )
 
 
 def _resolve_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
@@ -78,8 +80,7 @@ def _resolve_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
     if not np.all(np.isfinite(scenario_offsets)):
         return None
     return {
-        level: float(np.interp(level, scenario_levels, scenario_offsets))
-        for level in SIGMA_LEVELS
+        level: float(np.interp(level, scenario_levels, scenario_offsets)) for level in SIGMA_LEVELS
     }
 
 
@@ -215,8 +216,6 @@ def render_model_kpis(
     if logperiodic_stats_rows or perrenod_stats_rows:
         from core.oscillator import render_logperiodic_regression_stats_table
 
-        render_logperiodic_regression_stats_table(
-            logperiodic_stats_rows, perrenod_stats_rows
-        )
+        render_logperiodic_regression_stats_table(logperiodic_stats_rows, perrenod_stats_rows)
 
     _render_sigma_band_chart(band_shares)

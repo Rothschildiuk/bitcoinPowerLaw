@@ -967,6 +967,7 @@ def build_currency_close_series(raw_df, selected_currency):
     return close_usd
 
 
+@st.cache_data(ttl=3600)
 def build_prepared_bitcoin_volatility_data(raw_df, rolling_window_days=30):
     close_series = pd.to_numeric(raw_df["Close"], errors="coerce").dropna()
     close_series = close_series[close_series > 0].sort_index()

@@ -1,5 +1,4 @@
 from pathlib import Path
-from functools import lru_cache
 
 import streamlit as st
 
@@ -33,7 +32,6 @@ def get_theme(_is_dark=True):
     return THEMES["dark"]
 
 
-@lru_cache(maxsize=1)
 def load_css_template(css_path):
     return Path(css_path).read_text(encoding="utf-8")
 

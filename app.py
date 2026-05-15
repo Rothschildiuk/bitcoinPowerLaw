@@ -196,12 +196,8 @@ def calculate_peak_powerlaw_overlay(
     sigma_threshold = abs(float(sigma_threshold))
     sigma_levels = [-2.0, -1.0, 0.0, 1.0, 2.0]
     sigma_offsets = [*percentile_offsets[:2], 0.0, *percentile_offsets[2:]]
-    lower_offset = float(
-        np.interp(-sigma_threshold, sigma_levels, sigma_offsets)
-    )
-    upper_offset = float(
-        np.interp(sigma_threshold, sigma_levels, sigma_offsets)
-    )
+    lower_offset = float(np.interp(-sigma_threshold, sigma_levels, sigma_offsets))
+    upper_offset = float(np.interp(sigma_threshold, sigma_levels, sigma_offsets))
     residuals = pd.to_numeric(display_df["Res"], errors="coerce").to_numpy(dtype=float)
     peak_overlay = power_law.fit_peak_powerlaw_envelope(
         display_df["AbsDays"].to_numpy(dtype=float),
@@ -339,6 +335,15 @@ def prepare_portfolio_projection(
     )
 
 
+@st.cache_data(ttl=3600)
+def prepare_bitcoin_network_simulation(base_df, seed, resolution_days):
+    return build_bitcoin_network_simulation(
+        base_df,
+        seed=int(seed),
+        resolution_days=float(resolution_days),
+    )
+
+
 def render_portfolio_view(
     df_display,
     current_gen_date,
@@ -400,9 +405,7 @@ def render_portfolio_view(
             percentile_offsets,
             st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0),
         )
-        selected_envelope = envelope_overlay.get(
-            "peak" if use_peak_powerlaw_scenario else "trough"
-        )
+        selected_envelope = envelope_overlay.get("peak" if use_peak_powerlaw_scenario else "trough")
         if selected_envelope is not None:
             projection_intercept_a = float(selected_envelope["intercept"])
             projection_slope_b = float(selected_envelope["slope"])
@@ -413,9 +416,11 @@ def render_portfolio_view(
     scenario_sigma_level = (
         resolve_current_sigma_level(df_display, percentile_offsets)
         if use_current_sigma_scenario
-        else 0.0
-        if use_peak_powerlaw_scenario or use_trough_powerlaw_scenario
-        else float(selected_sigma_level)
+        else (
+            0.0
+            if use_peak_powerlaw_scenario or use_trough_powerlaw_scenario
+            else float(selected_sigma_level)
+        )
     )
 
     settings = PortfolioSettings(
@@ -651,8 +656,7 @@ def render_portfolio_view(
             current_price=df_display["CloseDisplay"].iloc[-1],
             current_model_log=(
                 projection_intercept_a
-                + projection_slope_b
-                * np.log10(max(float(df_display["Days"].iloc[-1]), 1.0))
+                + projection_slope_b * np.log10(max(float(df_display["Days"].iloc[-1]), 1.0))
             ),
             current_date=df_display.index[-1],
             current_gen_date=current_gen_date,
@@ -927,7 +931,9 @@ def render_portfolio_view(
                 ),
             )
         )
-        total_strategy_value = result.backtest_df["StrategyValue"] - result.backtest_df["NetCashFlow"]
+        total_strategy_value = (
+            result.backtest_df["StrategyValue"] - result.backtest_df["NetCashFlow"]
+        )
         backtest_fig.add_trace(
             go.Scatter(
                 x=result.backtest_df["Date"],
@@ -1116,7 +1122,7 @@ raw_us_m2_df["LogClose"] = np.log10(raw_us_m2_df["Close"])
 raw_russian_m2_df = raw_russian_m2_df[raw_russian_m2_df["Close"] > 0].copy()
 raw_russian_m2_df["LogClose"] = np.log10(raw_russian_m2_df["Close"])
 raw_bitcoin_volatility_df = build_prepared_bitcoin_volatility_data(raw_df_usd)
-raw_bitcoin_network_simulation_df = build_bitcoin_network_simulation(
+raw_bitcoin_network_simulation_df = prepare_bitcoin_network_simulation(
     raw_df_usd,
     seed=int(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1)),
     resolution_days=float(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION, 0.00001)),
@@ -1326,10 +1332,12 @@ df_display["Fair"], _, fair_was_clipped = evaluate_powerlaw_values(
     0.0,
     1.0,
 )
-_, historical_powerlaw_slopes, _ = calculate_expanding_powerlaw_parameters(
-    df_display["LogD"].values,
-    df_display["LogClose"].values,
-)
+historical_powerlaw_slopes = np.array([], dtype=float)
+if mode == MODE_LOGPERIODIC:
+    _, historical_powerlaw_slopes, _ = calculate_expanding_powerlaw_parameters(
+        df_display["LogD"].values,
+        df_display["LogClose"].values,
+    )
 
 currency_prefix = active_model.currency_prefix
 currency_suffix = active_model.currency_suffix
@@ -1361,6 +1369,7 @@ if mode == MODE_LOGPERIODIC:
         current_r2 = 0.0
 
 p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
+residual_sigma_log = calculate_residual_sigma_log(df_display)
 
 # --- OSCILLATOR CALC ---
 osc_settings = oscillator.OscillatorSettings(
@@ -1446,17 +1455,19 @@ m_x, m_dates, m_log_d, m_fair_usd, m_dates_str = prepare_model_grid(
 )
 m_fair_display = m_fair_usd
 
-m_osc_y = oscillator.build_oscillator_curve(
-    m_log_d,
-    osc_amp,
-    osc_omega,
-    osc_phi,
-    osc_settings.amp_factor_top,
-    osc_settings.amp_factor_bottom,
-    osc_settings.impulse_damping,
-    osc_reference_log_day,
-    osc_harmonic_coefficients,
-)
+m_osc_y = np.array([], dtype=float)
+if mode == MODE_LOGPERIODIC:
+    m_osc_y = oscillator.build_oscillator_curve(
+        m_log_d,
+        osc_amp,
+        osc_omega,
+        osc_phi,
+        osc_settings.amp_factor_top,
+        osc_settings.amp_factor_bottom,
+        osc_settings.impulse_damping,
+        osc_reference_log_day,
+        osc_harmonic_coefficients,
+    )
 m_osc_y_by_harmonic = {selected_harmonic_count: m_osc_y}
 if mode == MODE_LOGPERIODIC:
     m_osc_y_by_harmonic = {}
@@ -1554,7 +1565,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         m_osc_y=m_osc_y,
         m_osc_y_by_harmonic=m_osc_y_by_harmonic,
         perrenod_curve=perrenod_curve,
-        residual_sigma_log=calculate_residual_sigma_log(df_display),
+        residual_sigma_log=residual_sigma_log,
         p2_5=p2_5,
         p16_5=p16_5,
         p83_5=p83_5,

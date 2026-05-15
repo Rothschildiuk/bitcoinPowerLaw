@@ -1,9 +1,13 @@
 # AGENTS.md
 
+## Collaboration
+- Speak with the user in Ukrainian.
+
 ## Workflows
 - Setup: `python3 -m venv venv`, `make install`, `npm install`.
 - Discover commands: `make help`.
 - Run app: `make run`; macOS shortcut: `./run.command`.
+- Before running the app, check `http://localhost:8501/` because the user usually runs it there.
 - Format/check/test: `make format`, `make check`, `make test`.
 - JS tests: `npm test` is a placeholder and exits 0 with "No JS tests configured".
 - Refresh defaults: `make update-defaults`; preview with `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`.
