@@ -258,12 +258,24 @@ footer {visibility: hidden; display: none;}
     box-sizing: border-box; width: 100%; height: 100%; border-radius: 5px 5px 3px 3px; background: rgba(155, 163, 175, 0.12);
     display: flex; align-items: end; overflow: hidden; border: 1px solid rgba(155, 163, 175, 0.14);
 }
+.sigma-bar-item-current .sigma-bar-value {
+    color: #f0b90b;
+}
+.sigma-bar-item-current .sigma-bar-track {
+    border-color: rgba(240, 185, 11, 0.95);
+    box-shadow: 0 0 0 1px rgba(240, 185, 11, 0.42), 0 0 14px rgba(240, 185, 11, 0.32);
+    background: rgba(240, 185, 11, 0.12);
+}
 .sigma-bar-fill {
     width: 100%; min-height: 2px; border-radius: 5px 5px 3px 3px; background: linear-gradient(180deg, #f0b90b 0%, #1199d6 100%);
 }
 .sigma-bar-label {
     align-self: start; max-width: 100%; color: __C_TEXT_MAIN__; font-size: 7px; font-weight: 750; line-height: 1.1; text-align: center; opacity: 0.92;
     white-space: normal; width: 100%; overflow: hidden; overflow-wrap: anywhere;
+}
+.sigma-bar-item-current .sigma-bar-label {
+    color: #f0b90b;
+    opacity: 1;
 }
 .lp-stats-panel {
     width: min(100%, 1520px);

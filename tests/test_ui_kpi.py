@@ -3,7 +3,11 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from ui.kpi import calculate_powerlaw_band_shares
+from ui.kpi import (
+    calculate_current_powerlaw_sigma_level,
+    calculate_powerlaw_band_shares,
+    _render_sigma_band_chart,
+)
 
 
 class TestUIKpi(unittest.TestCase):
@@ -113,6 +117,45 @@ class TestUIKpi(unittest.TestCase):
         )
 
         self.assertEqual([band["share"] for band in shares], [0.0] * 34)
+
+    def test_calculate_current_powerlaw_sigma_level_uses_latest_valid_residual(self):
+        df_display = pd.DataFrame({"Res": [-0.5, np.nan, 0.25]})
+
+        sigma_level = calculate_current_powerlaw_sigma_level(
+            df_display,
+            p2_5=-2.0,
+            p16_5=-1.0,
+            p83_5=1.0,
+            p97_5=2.0,
+        )
+
+        self.assertAlmostEqual(sigma_level, 0.25)
+
+    def test_render_sigma_band_chart_marks_current_band(self):
+        shares = calculate_powerlaw_band_shares(
+            pd.DataFrame({"Res": [-0.25, 0.25]}),
+            p2_5=-2.0,
+            p16_5=-1.0,
+            p83_5=1.0,
+            p97_5=2.0,
+        )
+        rendered = {}
+
+        def capture_markdown(html, unsafe_allow_html=False):
+            rendered["html"] = html
+            rendered["unsafe_allow_html"] = unsafe_allow_html
+
+        import ui.kpi
+
+        original_markdown = ui.kpi.st.markdown
+        ui.kpi.st.markdown = capture_markdown
+        try:
+            _render_sigma_band_chart(shares, current_sigma_level=0.25)
+        finally:
+            ui.kpi.st.markdown = original_markdown
+
+        self.assertTrue(rendered["unsafe_allow_html"])
+        self.assertEqual(rendered["html"].count("sigma-bar-item-current"), 1)
 
 
 if __name__ == "__main__":

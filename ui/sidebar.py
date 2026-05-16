@@ -84,7 +84,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     st.number_input(
         "BTC quantity",
         min_value=0.0,
-        value=float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)),
         step=0.0001,
         format="%.4f",
         key=KEY_PORTFOLIO_BTC_AMOUNT,
@@ -95,7 +94,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         st.markdown("**Monthly buy/sell amount**")
         st.number_input(
             "Monthly buy/sell amount",
-            value=int(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0)),
             step=10,
             format="%d",
             key=KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
@@ -111,7 +109,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             "Sell % of MoM Change",
             min_value=0.0,
             max_value=100.0,
-            value=sell_mom_pct,
             step=1.0,
             format="%.1f",
             key=KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
@@ -178,7 +175,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             "Envelope sigma",
             min_value=0.25,
             max_value=2.0,
-            value=float(st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0)),
             step=0.25,
             key=KEY_POWERLAW_ENVELOPE_SIGMA,
             label_visibility="collapsed",
@@ -287,7 +283,6 @@ def _render_bitcoin_network_simulation_controls():
         "Resolution (days)",
         min_value=0.00001,
         max_value=0.01,
-        value=float(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION, 0.00001)),
         step=0.00001,
         format="%.5f",
         key=KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
@@ -422,7 +417,6 @@ def render_sidebar_panel(
                 "Envelope sigma",
                 min_value=0.25,
                 max_value=2.0,
-                value=float(st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0)),
                 step=0.25,
                 key=KEY_POWERLAW_ENVELOPE_SIGMA,
                 label_visibility="collapsed",

@@ -1,7 +1,7 @@
 import numpy as np
 import streamlit as st
 
-from core.utils import evaluate_powerlaw_values
+from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_log_offset
 
 SIGMA_STEP = 0.125
 SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.0, 2.0 + SIGMA_STEP, SIGMA_STEP))
@@ -136,12 +136,45 @@ def calculate_powerlaw_band_shares(df_display, p2_5, p16_5, p83_5, p97_5):
     return band_shares
 
 
-def _render_sigma_band_chart(band_shares):
+def calculate_current_powerlaw_sigma_level(df_display, p2_5, p16_5, p83_5, p97_5):
+    residuals = np.asarray(df_display["Res"], dtype=float)
+    valid_residuals = residuals[np.isfinite(residuals)]
+    if valid_residuals.size == 0:
+        return None
+
+    percentile_offsets = (float(p2_5), float(p16_5), float(p83_5), float(p97_5))
+    if not np.all(np.isfinite(percentile_offsets)):
+        return None
+
+    return interpolate_sigma_level_from_log_offset(valid_residuals[-1], percentile_offsets)
+
+
+def _sigma_band_contains_level(band, sigma_level):
+    if sigma_level is None or not np.isfinite(float(sigma_level)):
+        return False
+
+    sigma_level = float(sigma_level)
+    lower_level = band["lower_level"]
+    upper_level = band["upper_level"]
+    if lower_level is None:
+        return sigma_level < float(upper_level)
+    if upper_level is None:
+        return sigma_level >= float(lower_level)
+    return float(lower_level) <= sigma_level < float(upper_level)
+
+
+def _render_sigma_band_chart(band_shares, current_sigma_level=None):
     max_share = max((float(band["share"]) for band in band_shares), default=0.0)
     scale_max = max(max_share, 1.0)
-    bars = "".join(
-        (
-            "<div class='sigma-bar-item'>"
+
+    def render_bar(band):
+        item_class = "sigma-bar-item"
+        aria_label = ""
+        if _sigma_band_contains_level(band, current_sigma_level):
+            item_class = "sigma-bar-item sigma-bar-item-current"
+            aria_label = " aria-label='Current sigma band'"
+        return (
+            f"<div class='{item_class}'{aria_label}>"
             f"<div class='sigma-bar-value'>{band['share']:.1f}%</div>"
             "<div class='sigma-bar-track'>"
             f"<div class='sigma-bar-fill' style='height:{(float(band['share']) / scale_max) * 100.0:.1f}%;'></div>"
@@ -149,7 +182,9 @@ def _render_sigma_band_chart(band_shares):
             f"<div class='sigma-bar-label' title='{band['label']}'>{band.get('compact_label', band['label'])}</div>"
             "</div>"
         )
-        for band in band_shares
+
+    bars = "".join(
+        render_bar(band) for band in band_shares
     )
     st.markdown(
         (
@@ -195,6 +230,9 @@ def render_model_kpis(
     pot_target = float(pot_target[0])
     pot = ((pot_target - l_p) / l_p) * 100
     band_shares = calculate_powerlaw_band_shares(df_display, p2_5, p16_5, p83_5, p97_5)
+    current_sigma_level = calculate_current_powerlaw_sigma_level(
+        df_display, p2_5, p16_5, p83_5, p97_5
+    )
 
     k1, k2, k3 = st.columns(3)
     _kpi_card(
@@ -218,4 +256,4 @@ def render_model_kpis(
 
         render_logperiodic_regression_stats_table(logperiodic_stats_rows, perrenod_stats_rows)
 
-    _render_sigma_band_chart(band_shares)
+    _render_sigma_band_chart(band_shares, current_sigma_level)
