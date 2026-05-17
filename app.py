@@ -9,6 +9,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
+    CURRENCY_RUB,
     CURRENCY_UAH,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
@@ -741,6 +742,7 @@ def render_portfolio_view(
         else:
             today_btc_sell_delta_label = f"cheaper than {pension_floor_label}"
             today_btc_sell_delta_class = "pension-metric-note-negative"
+        current_portfolio_value = current_price_display * max(float(settings.btc_amount), 0.0)
         st.markdown(
             (
                 "<div class='pension-metric-grid'>"
@@ -751,6 +753,13 @@ def render_portfolio_view(
                 f"style='border-color:{pension_estimate.withdrawal_rating_color};"
                 f"color:{pension_estimate.withdrawal_rating_color};'>"
                 f"{pension_estimate.withdrawal_rating}</div>"
+                "</div>"
+                "<div class='pension-metric-card'>"
+                "<div class='pension-metric-label'>Current portfolio</div>"
+                f"<div class='pension-metric-value'>{format_portfolio_money(current_portfolio_value)}</div>"
+                "<div class='pension-metric-note pension-metric-note-neutral'>"
+                f"{max(float(settings.btc_amount), 0.0):,.4f} BTC at today's price"
+                "</div>"
                 "</div>"
                 "<div class='pension-metric-card'>"
                 "<div class='pension-metric-label'>Conservative monthly pension</div>"
@@ -1225,7 +1234,13 @@ raw_bitcoin_network_simulation_df = prepare_bitcoin_network_simulation(
 
 # Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
 sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
-if sidebar_currency not in [CURRENCY_EURO, CURRENCY_DOLLAR, CURRENCY_UAH, CURRENCY_GOLD]:
+if sidebar_currency not in [
+    CURRENCY_EURO,
+    CURRENCY_DOLLAR,
+    CURRENCY_UAH,
+    CURRENCY_RUB,
+    CURRENCY_GOLD,
+]:
     sidebar_currency = CURRENCY_DOLLAR
 sidebar_price_close = build_currency_close_series(raw_df_usd, sidebar_currency)
 sidebar_price_close = sidebar_price_close[sidebar_price_close > 0]

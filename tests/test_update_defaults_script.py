@@ -2,7 +2,12 @@ import unittest
 from contextlib import ExitStack
 from unittest.mock import patch
 
-from core.constants import CURRENCY_UAH, POWERLAW_SERIES_BITCOIN_VOLATILITY, POWERLAW_SERIES_PRICE
+from core.constants import (
+    CURRENCY_RUB,
+    CURRENCY_UAH,
+    POWERLAW_SERIES_BITCOIN_VOLATILITY,
+    POWERLAW_SERIES_PRICE,
+)
 from scripts import update_powerlaw_defaults
 from scripts.update_powerlaw_defaults import DEFAULT_CASES, update_constants_content
 
@@ -20,6 +25,12 @@ class TestUpdateDefaultsScript(unittest.TestCase):
     def test_default_cases_include_uah_price_model(self):
         self.assertIn(
             (POWERLAW_SERIES_PRICE, CURRENCY_UAH, "DEFAULT_UAH_A", "DEFAULT_UAH_B"),
+            DEFAULT_CASES,
+        )
+
+    def test_default_cases_include_rub_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_RUB, "DEFAULT_RUB_A", "DEFAULT_RUB_B"),
             DEFAULT_CASES,
         )
 

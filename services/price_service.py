@@ -17,6 +17,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
+    CURRENCY_RUB,
     CURRENCY_UAH,
     GENESIS_DATE,
 )
@@ -284,7 +285,7 @@ def _validate_reference_frame(data_df):
     return (
         isinstance(data_df, pd.DataFrame)
         and len(data_df) >= 100
-        and {"EURUSD", "USDUAH", "XAUUSD"}.issubset(set(data_df.columns))
+        and {"EURUSD", "USDUAH", "USDRUB", "XAUUSD"}.issubset(set(data_df.columns))
     )
 
 
@@ -895,6 +896,9 @@ def load_reference_series(start_date, source="auto"):
     def fetch_reference_frame():
         eur_usd = _safe_download_close_series("EURUSD=X", start_date)
         usd_uah = _safe_download_close_series("UAH=X", start_date)
+        usd_rub = _safe_download_close_series("RUB=X", start_date)
+        if usd_rub.empty:
+            usd_rub = _safe_download_close_series("USDRUB=X", start_date)
         # GC=F is usually more stable than XAUUSD=X on hosted environments.
         xau_usd = _safe_download_close_series("GC=F", start_date)
         if xau_usd.empty:
@@ -904,6 +908,7 @@ def load_reference_series(start_date, source="auto"):
             [
                 eur_usd.rename("EURUSD"),
                 usd_uah.rename("USDUAH"),
+                usd_rub.rename("USDRUB"),
                 xau_usd.rename("XAUUSD"),
             ],
             axis=1,
@@ -938,10 +943,16 @@ def load_reference_series(start_date, source="auto"):
         if "USDUAH" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    usd_rub = (
+        pd.to_numeric(reference_df["USDRUB"], errors="coerce").dropna()
+        if "USDRUB" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     eur_usd.index = pd.to_datetime(eur_usd.index)
     usd_uah.index = pd.to_datetime(usd_uah.index)
+    usd_rub.index = pd.to_datetime(usd_rub.index)
     xau_usd.index = pd.to_datetime(xau_usd.index)
-    return eur_usd, usd_uah, xau_usd
+    return eur_usd, usd_uah, usd_rub, xau_usd
 
 
 def build_currency_close_series(raw_df, selected_currency):
@@ -950,7 +961,7 @@ def build_currency_close_series(raw_df, selected_currency):
         return close_usd
 
     start_date = str(raw_df.index.min().date())
-    eur_usd, usd_uah, xau_usd = load_reference_series(start_date)
+    eur_usd, usd_uah, usd_rub, xau_usd = load_reference_series(start_date)
 
     if selected_currency == CURRENCY_EURO and not eur_usd.empty:
         eur_usd_aligned = eur_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
@@ -959,6 +970,10 @@ def build_currency_close_series(raw_df, selected_currency):
     if selected_currency == CURRENCY_UAH and not usd_uah.empty:
         usd_uah_aligned = usd_uah.reindex(close_usd.index).interpolate("time").ffill().bfill()
         return close_usd * usd_uah_aligned
+
+    if selected_currency == CURRENCY_RUB and not usd_rub.empty:
+        usd_rub_aligned = usd_rub.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        return close_usd * usd_rub_aligned
 
     if selected_currency == CURRENCY_GOLD and not xau_usd.empty:
         xau_usd_aligned = xau_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()

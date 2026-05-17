@@ -3,6 +3,7 @@ import unittest
 from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
+    CURRENCY_RUB,
     CURRENCY_UAH,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
@@ -172,6 +173,18 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(uah_config.currency_decimals, 0)
         self.assertEqual(uah_config.target_series_unit, CURRENCY_UAH)
         self.assertTrue(uah_config.supports_currency_selector)
+
+        rub_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_RUB,
+        )
+
+        self.assertEqual(rub_config.currency_prefix, "₽")
+        self.assertEqual(rub_config.currency_decimals, 0)
+        self.assertEqual(rub_config.target_series_unit, CURRENCY_RUB)
+        self.assertTrue(rub_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(

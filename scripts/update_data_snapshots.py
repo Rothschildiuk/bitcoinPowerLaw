@@ -55,11 +55,12 @@ def _build_snapshot_jobs():
 
 
 def _build_reference_snapshot():
-    eur_usd, usd_uah, xau_usd = load_reference_series("2010-01-01", source="live")
+    eur_usd, usd_uah, usd_rub, xau_usd = load_reference_series("2010-01-01", source="live")
     return (
         eur_usd.rename("EURUSD")
         .to_frame()
         .join(usd_uah.rename("USDUAH"), how="outer")
+        .join(usd_rub.rename("USDRUB"), how="outer")
         .join(xau_usd.rename("XAUUSD"), how="outer")
         .sort_index()
     )
