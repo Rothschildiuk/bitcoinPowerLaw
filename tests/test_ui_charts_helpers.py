@@ -422,6 +422,85 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(len(locked_dsi_traces), 3)
         self.assertTrue(all(trace.visible == "legendonly" for trace in locked_dsi_traces))
 
+    def test_logperiodic_bitcoin_residual_overlay_is_available_from_legend(self):
+        dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
+        days = np.array([4000.0, 4001.0, 4002.0])
+        df_display = pd.DataFrame(
+            {
+                "AbsDays": days,
+                "Days": days,
+                "CloseDisplay": [1.0, 2.0, 3.0],
+                "Res": [0.1, 0.2, 0.3],
+            },
+            index=dates,
+        )
+        btc_overlay = pd.DataFrame(
+            {
+                "Days": days,
+                "ResidualSigma": [-0.5, 0.0, 0.5],
+            },
+            index=dates,
+        )
+        captured = {}
+
+        def capture_plotly_chart(fig, **kwargs):
+            captured["fig"] = fig
+
+        with patch("ui.charts.st.plotly_chart", side_effect=capture_plotly_chart):
+            render_main_model_chart(
+                mode=MODE_LOGPERIODIC,
+                time_scale=TIME_LOG,
+                price_scale=TIME_LOG,
+                df_display=df_display,
+                current_gen_date=pd.Timestamp("2009-01-03"),
+                view_max=5000.0,
+                plot_x_model=days,
+                plot_x_main=days,
+                plot_x_osc=days,
+                m_log_d=np.log10(days),
+                m_dates=dates,
+                m_dates_str=np.array(["01.01.2020", "02.01.2020", "03.01.2020"]),
+                m_fair_display=np.array([1.0, 2.0, 3.0]),
+                historical_powerlaw_slopes=np.array([5.5, 5.6, 5.7]),
+                show_historical_powerlaw_slope=False,
+                m_osc_y=np.array([0.1, 0.2, 0.3]),
+                m_osc_y_by_harmonic={1: np.array([0.1, 0.2, 0.3])},
+                perrenod_curve=None,
+                residual_sigma_log=1.0,
+                p2_5=-0.2,
+                p16_5=-0.1,
+                p83_5=0.1,
+                p97_5=0.2,
+                peak_powerlaw_overlay=None,
+                osc_t1_age=1.0,
+                osc_lambda=2.0,
+                selected_harmonic_count=1,
+                pl_template="plotly_dark",
+                pl_bg_color="#000",
+                pl_grid_color="#333",
+                pl_btc_color="#fff",
+                pl_legend_color="#fff",
+                pl_text_color="#fff",
+                c_hover_bg="#111",
+                c_hover_text="#fff",
+                c_border="#333",
+                currency_prefix="$",
+                currency_suffix="",
+                currency_decimals=0,
+                target_series_name="Difficulty",
+                target_series_unit="",
+                show_halving_lines=False,
+                bitcoin_residual_overlay_df=btc_overlay,
+                chart_key="test-logperiodic-btc-residual",
+            )
+
+        btc_traces = [
+            trace for trace in captured["fig"].data if trace.name == "Bitcoin price residual σ"
+        ]
+        self.assertEqual(len(btc_traces), 1)
+        np.testing.assert_allclose(btc_traces[0].y, [-0.5, 0.0, 0.5])
+        self.assertEqual(btc_traces[0].visible, "legendonly")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -58,6 +58,9 @@ from core.series_registry import (
 )
 
 
+KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
+
+
 def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_max):
     portfolio_view_options = [
         PORTFOLIO_VIEW_ACCUMULATION,
@@ -80,15 +83,24 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         key=KEY_PORTFOLIO_STRATEGY_VIEW,
         label_visibility="collapsed",
     )
+    if float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)) == 0.0:
+        st.session_state[KEY_PORTFOLIO_BTC_AMOUNT] = 2.0
+    if KEY_PORTFOLIO_BTC_AMOUNT_INPUT not in st.session_state:
+        st.session_state[KEY_PORTFOLIO_BTC_AMOUNT_INPUT] = float(
+            st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)
+        )
+    if float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT_INPUT, 2.0)) == 0.0:
+        st.session_state[KEY_PORTFOLIO_BTC_AMOUNT_INPUT] = 2.0
     st.markdown("**BTC quantity**")
-    st.number_input(
+    btc_amount = st.number_input(
         "BTC quantity",
         min_value=0.0,
         step=0.0001,
         format="%.4f",
-        key=KEY_PORTFOLIO_BTC_AMOUNT,
+        key=KEY_PORTFOLIO_BTC_AMOUNT_INPUT,
         label_visibility="collapsed",
     )
+    st.session_state[KEY_PORTFOLIO_BTC_AMOUNT] = float(btc_amount)
 
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
         st.markdown("**Monthly buy/sell amount**")

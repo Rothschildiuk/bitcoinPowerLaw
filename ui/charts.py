@@ -183,8 +183,9 @@ def render_main_model_chart(
     target_series_name,
     target_series_unit,
     show_halving_lines,
-    osc_visible_start_abs_day=None,
     chart_key,
+    bitcoin_residual_overlay_df=None,
+    osc_visible_start_abs_day=None,
 ):
     fig = (
         make_subplots(specs=[[{"secondary_y": True}]]) if mode == MODE_LOGPERIODIC else go.Figure()
@@ -569,6 +570,32 @@ def render_main_model_chart(
             sigma_scale = 1.0
         osc_y_vals = df_display["Res"].to_numpy(dtype=float)[osc_mask] / sigma_scale
         osc_dates = df_display.index.strftime("%d.%m.%Y").to_numpy()[osc_mask]
+
+        if bitcoin_residual_overlay_df is not None and not bitcoin_residual_overlay_df.empty:
+            btc_residual_x = (
+                bitcoin_residual_overlay_df["Days"]
+                if is_log_time
+                else bitcoin_residual_overlay_df.index
+            )
+            btc_residual_values = pd.to_numeric(
+                bitcoin_residual_overlay_df["ResidualSigma"], errors="coerce"
+            )
+            btc_residual_mask = np.isfinite(btc_residual_values.to_numpy(dtype=float))
+            if np.any(btc_residual_mask):
+                fig.add_trace(
+                    go.Scatter(
+                        x=np.asarray(btc_residual_x)[btc_residual_mask],
+                        y=btc_residual_values.to_numpy(dtype=float)[btc_residual_mask],
+                        mode="lines",
+                        name="Bitcoin price residual σ",
+                        line=dict(color=pl_btc_color, width=1.4),
+                        customdata=bitcoin_residual_overlay_df.index.strftime("%d.%m.%Y").to_numpy()[
+                            btc_residual_mask
+                        ],
+                        hovertemplate="<b>%{customdata}</b><br>Bitcoin price residual: %{y:.2f}σ<extra></extra>",
+                        visible="legendonly",
+                    )
+                )
 
         fig.add_trace(
             go.Scatter(

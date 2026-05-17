@@ -143,6 +143,8 @@ def initialize_app_session_state():
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    if float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)) == 0.0:
+        st.session_state[KEY_PORTFOLIO_BTC_AMOUNT] = 2.0
     # Light theme is disabled by product decision; always force dark theme.
     st.session_state[KEY_THEME_MODE] = DEFAULT_THEME
 
@@ -1439,6 +1441,46 @@ currency_unit = active_model.currency_unit
 df_display["CloseDisplay"] = df_display["Close"]
 df_display["FairDisplay"] = df_display["Fair"]
 
+bitcoin_residual_overlay_df = None
+if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
+    price_model = get_active_model_config(
+        MODE_POWERLAW,
+        POWERLAW_SERIES_PRICE,
+        POWERLAW_SERIES_PRICE,
+        currency,
+    )
+    price_genesis_offset = (
+        int(price_model.model_origin_abs_day)
+        if price_model.model_origin_abs_day is not None
+        else session_genesis_offset
+    )
+    bitcoin_residual_overlay_df = raw_df_usd.copy()
+    bitcoin_residual_overlay_df["Close"] = build_currency_close_series(raw_df_usd, currency)
+    bitcoin_residual_overlay_df = bitcoin_residual_overlay_df[
+        (bitcoin_residual_overlay_df["AbsDays"] > price_genesis_offset)
+        & (bitcoin_residual_overlay_df["Close"] > 0)
+    ].copy()
+    bitcoin_residual_overlay_df["LogClose"] = np.log10(bitcoin_residual_overlay_df["Close"])
+    bitcoin_residual_overlay_df["Days"] = (
+        bitcoin_residual_overlay_df["AbsDays"] - price_genesis_offset
+    )
+    bitcoin_residual_overlay_df["LogD"] = np.log10(bitcoin_residual_overlay_df["Days"])
+    bitcoin_trend = resolve_trend_parameters(
+        bitcoin_residual_overlay_df["LogD"].values,
+        bitcoin_residual_overlay_df["LogClose"].values,
+        intercept_a=float(st.session_state.get(price_model.a_key, price_model.default_a)),
+        slope_b=float(st.session_state.get(price_model.b_key, price_model.default_b)),
+        active_mode=MODE_POWERLAW,
+    )
+    bitcoin_residual_overlay_df["Res"] = bitcoin_trend.residual_series
+    bitcoin_residual_sigma_log = calculate_residual_sigma_log(bitcoin_residual_overlay_df)
+    if bitcoin_residual_sigma_log > 0.0:
+        bitcoin_residual_overlay_df["ResidualSigma"] = (
+            bitcoin_residual_overlay_df["Res"] / bitcoin_residual_sigma_log
+        )
+    else:
+        bitcoin_residual_overlay_df = None
+
 if mode in [MODE_POWERLAW, MODE_PORTFOLIO] and powerlaw_parameters_are_unstable(
     current_r2, was_clipped=fair_was_clipped
 ):
@@ -1682,6 +1724,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         target_series_name=target_series_name,
         target_series_unit=target_series_unit,
         show_halving_lines=mode == MODE_POWERLAW and active_model.show_halving_lines,
+        bitcoin_residual_overlay_df=bitcoin_residual_overlay_df,
         osc_visible_start_abs_day=(
             active_model.oscillator_min_abs_day if mode == MODE_LOGPERIODIC else None
         ),
