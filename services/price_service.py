@@ -14,10 +14,12 @@ import streamlit as st
 import yfinance as yf
 
 from core.constants import (
+    CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_RUB,
+    CURRENCY_SILVER,
     CURRENCY_UAH,
     GENESIS_DATE,
 )
@@ -285,7 +287,9 @@ def _validate_reference_frame(data_df):
     return (
         isinstance(data_df, pd.DataFrame)
         and len(data_df) >= 100
-        and {"EURUSD", "USDUAH", "USDRUB", "XAUUSD"}.issubset(set(data_df.columns))
+        and {"EURUSD", "USDUAH", "USDRUB", "XAUUSD", "XAGUSD", "COPPERUSD"}.issubset(
+            set(data_df.columns)
+        )
     )
 
 
@@ -903,6 +907,8 @@ def load_reference_series(start_date, source="auto"):
         xau_usd = _safe_download_close_series("GC=F", start_date)
         if xau_usd.empty:
             xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
+        xag_usd = _safe_download_close_series("SI=F", start_date)
+        copper_usd = _safe_download_close_series("HG=F", start_date)
 
         reference_df = pd.concat(
             [
@@ -910,6 +916,8 @@ def load_reference_series(start_date, source="auto"):
                 usd_uah.rename("USDUAH"),
                 usd_rub.rename("USDRUB"),
                 xau_usd.rename("XAUUSD"),
+                xag_usd.rename("XAGUSD"),
+                copper_usd.rename("COPPERUSD"),
             ],
             axis=1,
         ).sort_index()
@@ -938,6 +946,16 @@ def load_reference_series(start_date, source="auto"):
         if "XAUUSD" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    xag_usd = (
+        pd.to_numeric(reference_df["XAGUSD"], errors="coerce").dropna()
+        if "XAGUSD" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    copper_usd = (
+        pd.to_numeric(reference_df["COPPERUSD"], errors="coerce").dropna()
+        if "COPPERUSD" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     usd_uah = (
         pd.to_numeric(reference_df["USDUAH"], errors="coerce").dropna()
         if "USDUAH" in reference_df.columns
@@ -952,7 +970,9 @@ def load_reference_series(start_date, source="auto"):
     usd_uah.index = pd.to_datetime(usd_uah.index)
     usd_rub.index = pd.to_datetime(usd_rub.index)
     xau_usd.index = pd.to_datetime(xau_usd.index)
-    return eur_usd, usd_uah, usd_rub, xau_usd
+    xag_usd.index = pd.to_datetime(xag_usd.index)
+    copper_usd.index = pd.to_datetime(copper_usd.index)
+    return eur_usd, usd_uah, usd_rub, xau_usd, xag_usd, copper_usd
 
 
 def build_currency_close_series(raw_df, selected_currency):
@@ -961,7 +981,7 @@ def build_currency_close_series(raw_df, selected_currency):
         return close_usd
 
     start_date = str(raw_df.index.min().date())
-    eur_usd, usd_uah, usd_rub, xau_usd = load_reference_series(start_date)
+    eur_usd, usd_uah, usd_rub, xau_usd, xag_usd, copper_usd = load_reference_series(start_date)
 
     if selected_currency == CURRENCY_EURO and not eur_usd.empty:
         eur_usd_aligned = eur_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
@@ -978,6 +998,16 @@ def build_currency_close_series(raw_df, selected_currency):
     if selected_currency == CURRENCY_GOLD and not xau_usd.empty:
         xau_usd_aligned = xau_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
         return close_usd / xau_usd_aligned
+
+    if selected_currency == CURRENCY_SILVER and not xag_usd.empty:
+        xag_usd_aligned = xag_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        return close_usd / xag_usd_aligned
+
+    if selected_currency == CURRENCY_COPPER and not copper_usd.empty:
+        copper_usd_aligned = (
+            copper_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        )
+        return close_usd / copper_usd_aligned
 
     return close_usd
 

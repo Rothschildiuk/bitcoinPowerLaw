@@ -1,9 +1,11 @@
 import unittest
 
 from core.constants import (
+    CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_RUB,
+    CURRENCY_SILVER,
     CURRENCY_UAH,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
@@ -185,6 +187,32 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(rub_config.currency_decimals, 0)
         self.assertEqual(rub_config.target_series_unit, CURRENCY_RUB)
         self.assertTrue(rub_config.supports_currency_selector)
+
+        silver_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_SILVER,
+        )
+
+        self.assertEqual(silver_config.currency_suffix, " oz")
+        self.assertEqual(silver_config.currency_decimals, 2)
+        self.assertEqual(silver_config.currency_unit, "XAG")
+        self.assertEqual(silver_config.target_series_unit, CURRENCY_SILVER)
+        self.assertTrue(silver_config.supports_currency_selector)
+
+        copper_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_COPPER,
+        )
+
+        self.assertEqual(copper_config.currency_suffix, " lb")
+        self.assertEqual(copper_config.currency_decimals, 2)
+        self.assertEqual(copper_config.currency_unit, "Copper lb")
+        self.assertEqual(copper_config.target_series_unit, CURRENCY_COPPER)
+        self.assertTrue(copper_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(

@@ -6,10 +6,12 @@ import streamlit as st
 from core import oscillator, power_law
 from core.constants import (
     APP_VERSION,
+    CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_RUB,
+    CURRENCY_SILVER,
     CURRENCY_UAH,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
@@ -139,6 +141,8 @@ def initialize_app_session_state():
         KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT: 0,
         KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT: 0.0,
         KEY_PORTFOLIO_PENSION_PAYOUT_PCT: 100.0,
+        KEY_PORTFOLIO_FORECAST_UNIT: "Month",
+        KEY_PORTFOLIO_FORECAST_HORIZON: DEFAULT_FORECAST_HORIZON,
         KEY_PORTFOLIO_STRATEGY_VIEW: PORTFOLIO_VIEW_ACCUMULATION,
     }
     for key, value in defaults.items():
@@ -440,7 +444,7 @@ def render_portfolio_view(
             if portfolio_strategy_view == PORTFOLIO_VIEW_ACCUMULATION
             else 0.0
         ),
-        forecast_unit=st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Year"),
+        forecast_unit=st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Month"),
         forecast_horizon=int(
             st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
         ),
@@ -1240,6 +1244,8 @@ if sidebar_currency not in [
     CURRENCY_UAH,
     CURRENCY_RUB,
     CURRENCY_GOLD,
+    CURRENCY_SILVER,
+    CURRENCY_COPPER,
 ]:
     sidebar_currency = CURRENCY_DOLLAR
 sidebar_price_close = build_currency_close_series(raw_df_usd, sidebar_currency)

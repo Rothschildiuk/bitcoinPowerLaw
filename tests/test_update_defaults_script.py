@@ -3,7 +3,9 @@ from contextlib import ExitStack
 from unittest.mock import patch
 
 from core.constants import (
+    CURRENCY_COPPER,
     CURRENCY_RUB,
+    CURRENCY_SILVER,
     CURRENCY_UAH,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_PRICE,
@@ -31,6 +33,18 @@ class TestUpdateDefaultsScript(unittest.TestCase):
     def test_default_cases_include_rub_price_model(self):
         self.assertIn(
             (POWERLAW_SERIES_PRICE, CURRENCY_RUB, "DEFAULT_RUB_A", "DEFAULT_RUB_B"),
+            DEFAULT_CASES,
+        )
+
+    def test_default_cases_include_silver_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_SILVER, "DEFAULT_SILVER_A", "DEFAULT_SILVER_B"),
+            DEFAULT_CASES,
+        )
+
+    def test_default_cases_include_copper_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_COPPER, "DEFAULT_COPPER_A", "DEFAULT_COPPER_B"),
             DEFAULT_CASES,
         )
 
