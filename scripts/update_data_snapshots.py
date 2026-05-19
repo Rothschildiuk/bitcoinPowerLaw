@@ -55,9 +55,16 @@ def _build_snapshot_jobs():
 
 
 def _build_reference_snapshot():
-    eur_usd, usd_uah, usd_rub, xau_usd, xag_usd, copper_usd = load_reference_series(
-        "2010-01-01", source="live"
-    )
+    (
+        eur_usd,
+        usd_uah,
+        usd_rub,
+        xau_usd,
+        xag_usd,
+        copper_usd,
+        iron_ore_usd,
+        aluminum_usd,
+    ) = load_reference_series("2010-01-01", source="live")
     return (
         eur_usd.rename("EURUSD")
         .to_frame()
@@ -66,6 +73,8 @@ def _build_reference_snapshot():
         .join(xau_usd.rename("XAUUSD"), how="outer")
         .join(xag_usd.rename("XAGUSD"), how="outer")
         .join(copper_usd.rename("COPPERUSD"), how="outer")
+        .join(iron_ore_usd.rename("IRONOREUSD"), how="outer")
+        .join(aluminum_usd.rename("ALUMINUMUSD"), how="outer")
         .sort_index()
     )
 

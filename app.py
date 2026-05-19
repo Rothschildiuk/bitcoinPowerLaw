@@ -6,10 +6,12 @@ import streamlit as st
 from core import oscillator, power_law
 from core.constants import (
     APP_VERSION,
+    CURRENCY_ALUMINUM,
     CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
+    CURRENCY_IRON,
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
@@ -1246,6 +1248,8 @@ if sidebar_currency not in [
     CURRENCY_GOLD,
     CURRENCY_SILVER,
     CURRENCY_COPPER,
+    CURRENCY_IRON,
+    CURRENCY_ALUMINUM,
 ]:
     sidebar_currency = CURRENCY_DOLLAR
 sidebar_price_close = build_currency_close_series(raw_df_usd, sidebar_currency)

@@ -11,7 +11,7 @@ Read this file only when changing loaders, cache behavior, snapshot refreshes, o
 ## Sources
 - Bitcoin price: GitHub CSV mirror; tail fallback order is `yfinance` `BTC-USD`, CoinGecko range API, then CoinCap history API.
 - Bitcoin volatility: derived from BTC/USD as 30-day rolling std of daily log returns times 100.
-- FX/metals references: `yfinance` symbols `EURUSD=X`, `UAH=X`, `RUB=X`, `GC=F`, `SI=F`, `HG=F`, fallback `XAUUSD=X`.
+- FX/metals references: `yfinance` symbols `EURUSD=X`, `UAH=X`, `RUB=X`, `GC=F`, `SI=F`, `HG=F`, `TIO=F`, `ALI=F`, fallback `XAUUSD=X`.
 - Filecoin/Monero/Litecoin/Dogecoin BTC pairs: CryptoCompare USD history converted through BTC/USD.
 - Miner revenue, Difficulty, Hashrate: Blockchain.com headerless CSV chart endpoints.
 - Lightning nodes/capacity: `bitcoinvisuals.com/static/data/data_daily.csv`.

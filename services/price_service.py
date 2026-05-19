@@ -14,10 +14,12 @@ import streamlit as st
 import yfinance as yf
 
 from core.constants import (
+    CURRENCY_ALUMINUM,
     CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_GOLD,
+    CURRENCY_IRON,
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
@@ -287,9 +289,16 @@ def _validate_reference_frame(data_df):
     return (
         isinstance(data_df, pd.DataFrame)
         and len(data_df) >= 100
-        and {"EURUSD", "USDUAH", "USDRUB", "XAUUSD", "XAGUSD", "COPPERUSD"}.issubset(
-            set(data_df.columns)
-        )
+        and {
+            "EURUSD",
+            "USDUAH",
+            "USDRUB",
+            "XAUUSD",
+            "XAGUSD",
+            "COPPERUSD",
+            "IRONOREUSD",
+            "ALUMINUMUSD",
+        }.issubset(set(data_df.columns))
     )
 
 
@@ -909,6 +918,8 @@ def load_reference_series(start_date, source="auto"):
             xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
         xag_usd = _safe_download_close_series("SI=F", start_date)
         copper_usd = _safe_download_close_series("HG=F", start_date)
+        iron_ore_usd = _safe_download_close_series("TIO=F", start_date)
+        aluminum_usd = _safe_download_close_series("ALI=F", start_date)
 
         reference_df = pd.concat(
             [
@@ -918,6 +929,8 @@ def load_reference_series(start_date, source="auto"):
                 xau_usd.rename("XAUUSD"),
                 xag_usd.rename("XAGUSD"),
                 copper_usd.rename("COPPERUSD"),
+                iron_ore_usd.rename("IRONOREUSD"),
+                aluminum_usd.rename("ALUMINUMUSD"),
             ],
             axis=1,
         ).sort_index()
@@ -956,6 +969,16 @@ def load_reference_series(start_date, source="auto"):
         if "COPPERUSD" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    iron_ore_usd = (
+        pd.to_numeric(reference_df["IRONOREUSD"], errors="coerce").dropna()
+        if "IRONOREUSD" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    aluminum_usd = (
+        pd.to_numeric(reference_df["ALUMINUMUSD"], errors="coerce").dropna()
+        if "ALUMINUMUSD" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     usd_uah = (
         pd.to_numeric(reference_df["USDUAH"], errors="coerce").dropna()
         if "USDUAH" in reference_df.columns
@@ -972,7 +995,18 @@ def load_reference_series(start_date, source="auto"):
     xau_usd.index = pd.to_datetime(xau_usd.index)
     xag_usd.index = pd.to_datetime(xag_usd.index)
     copper_usd.index = pd.to_datetime(copper_usd.index)
-    return eur_usd, usd_uah, usd_rub, xau_usd, xag_usd, copper_usd
+    iron_ore_usd.index = pd.to_datetime(iron_ore_usd.index)
+    aluminum_usd.index = pd.to_datetime(aluminum_usd.index)
+    return (
+        eur_usd,
+        usd_uah,
+        usd_rub,
+        xau_usd,
+        xag_usd,
+        copper_usd,
+        iron_ore_usd,
+        aluminum_usd,
+    )
 
 
 def build_currency_close_series(raw_df, selected_currency):
@@ -981,7 +1015,16 @@ def build_currency_close_series(raw_df, selected_currency):
         return close_usd
 
     start_date = str(raw_df.index.min().date())
-    eur_usd, usd_uah, usd_rub, xau_usd, xag_usd, copper_usd = load_reference_series(start_date)
+    (
+        eur_usd,
+        usd_uah,
+        usd_rub,
+        xau_usd,
+        xag_usd,
+        copper_usd,
+        iron_ore_usd,
+        aluminum_usd,
+    ) = load_reference_series(start_date)
 
     if selected_currency == CURRENCY_EURO and not eur_usd.empty:
         eur_usd_aligned = eur_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
@@ -1008,6 +1051,18 @@ def build_currency_close_series(raw_df, selected_currency):
             copper_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
         )
         return close_usd / copper_usd_aligned
+
+    if selected_currency == CURRENCY_IRON and not iron_ore_usd.empty:
+        iron_ore_usd_aligned = (
+            iron_ore_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        )
+        return close_usd / iron_ore_usd_aligned
+
+    if selected_currency == CURRENCY_ALUMINUM and not aluminum_usd.empty:
+        aluminum_usd_aligned = (
+            aluminum_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        )
+        return close_usd / aluminum_usd_aligned
 
     return close_usd
 

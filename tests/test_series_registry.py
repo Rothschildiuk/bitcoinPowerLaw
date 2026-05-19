@@ -1,9 +1,11 @@
 import unittest
 
 from core.constants import (
+    CURRENCY_ALUMINUM,
     CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
+    CURRENCY_IRON,
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
@@ -213,6 +215,32 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(copper_config.currency_unit, "Copper lb")
         self.assertEqual(copper_config.target_series_unit, CURRENCY_COPPER)
         self.assertTrue(copper_config.supports_currency_selector)
+
+        iron_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_IRON,
+        )
+
+        self.assertEqual(iron_config.currency_suffix, " t")
+        self.assertEqual(iron_config.currency_decimals, 2)
+        self.assertEqual(iron_config.currency_unit, "Iron ore tonne")
+        self.assertEqual(iron_config.target_series_unit, CURRENCY_IRON)
+        self.assertTrue(iron_config.supports_currency_selector)
+
+        aluminum_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_ALUMINUM,
+        )
+
+        self.assertEqual(aluminum_config.currency_suffix, " t")
+        self.assertEqual(aluminum_config.currency_decimals, 2)
+        self.assertEqual(aluminum_config.currency_unit, "Aluminum tonne")
+        self.assertEqual(aluminum_config.target_series_unit, CURRENCY_ALUMINUM)
+        self.assertTrue(aluminum_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(
