@@ -9,6 +9,7 @@ from core.constants import (
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
+    CURRENCY_US_HOUSING,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
     DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     FILECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
@@ -241,6 +242,20 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(aluminum_config.currency_unit, "Aluminum tonne")
         self.assertEqual(aluminum_config.target_series_unit, CURRENCY_ALUMINUM)
         self.assertTrue(aluminum_config.supports_currency_selector)
+
+        us_housing_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_US_HOUSING,
+        )
+
+        self.assertEqual(us_housing_config.currency_suffix, " index")
+        self.assertEqual(us_housing_config.currency_decimals, 2)
+        self.assertEqual(us_housing_config.currency_unit, "Case-Shiller index")
+        self.assertEqual(us_housing_config.target_series_unit, CURRENCY_US_HOUSING)
+        self.assertIsNotNone(us_housing_config.oscillator_defaults)
+        self.assertTrue(us_housing_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(

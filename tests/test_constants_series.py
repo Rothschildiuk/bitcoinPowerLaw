@@ -11,6 +11,7 @@ from core.constants import (
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
+    CURRENCY_US_HOUSING,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
@@ -41,6 +42,7 @@ class TestConstantsSeries(unittest.TestCase):
                 CURRENCY_COPPER,
                 CURRENCY_IRON,
                 CURRENCY_ALUMINUM,
+                CURRENCY_US_HOUSING,
             ],
         )
 

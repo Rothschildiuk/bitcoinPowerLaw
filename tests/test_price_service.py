@@ -47,6 +47,16 @@ class TestPriceService(unittest.TestCase):
         snapshot_df["LogClose"] = np.log10(snapshot_df["Close"])
         return snapshot_df
 
+    def _make_valid_reference_snapshot(self, last_date="2024-01-02"):
+        date_index = pd.date_range(end=pd.Timestamp(last_date), periods=120, freq="D")
+        return pd.DataFrame(
+            {
+                column: np.arange(len(date_index), dtype=float) + index + 1.0
+                for index, column in enumerate(price_service.REFERENCE_SERIES_COLUMNS)
+            },
+            index=date_index,
+        )
+
     def test_build_prepared_bitcoin_volatility_data_uses_daily_log_returns(self):
         date_index = pd.date_range("2024-01-01", periods=6, freq="D")
         close_values = [100.0, 110.0, 99.0, 118.8, 95.04, 123.552]
@@ -198,6 +208,42 @@ class TestPriceService(unittest.TestCase):
         )
 
         self.assertEqual(float(result.iloc[0]["Close"]), 42.0)
+
+    @patch("services.price_service.fetch_reference_series_frame")
+    def test_build_incremental_reference_series_snapshot_fetches_only_missing_tail(
+        self,
+        mock_fetch_reference_series_frame,
+    ):
+        snapshot_df = self._make_valid_reference_snapshot()
+        price_service.write_snapshot_dataframe("reference_series", snapshot_df)
+        tail_df = pd.DataFrame(
+            {
+                column: [1000.0 + index]
+                for index, column in enumerate(price_service.REFERENCE_SERIES_COLUMNS)
+            },
+            index=pd.to_datetime(["2024-01-03"]),
+        )
+        mock_fetch_reference_series_frame.return_value = tail_df
+
+        result = price_service.build_incremental_reference_series_snapshot()
+
+        mock_fetch_reference_series_frame.assert_called_once_with("2024-01-03")
+        self.assertEqual(result.index.max(), pd.Timestamp("2024-01-03"))
+        self.assertEqual(len(result), len(snapshot_df) + 1)
+        self.assertEqual(float(result.loc[pd.Timestamp("2024-01-03"), "EURUSD"]), 1000.0)
+
+    @patch("services.price_service.fetch_reference_series_frame")
+    def test_build_incremental_reference_series_snapshot_full_fetches_without_valid_snapshot(
+        self,
+        mock_fetch_reference_series_frame,
+    ):
+        full_df = self._make_valid_reference_snapshot()
+        mock_fetch_reference_series_frame.return_value = full_df
+
+        result = price_service.build_incremental_reference_series_snapshot()
+
+        mock_fetch_reference_series_frame.assert_called_once_with("2010-01-01")
+        self.assertTrue(result.equals(full_df))
 
     @patch("services.price_service.pd.read_csv")
     def test_load_prepared_price_data_live_source_bypasses_valid_snapshot(self, mock_read_csv):
@@ -452,6 +498,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
             usd_uah,
@@ -461,6 +508,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "EUR")
@@ -478,6 +526,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
             usd_uah,
@@ -487,6 +536,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "UAH")
@@ -504,6 +554,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
             usd_uah,
@@ -513,6 +564,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "RUB")
@@ -530,6 +582,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
             usd_uah,
@@ -539,6 +592,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "SILVER")
@@ -556,6 +610,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series([4.0, 5.0], index=idx)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
             usd_uah,
@@ -565,6 +620,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "COPPER")
@@ -582,6 +638,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series([100.0, 80.0], index=idx)
         aluminum_usd = pd.Series(dtype=float)
+        us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
             usd_uah,
@@ -591,6 +648,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "IRON")
@@ -608,6 +666,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series([2500.0, 3000.0], index=idx)
+        us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
             usd_uah,
@@ -617,10 +676,39 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "ALUMINUM")
         self.assertListEqual(result.round(6).tolist(), [0.04, 0.04])
+
+    @patch("services.price_service.load_reference_series")
+    def test_build_currency_close_series_for_us_housing(self, mock_load_reference_series):
+        idx = pd.to_datetime(["2024-01-01", "2024-02-01"])
+        raw_df = pd.DataFrame({"Close": [100.0, 120.0]}, index=idx)
+        eur_usd = pd.Series(dtype=float)
+        usd_uah = pd.Series(dtype=float)
+        usd_rub = pd.Series(dtype=float)
+        xau_usd = pd.Series(dtype=float)
+        xag_usd = pd.Series(dtype=float)
+        copper_usd = pd.Series(dtype=float)
+        iron_ore_usd = pd.Series(dtype=float)
+        aluminum_usd = pd.Series(dtype=float)
+        us_housing = pd.Series([250.0, 300.0], index=idx)
+        mock_load_reference_series.return_value = (
+            eur_usd,
+            usd_uah,
+            usd_rub,
+            xau_usd,
+            xag_usd,
+            copper_usd,
+            iron_ore_usd,
+            aluminum_usd,
+            us_housing,
+        )
+
+        result = price_service.build_currency_close_series(raw_df, "US_HOUSING")
+        self.assertListEqual(result.round(6).tolist(), [0.4, 0.4])
 
     @patch("services.price_service._safe_download_cryptocompare_histoday")
     @patch("services.price_service._safe_download_crypto_btc_via_usd")

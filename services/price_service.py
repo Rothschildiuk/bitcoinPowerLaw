@@ -23,6 +23,7 @@ from core.constants import (
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
+    CURRENCY_US_HOUSING,
     GENESIS_DATE,
 )
 
@@ -44,6 +45,7 @@ LIQUID_RESERVES_URL = "https://liquid.network/api/v1/liquid/reserves"
 LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month"
 LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
 FRED_M2SL_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL"
+FRED_US_HOUSING_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CSUSHPISA"
 CBR_MONETARY_AGGREGATES_XLSX_URL = (
     "https://www.cbr.ru/vfs/eng/statistics/credit_statistics/monetary_agg_e.xlsx"
 )
@@ -55,6 +57,17 @@ FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
 COINLORE_MONERO_START_DATE = "2014-05-21"
+REFERENCE_SERIES_COLUMNS = (
+    "EURUSD",
+    "USDUAH",
+    "USDRUB",
+    "XAUUSD",
+    "XAGUSD",
+    "COPPERUSD",
+    "IRONOREUSD",
+    "ALUMINUMUSD",
+    "USHOUSING",
+)
 COINLORE_CRYPTO_META = {
     "FIL": {"slug": "filecoin", "start_date": "2017-12-13"},
     "XMR": {"slug": "monero", "start_date": COINLORE_MONERO_START_DATE},
@@ -289,16 +302,7 @@ def _validate_reference_frame(data_df):
     return (
         isinstance(data_df, pd.DataFrame)
         and len(data_df) >= 100
-        and {
-            "EURUSD",
-            "USDUAH",
-            "USDRUB",
-            "XAUUSD",
-            "XAGUSD",
-            "COPPERUSD",
-            "IRONOREUSD",
-            "ALUMINUMUSD",
-        }.issubset(set(data_df.columns))
+        and set(REFERENCE_SERIES_COLUMNS).issubset(set(data_df.columns))
     )
 
 
@@ -559,6 +563,22 @@ def _fetch_fred_russian_m2_data(source_url=FRED_RUSSIAN_M2_CSV_URL):
     if prepared_df.empty:
         raise ValueError("FRED Russian M2 returned no usable rows.")
     return prepared_df
+
+
+def _fetch_fred_series(source_url, value_column_name):
+    fred_df = pd.read_csv(source_url)
+    if "observation_date" not in fred_df.columns or value_column_name not in fred_df.columns:
+        raise ValueError(f"FRED payload is missing required columns for {value_column_name}.")
+
+    values = pd.to_numeric(fred_df[value_column_name], errors="coerce")
+    prepared_df = pd.DataFrame({"Date": fred_df["observation_date"], "Close": values})
+    prepared_df["Date"] = pd.to_datetime(prepared_df["Date"], errors="coerce")
+    prepared_df = prepared_df.dropna(subset=["Date", "Close"])
+    prepared_df = prepared_df[prepared_df["Close"] > 0]
+    prepared_df = prepared_df.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+    if prepared_df.empty:
+        raise ValueError(f"FRED returned no usable rows for {value_column_name}.")
+    return prepared_df.set_index("Date")["Close"].astype(float)
 
 
 def _safe_download_close_series(symbol, start_date):
@@ -904,37 +924,72 @@ def _safe_download_btc_tail_from_coincap(start_date):
     return daily_tail.astype(float)
 
 
+def fetch_reference_series_frame(start_date):
+    eur_usd = _safe_download_close_series("EURUSD=X", start_date)
+    usd_uah = _safe_download_close_series("UAH=X", start_date)
+    usd_rub = _safe_download_close_series("RUB=X", start_date)
+    if usd_rub.empty:
+        usd_rub = _safe_download_close_series("USDRUB=X", start_date)
+    # GC=F is usually more stable than XAUUSD=X on hosted environments.
+    xau_usd = _safe_download_close_series("GC=F", start_date)
+    if xau_usd.empty:
+        xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
+    xag_usd = _safe_download_close_series("SI=F", start_date)
+    copper_usd = _safe_download_close_series("HG=F", start_date)
+    iron_ore_usd = _safe_download_close_series("TIO=F", start_date)
+    aluminum_usd = _safe_download_close_series("ALI=F", start_date)
+    us_housing = _fetch_fred_series(FRED_US_HOUSING_CSV_URL, "CSUSHPISA")
+    us_housing = us_housing[us_housing.index >= pd.Timestamp(start_date)]
+
+    return pd.concat(
+        [
+            eur_usd.rename("EURUSD"),
+            usd_uah.rename("USDUAH"),
+            usd_rub.rename("USDRUB"),
+            xau_usd.rename("XAUUSD"),
+            xag_usd.rename("XAGUSD"),
+            copper_usd.rename("COPPERUSD"),
+            iron_ore_usd.rename("IRONOREUSD"),
+            aluminum_usd.rename("ALUMINUMUSD"),
+            us_housing.rename("USHOUSING"),
+        ],
+        axis=1,
+    ).sort_index()
+
+
+def build_incremental_reference_series_snapshot(start_date="2010-01-01"):
+    snapshot_df = _read_snapshot_dataframe("reference_series")
+    if snapshot_df is None or not _validate_reference_frame(snapshot_df):
+        return fetch_reference_series_frame(start_date)
+
+    latest_snapshot_date = snapshot_df.index.max()
+    if pd.isna(latest_snapshot_date):
+        return fetch_reference_series_frame(start_date)
+
+    tail_start = pd.Timestamp(latest_snapshot_date).normalize() + pd.Timedelta(days=1)
+    today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    if tail_start > today:
+        return snapshot_df
+
+    try:
+        tail_df = fetch_reference_series_frame(tail_start.strftime("%Y-%m-%d"))
+    except Exception:
+        return snapshot_df
+
+    if tail_df is None or tail_df.empty:
+        return snapshot_df
+
+    merged_df = pd.concat([snapshot_df, tail_df])
+    merged_df = merged_df[~merged_df.index.duplicated(keep="last")].sort_index()
+    if _validate_reference_frame(merged_df):
+        return merged_df
+    return snapshot_df
+
+
 @st.cache_data(ttl=3600)
 def load_reference_series(start_date, source="auto"):
     def fetch_reference_frame():
-        eur_usd = _safe_download_close_series("EURUSD=X", start_date)
-        usd_uah = _safe_download_close_series("UAH=X", start_date)
-        usd_rub = _safe_download_close_series("RUB=X", start_date)
-        if usd_rub.empty:
-            usd_rub = _safe_download_close_series("USDRUB=X", start_date)
-        # GC=F is usually more stable than XAUUSD=X on hosted environments.
-        xau_usd = _safe_download_close_series("GC=F", start_date)
-        if xau_usd.empty:
-            xau_usd = _safe_download_close_series("XAUUSD=X", start_date)
-        xag_usd = _safe_download_close_series("SI=F", start_date)
-        copper_usd = _safe_download_close_series("HG=F", start_date)
-        iron_ore_usd = _safe_download_close_series("TIO=F", start_date)
-        aluminum_usd = _safe_download_close_series("ALI=F", start_date)
-
-        reference_df = pd.concat(
-            [
-                eur_usd.rename("EURUSD"),
-                usd_uah.rename("USDUAH"),
-                usd_rub.rename("USDRUB"),
-                xau_usd.rename("XAUUSD"),
-                xag_usd.rename("XAGUSD"),
-                copper_usd.rename("COPPERUSD"),
-                iron_ore_usd.rename("IRONOREUSD"),
-                aluminum_usd.rename("ALUMINUMUSD"),
-            ],
-            axis=1,
-        ).sort_index()
-        return reference_df
+        return fetch_reference_series_frame(start_date)
 
     reference_df = _load_snapshot_or_live(
         "reference_series",
@@ -979,6 +1034,11 @@ def load_reference_series(start_date, source="auto"):
         if "ALUMINUMUSD" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    us_housing = (
+        pd.to_numeric(reference_df["USHOUSING"], errors="coerce").dropna()
+        if "USHOUSING" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     usd_uah = (
         pd.to_numeric(reference_df["USDUAH"], errors="coerce").dropna()
         if "USDUAH" in reference_df.columns
@@ -997,6 +1057,7 @@ def load_reference_series(start_date, source="auto"):
     copper_usd.index = pd.to_datetime(copper_usd.index)
     iron_ore_usd.index = pd.to_datetime(iron_ore_usd.index)
     aluminum_usd.index = pd.to_datetime(aluminum_usd.index)
+    us_housing.index = pd.to_datetime(us_housing.index)
     return (
         eur_usd,
         usd_uah,
@@ -1006,6 +1067,7 @@ def load_reference_series(start_date, source="auto"):
         copper_usd,
         iron_ore_usd,
         aluminum_usd,
+        us_housing,
     )
 
 
@@ -1024,6 +1086,7 @@ def build_currency_close_series(raw_df, selected_currency):
         copper_usd,
         iron_ore_usd,
         aluminum_usd,
+        us_housing,
     ) = load_reference_series(start_date)
 
     if selected_currency == CURRENCY_EURO and not eur_usd.empty:
@@ -1047,9 +1110,7 @@ def build_currency_close_series(raw_df, selected_currency):
         return close_usd / xag_usd_aligned
 
     if selected_currency == CURRENCY_COPPER and not copper_usd.empty:
-        copper_usd_aligned = (
-            copper_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
-        )
+        copper_usd_aligned = copper_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
         return close_usd / copper_usd_aligned
 
     if selected_currency == CURRENCY_IRON and not iron_ore_usd.empty:
@@ -1063,6 +1124,10 @@ def build_currency_close_series(raw_df, selected_currency):
             aluminum_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
         )
         return close_usd / aluminum_usd_aligned
+
+    if selected_currency == CURRENCY_US_HOUSING and not us_housing.empty:
+        us_housing_aligned = us_housing.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        return close_usd / us_housing_aligned
 
     return close_usd
 

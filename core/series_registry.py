@@ -10,6 +10,7 @@ from core.constants import (
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
+    CURRENCY_US_HOUSING,
     DEFAULT_A,
     DEFAULT_B,
     DEFAULT_BITCOIN_VOLATILITY_A,
@@ -32,6 +33,8 @@ from core.constants import (
     DEFAULT_HASHRATE_B,
     DEFAULT_IRON_A,
     DEFAULT_IRON_B,
+    DEFAULT_US_HOUSING_A,
+    DEFAULT_US_HOUSING_B,
     DEFAULT_LITECOIN_BTC_A,
     DEFAULT_LITECOIN_BTC_B,
     DEFAULT_LIGHTNING_CAPACITY_A,
@@ -67,6 +70,7 @@ from core.constants import (
     KEY_A_GOLD,
     KEY_A_HASHRATE,
     KEY_A_IRON,
+    KEY_A_US_HOUSING,
     KEY_A_LITECOIN_BTC,
     KEY_A_LIGHTNING_CAPACITY,
     KEY_A_LIGHTNING_NODES,
@@ -91,6 +95,7 @@ from core.constants import (
     KEY_B_GOLD,
     KEY_B_HASHRATE,
     KEY_B_IRON,
+    KEY_B_US_HOUSING,
     KEY_B_LITECOIN_BTC,
     KEY_B_LIGHTNING_CAPACITY,
     KEY_B_LIGHTNING_NODES,
@@ -110,8 +115,17 @@ from core.constants import (
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     OSC_DEFAULTS,
+    OSC_DEFAULTS_ALUMINUM,
+    OSC_DEFAULTS_COPPER,
     OSC_DEFAULTS_DIFFICULTY,
+    OSC_DEFAULTS_EURO,
+    OSC_DEFAULTS_GOLD,
     OSC_DEFAULTS_HASHRATE,
+    OSC_DEFAULTS_IRON,
+    OSC_DEFAULTS_RUB,
+    OSC_DEFAULTS_SILVER,
+    OSC_DEFAULTS_UAH,
+    OSC_DEFAULTS_US_HOUSING,
     LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
     LITECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_BTC_MODEL_ORIGIN_ABS_DAYS,
@@ -447,6 +461,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 0,
         "currency_unit": CURRENCY_DOLLAR,
+        "oscillator_defaults": OSC_DEFAULTS,
     },
     CURRENCY_EURO: {
         "a_key": KEY_A_EURO,
@@ -458,6 +473,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 2,
         "currency_unit": CURRENCY_EURO,
+        "oscillator_defaults": OSC_DEFAULTS_EURO,
     },
     CURRENCY_UAH: {
         "a_key": KEY_A_UAH,
@@ -469,6 +485,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 0,
         "currency_unit": CURRENCY_UAH,
+        "oscillator_defaults": OSC_DEFAULTS_UAH,
     },
     CURRENCY_RUB: {
         "a_key": KEY_A_RUB,
@@ -480,6 +497,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 0,
         "currency_unit": CURRENCY_RUB,
+        "oscillator_defaults": OSC_DEFAULTS_RUB,
     },
     CURRENCY_GOLD: {
         "a_key": KEY_A_GOLD,
@@ -491,6 +509,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " oz",
         "currency_decimals": 2,
         "currency_unit": "XAU",
+        "oscillator_defaults": OSC_DEFAULTS_GOLD,
     },
     CURRENCY_SILVER: {
         "a_key": KEY_A_SILVER,
@@ -502,6 +521,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " oz",
         "currency_decimals": 2,
         "currency_unit": "XAG",
+        "oscillator_defaults": OSC_DEFAULTS_SILVER,
     },
     CURRENCY_COPPER: {
         "a_key": KEY_A_COPPER,
@@ -513,6 +533,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " lb",
         "currency_decimals": 2,
         "currency_unit": "Copper lb",
+        "oscillator_defaults": OSC_DEFAULTS_COPPER,
     },
     CURRENCY_IRON: {
         "a_key": KEY_A_IRON,
@@ -524,6 +545,7 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " t",
         "currency_decimals": 2,
         "currency_unit": "Iron ore tonne",
+        "oscillator_defaults": OSC_DEFAULTS_IRON,
     },
     CURRENCY_ALUMINUM: {
         "a_key": KEY_A_ALUMINUM,
@@ -535,6 +557,19 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " t",
         "currency_decimals": 2,
         "currency_unit": "Aluminum tonne",
+        "oscillator_defaults": OSC_DEFAULTS_ALUMINUM,
+    },
+    CURRENCY_US_HOUSING: {
+        "a_key": KEY_A_US_HOUSING,
+        "b_key": KEY_B_US_HOUSING,
+        "default_a": DEFAULT_US_HOUSING_A,
+        "default_b": DEFAULT_US_HOUSING_B,
+        "target_series_unit": CURRENCY_US_HOUSING,
+        "currency_prefix": "",
+        "currency_suffix": " index",
+        "currency_decimals": 2,
+        "currency_unit": "Case-Shiller index",
+        "oscillator_defaults": OSC_DEFAULTS_US_HOUSING,
     },
 }
 
@@ -654,6 +689,7 @@ def iter_session_model_defaults():
         CURRENCY_COPPER,
         CURRENCY_IRON,
         CURRENCY_ALUMINUM,
+        CURRENCY_US_HOUSING,
     ):
         price_config = get_series_config(POWERLAW_SERIES_PRICE, selected_currency=currency)
         for key, value in (

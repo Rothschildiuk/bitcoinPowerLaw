@@ -15,6 +15,7 @@ from core.constants import (
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
+    CURRENCY_US_HOUSING,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
     FORECAST_HORIZON_MAX,
@@ -1250,6 +1251,7 @@ if sidebar_currency not in [
     CURRENCY_COPPER,
     CURRENCY_IRON,
     CURRENCY_ALUMINUM,
+    CURRENCY_US_HOUSING,
 ]:
     sidebar_currency = CURRENCY_DOLLAR
 sidebar_price_close = build_currency_close_series(raw_df_usd, sidebar_currency)

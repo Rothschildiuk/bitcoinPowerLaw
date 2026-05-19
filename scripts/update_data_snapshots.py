@@ -9,6 +9,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.price_service import (  # noqa: E402
+    build_incremental_reference_series_snapshot,
     load_bitcoin_visuals_daily_data,
     load_prepared_difficulty_data,
     load_prepared_dogecoin_btc_data,
@@ -24,7 +25,6 @@ from services.price_service import (  # noqa: E402
     load_prepared_price_data,
     load_prepared_russian_m2_data,
     load_prepared_us_m2_data,
-    load_reference_series,
     write_snapshot_dataframe,
 )
 
@@ -32,7 +32,7 @@ from services.price_service import (  # noqa: E402
 def _build_snapshot_jobs():
     return {
         "reference_series": lambda: _build_reference_snapshot(),
-        "prepared_price_data": lambda: load_prepared_price_data(source="live"),
+        "prepared_price_data": lambda: load_prepared_price_data(source="auto"),
         "prepared_miner_revenue_data": lambda: load_prepared_miner_revenue_data(source="live"),
         "prepared_difficulty_data": lambda: load_prepared_difficulty_data(source="live"),
         "prepared_hashrate_data": lambda: load_prepared_hashrate_data(source="live"),
@@ -55,28 +55,7 @@ def _build_snapshot_jobs():
 
 
 def _build_reference_snapshot():
-    (
-        eur_usd,
-        usd_uah,
-        usd_rub,
-        xau_usd,
-        xag_usd,
-        copper_usd,
-        iron_ore_usd,
-        aluminum_usd,
-    ) = load_reference_series("2010-01-01", source="live")
-    return (
-        eur_usd.rename("EURUSD")
-        .to_frame()
-        .join(usd_uah.rename("USDUAH"), how="outer")
-        .join(usd_rub.rename("USDRUB"), how="outer")
-        .join(xau_usd.rename("XAUUSD"), how="outer")
-        .join(xag_usd.rename("XAGUSD"), how="outer")
-        .join(copper_usd.rename("COPPERUSD"), how="outer")
-        .join(iron_ore_usd.rename("IRONOREUSD"), how="outer")
-        .join(aluminum_usd.rename("ALUMINUMUSD"), how="outer")
-        .sort_index()
-    )
+    return build_incremental_reference_series_snapshot()
 
 
 def update_snapshots(selected_jobs: list[str] | None = None, *, dry_run: bool = False):

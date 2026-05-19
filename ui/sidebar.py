@@ -57,7 +57,6 @@ from core.series_registry import (
     series_supports_currency_selector,
 )
 
-
 KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
 
 
@@ -171,9 +170,11 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             st.session_state[KEY_PORTFOLIO_SIGMA_LEVEL] = selected_sigma
 
         st.radio(
-            "Price scenario"
-            if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION
-            else "Pension sigma",
+            (
+                "Price scenario"
+                if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION
+                else "Pension sigma"
+            ),
             sigma_options,
             index=sigma_options.index(selected_sigma),
             format_func=format_sigma_option,
@@ -518,14 +519,15 @@ def render_sidebar_panel(
             st.session_state[KEY_A] = float(st.session_state.get(a_key, default_a))
             st.session_state[KEY_B] = float(st.session_state.get(b_key, default_b))
             active_osc_defaults = active_model.oscillator_defaults
+            logperiodic_defaults_signature = f"{logperiodic_series}:{currency}"
             last_lp_series = st.session_state.get(KEY_LOGPERIODIC_LAST_SERIES)
-            if last_lp_series != logperiodic_series:
+            if last_lp_series != logperiodic_defaults_signature:
                 for k, v in active_osc_defaults.items():
                     if k == "harmonic_count":
                         st.session_state[KEY_LOGPERIODIC_HARMONICS] = int(v)
                         continue
                     st.session_state[k] = v
-                st.session_state[KEY_LOGPERIODIC_LAST_SERIES] = logperiodic_series
+                st.session_state[KEY_LOGPERIODIC_LAST_SERIES] = logperiodic_defaults_signature
 
             oscillator.render_sidebar(
                 model_abs_days,

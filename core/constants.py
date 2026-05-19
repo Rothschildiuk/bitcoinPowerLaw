@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.1.4"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
@@ -47,6 +47,8 @@ DEFAULT_IRON_A = -18.892
 DEFAULT_IRON_B = 5.798
 DEFAULT_ALUMINUM_A = -19.555
 DEFAULT_ALUMINUM_B = 5.604
+DEFAULT_US_HOUSING_A = -17.228
+DEFAULT_US_HOUSING_B = 5.226
 DEFAULT_REVENUE_A = -7.878
 DEFAULT_REVENUE_B = 4.159
 DEFAULT_BITCOIN_VOLATILITY_A = 2.003
@@ -80,6 +82,78 @@ POWERLAW_INTERCEPT_MAX = 45.0
 POWERLAW_SLOPE_MIN = 1.0
 POWERLAW_SLOPE_MAX = 15.0
 OSC_DEFAULTS = {
+    "lambda_val": 2.05,
+    "t1_age": 1.22,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_EURO = {
+    "lambda_val": 2.05,
+    "t1_age": 2.51,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_UAH = {
+    "lambda_val": 2.05,
+    "t1_age": 1.22,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_RUB = {
+    "lambda_val": 2.05,
+    "t1_age": 2.51,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_GOLD = {
+    "lambda_val": 2.06,
+    "t1_age": 1.21,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_SILVER = {
+    "lambda_val": 2.05,
+    "t1_age": 2.52,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_COPPER = {
+    "lambda_val": 2.05,
+    "t1_age": 2.51,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_IRON = {
+    "lambda_val": 3.79,
+    "t1_age": 1.81,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_ALUMINUM = {
+    "lambda_val": 2.05,
+    "t1_age": 2.51,
+    "amp_factor_top": 1.00,
+    "amp_factor_bottom": 0.78,
+    "impulse_damping": 1.72,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_US_HOUSING = {
     "lambda_val": 2.05,
     "t1_age": 1.22,
     "amp_factor_top": 1.00,
@@ -143,6 +217,8 @@ KEY_A_IRON = "A_iron"
 KEY_B_IRON = "B_iron"
 KEY_A_ALUMINUM = "A_aluminum"
 KEY_B_ALUMINUM = "B_aluminum"
+KEY_A_US_HOUSING = "A_us_housing"
+KEY_B_US_HOUSING = "B_us_housing"
 KEY_A_REVENUE = "A_revenue"
 KEY_B_REVENUE = "B_revenue"
 KEY_A_BITCOIN_VOLATILITY = "A_bitcoin_volatility"
@@ -257,6 +333,7 @@ CURRENCY_SILVER = "SILVER"
 CURRENCY_COPPER = "COPPER"
 CURRENCY_IRON = "IRON"
 CURRENCY_ALUMINUM = "ALUMINUM"
+CURRENCY_US_HOUSING = "US_HOUSING"
 CURRENCY_OPTIONS = [
     CURRENCY_EURO,
     CURRENCY_DOLLAR,
@@ -267,6 +344,7 @@ CURRENCY_OPTIONS = [
     CURRENCY_COPPER,
     CURRENCY_IRON,
     CURRENCY_ALUMINUM,
+    CURRENCY_US_HOUSING,
 ]
 TIME_LOG = "Log"
 TIME_LIN = "Lin"
