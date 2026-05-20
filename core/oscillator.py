@@ -25,9 +25,6 @@ AUTO_FIT_VISIBLE_PASSES = 12
 DEFAULT_OSCILLATOR_PARAMETER_BOUNDS = {
     "t1_age": (0.5, 3.0),
     "lambda_val": (1.5, 5.0),
-    "amp_factor_top": (0.1, 10.0),
-    "amp_factor_bottom": (0.1, 10.0),
-    "impulse_damping": (0.0, 2.0),
 }
 
 
@@ -41,9 +38,6 @@ def format_cycle_anchor_date(age_years, origin_offset_days=0):
 class OscillatorSettings:
     t1_age: float
     lambda_val: float
-    amp_factor_top: float
-    amp_factor_bottom: float
-    impulse_damping: float
     harmonic_count: int = 1
 
 
@@ -105,16 +99,8 @@ def resolve_harmonic_multipliers(harmonic_count):
     return (1, 2, 4)
 
 
-def _build_asymmetric_harmonic_template(
-    phase_values,
-    harmonic_index,
-    decay_factor,
-    top_amplitude_factor,
-    bottom_amplitude_factor,
-):
-    base_wave = build_oscillator_wave(phase_values * harmonic_index) * decay_factor
-    template = np.where(base_wave > 0, base_wave * top_amplitude_factor, base_wave)
-    return np.where(base_wave < 0, template * bottom_amplitude_factor, template)
+def _build_harmonic_template(phase_values, harmonic_index):
+    return build_oscillator_wave(phase_values * harmonic_index)
 
 
 def fit_oscillator_component(
@@ -122,9 +108,6 @@ def fit_oscillator_component(
     residual_series,
     t1_cycle_age_years,
     cycle_lambda,
-    top_amplitude_factor,
-    bottom_amplitude_factor,
-    impulse_damping,
     harmonic_count=1,
 ):
     if (not np.isfinite(t1_cycle_age_years)) or t1_cycle_age_years <= 0:
@@ -140,17 +123,10 @@ def fit_oscillator_component(
     angular_frequency = 2 * np.pi / log_lambda
     phase_shift = -angular_frequency * t1_log_days
     phase_values = angular_frequency * log_days + phase_shift
-    decay_factor = compute_impulse_decay(log_days, impulse_damping, float(np.min(log_days)))
     mode_multipliers = resolve_harmonic_multipliers(harmonic_count)
 
     harmonic_templates = [
-        _build_asymmetric_harmonic_template(
-            phase_values,
-            harmonic_multiplier,
-            decay_factor,
-            top_amplitude_factor,
-            bottom_amplitude_factor,
-        )
+        _build_harmonic_template(phase_values, harmonic_multiplier)
         for harmonic_multiplier in mode_multipliers
     ]
 
@@ -182,9 +158,6 @@ def compute_oscillator_fit_r2(
     residual_series,
     t1_cycle_age_years,
     cycle_lambda,
-    top_amplitude_factor,
-    bottom_amplitude_factor,
-    impulse_damping,
     harmonic_count=1,
 ):
     fit_result = fit_oscillator_component(
@@ -192,9 +165,6 @@ def compute_oscillator_fit_r2(
         residual_series,
         t1_cycle_age_years,
         cycle_lambda,
-        top_amplitude_factor,
-        bottom_amplitude_factor,
-        impulse_damping,
         harmonic_count,
     )
     if fit_result is None:
@@ -231,9 +201,6 @@ def compute_oscillator_model_stats(
     residual_series,
     t1_cycle_age_years,
     cycle_lambda,
-    top_amplitude_factor,
-    bottom_amplitude_factor,
-    impulse_damping,
     harmonic_count=1,
 ):
     residual_values = np.asarray(residual_series, dtype=float)
@@ -242,9 +209,6 @@ def compute_oscillator_model_stats(
         residual_values,
         t1_cycle_age_years,
         cycle_lambda,
-        top_amplitude_factor,
-        bottom_amplitude_factor,
-        impulse_damping,
         harmonic_count,
     )
     mode_multipliers = resolve_harmonic_multipliers(harmonic_count)
@@ -292,9 +256,6 @@ def compute_oscillator_model_stats_table(log_days, residual_series, current_para
             residual_series,
             current_params["t1_age"],
             current_params["lambda_val"],
-            current_params["amp_factor_top"],
-            current_params["amp_factor_bottom"],
-            current_params["impulse_damping"],
             harmonic_count=harmonic_count,
         )
         for harmonic_count in (1, 2, 3)
@@ -680,9 +641,6 @@ def compute_oscillator_overlay(
             osc_fit_residuals,
             settings.t1_age,
             settings.lambda_val,
-            settings.amp_factor_top,
-            settings.amp_factor_bottom,
-            settings.impulse_damping,
             settings.harmonic_count,
         )
 
@@ -727,23 +685,14 @@ def optimize_oscillator_parameters(
     spans = {
         "t1_age": 1.20,
         "lambda_val": 0.60,
-        "amp_factor_top": 1.60,
-        "amp_factor_bottom": 1.60,
-        "impulse_damping": 1.00,
     }
-    order = list(
-        parameter_order
-        or ["t1_age", "lambda_val", "amp_factor_top", "amp_factor_bottom", "impulse_damping"]
-    )
+    order = list(parameter_order or ["t1_age", "lambda_val"])
 
     best_r2 = compute_oscillator_fit_r2(
         log_days,
         residual_series,
         optimized_params["t1_age"],
         optimized_params["lambda_val"],
-        optimized_params["amp_factor_top"],
-        optimized_params["amp_factor_bottom"],
-        optimized_params["impulse_damping"],
         optimized_params.get("harmonic_count", 1),
     )
 
@@ -766,9 +715,6 @@ def optimize_oscillator_parameters(
                     residual_series,
                     trial["t1_age"],
                     trial["lambda_val"],
-                    trial["amp_factor_top"],
-                    trial["amp_factor_bottom"],
-                    trial["impulse_damping"],
                     trial.get("harmonic_count", 1),
                 )
                 if score > local_best_r2:
@@ -806,13 +752,6 @@ def optimize_single_oscillator_parameter(
             residual_series,
             params["t1_age"] if parameter_key != "t1_age" else float(candidate),
             params["lambda_val"] if parameter_key != "lambda_val" else float(candidate),
-            params["amp_factor_top"] if parameter_key != "amp_factor_top" else float(candidate),
-            (
-                params["amp_factor_bottom"]
-                if parameter_key != "amp_factor_bottom"
-                else float(candidate)
-            ),
-            params["impulse_damping"] if parameter_key != "impulse_damping" else float(candidate),
             params.get("harmonic_count", 1),
         ),
         min_value=min_value,
@@ -890,26 +829,15 @@ def build_oscillator_wave(phase_values):
     return np.cos(phase_values)
 
 
-def compute_impulse_decay(log_days, damping_factor, reference_log_day):
-    relative_position = np.maximum(0.0, log_days - reference_log_day)
-    return np.exp(-damping_factor * relative_position)
-
-
 def build_oscillator_curve(
     log_days,
     amplitude,
     angular_frequency,
     phase_shift,
-    top_amplitude_factor,
-    bottom_amplitude_factor,
-    damping_factor=0.0,
     reference_log_day=None,
     harmonic_coefficients=None,
 ):
     phase_values = angular_frequency * log_days + phase_shift
-    if reference_log_day is None:
-        reference_log_day = float(np.min(log_days))
-    decay_factor = compute_impulse_decay(log_days, damping_factor, reference_log_day)
     coefficients = np.atleast_1d(
         np.asarray(
             harmonic_coefficients if harmonic_coefficients is not None else [amplitude],
@@ -919,13 +847,7 @@ def build_oscillator_curve(
     y_values = np.zeros_like(np.asarray(log_days, dtype=float), dtype=float)
     multipliers = resolve_harmonic_multipliers(len(coefficients))
     for harmonic_multiplier, coefficient in zip(multipliers, coefficients):
-        template = _build_asymmetric_harmonic_template(
-            phase_values,
-            harmonic_multiplier,
-            decay_factor,
-            top_amplitude_factor,
-            bottom_amplitude_factor,
-        )
+        template = _build_harmonic_template(phase_values, harmonic_multiplier)
         y_values += coefficient * template
     return y_values
 
@@ -935,7 +857,6 @@ safe_r2 = calculate_r2_score
 _oscillator_r2 = compute_oscillator_fit_r2
 _auto_fit_oscillator = optimize_oscillator_parameters
 get_oscillator_wave = build_oscillator_wave
-get_impulse_decay = compute_impulse_decay
 oscillator_func_manual = build_oscillator_curve
 
 
@@ -995,15 +916,6 @@ def render_sidebar(
         current_params = {
             "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
             "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
-            "amp_factor_top": float(
-                st.session_state.get("amp_factor_top", defaults["amp_factor_top"])
-            ),
-            "amp_factor_bottom": float(
-                st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])
-            ),
-            "impulse_damping": float(
-                st.session_state.get("impulse_damping", defaults["impulse_damping"])
-            ),
             "harmonic_count": _normalize_harmonic_count(
                 st.session_state.get(KEY_LOGPERIODIC_HARMONICS, harmonic_options[0])
             ),
@@ -1031,9 +943,6 @@ def render_sidebar(
         current_params = {
             "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
             "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
-            "amp_factor_top": float(defaults["amp_factor_top"]),
-            "amp_factor_bottom": float(defaults["amp_factor_bottom"]),
-            "impulse_damping": float(defaults["impulse_damping"]),
             "harmonic_count": _normalize_harmonic_count(
                 st.session_state.get(KEY_LOGPERIODIC_HARMONICS, harmonic_options[0])
             ),
@@ -1089,11 +998,6 @@ def render_sidebar(
         key=KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
         horizontal=True,
     )
-    # Keep advanced amplitude/damping parameters fixed to defaults in LogPeriodic sidebar.
-    st.session_state["amp_factor_top"] = float(defaults["amp_factor_top"])
-    st.session_state["amp_factor_bottom"] = float(defaults["amp_factor_bottom"])
-    st.session_state["impulse_damping"] = float(defaults["impulse_damping"])
-
     # --- R2 Calculation for Sidebar Display ---
     if has_fit_data:
         harmonic_count = _normalize_harmonic_count(
@@ -1102,15 +1006,6 @@ def render_sidebar(
         current_params = {
             "t1_age": float(st.session_state.get("t1_age", defaults["t1_age"])),
             "lambda_val": float(st.session_state.get("lambda_val", defaults["lambda_val"])),
-            "amp_factor_top": float(
-                st.session_state.get("amp_factor_top", defaults["amp_factor_top"])
-            ),
-            "amp_factor_bottom": float(
-                st.session_state.get("amp_factor_bottom", defaults["amp_factor_bottom"])
-            ),
-            "impulse_damping": float(
-                st.session_state.get("impulse_damping", defaults["impulse_damping"])
-            ),
         }
         oscillator_r2_display = compute_sidebar_logperiodic_r2(
             log_days,

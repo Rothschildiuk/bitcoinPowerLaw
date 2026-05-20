@@ -364,9 +364,6 @@ def compute_default_updates():
                 residual_series,
                 optimized_trial["t1_age"],
                 optimized_trial["lambda_val"],
-                optimized_trial["amp_factor_top"],
-                optimized_trial["amp_factor_bottom"],
-                optimized_trial["impulse_damping"],
                 harmonic_count=harmonic_count,
             )
             optimized_candidates.append((trial_stats, optimized_trial))
@@ -380,9 +377,6 @@ def compute_default_updates():
             residual_series,
             optimized["t1_age"],
             optimized["lambda_val"],
-            optimized["amp_factor_top"],
-            optimized["amp_factor_bottom"],
-            optimized["impulse_damping"],
             optimized["harmonic_count"],
         )
         oscillator_summary_rows.append(

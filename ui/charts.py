@@ -5,7 +5,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
-from core.utils import evaluate_powerlaw_values
+from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_log_offset
 
 HALVING_DATES = [
     pd.Timestamp("2012-11-28"),
@@ -16,6 +16,7 @@ HALVING_DATES = [
 TIME_AXIS_LEADING_PADDING_DAYS = 90
 MODEL_FORWARD_YEARS = 10
 OPTIONAL_SIGMA_LEVELS = (-1.5, -0.5, 0.5, 1.5)
+LOGPERIODIC_SIGMA_DISPLAY_RANGE = (-3.0, 3.0)
 LOGPERIODIC_EXTREMA_HARMONICS = (
     (1, "ω", "solid", 1.5, 0.82),
     (2, "ω,2ω", "dash", 1.15, 0.62),
@@ -132,6 +133,24 @@ def _resolve_optional_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
         (level, float(np.interp(level, scenario_levels, scenario_offsets)))
         for level in OPTIONAL_SIGMA_LEVELS
     ]
+
+
+def _convert_log_offsets_to_sigma_levels(values, percentile_offsets):
+    values_arr = np.asarray(values, dtype=float)
+    sigma_values = np.full(values_arr.shape, np.nan, dtype=float)
+    valid_mask = np.isfinite(values_arr)
+    if not np.any(valid_mask):
+        return sigma_values
+
+    offsets = tuple(float(offset) for offset in percentile_offsets)
+    if not np.all(np.isfinite(offsets)):
+        return values_arr
+
+    sigma_values[valid_mask] = [
+        interpolate_sigma_level_from_log_offset(value, offsets)
+        for value in values_arr[valid_mask]
+    ]
+    return sigma_values
 
 
 def _format_sigma_line_name(level):
@@ -723,10 +742,11 @@ def render_main_model_chart(
             )
 
         osc_x_vals = np.asarray(plot_x_osc)[osc_mask]
-        sigma_scale = float(residual_sigma_log)
-        if not np.isfinite(sigma_scale) or sigma_scale <= 0.0:
-            sigma_scale = 1.0
-        osc_y_vals = df_display["Res"].to_numpy(dtype=float)[osc_mask] / sigma_scale
+        logperiodic_sigma_offsets = (p2_5, p16_5, p83_5, p97_5)
+        osc_y_vals = _convert_log_offsets_to_sigma_levels(
+            df_display["Res"].to_numpy(dtype=float)[osc_mask],
+            logperiodic_sigma_offsets,
+        )
         osc_dates = df_display.index.strftime("%d.%m.%Y").to_numpy()[osc_mask]
         osc_prices = df_display["CloseDisplay"].to_numpy(dtype=float)[osc_mask]
         osc_hover_data = np.column_stack([osc_dates, osc_prices])
@@ -799,7 +819,10 @@ def render_main_model_chart(
             fig.add_trace(
                 go.Scatter(
                     x=plot_x_model,
-                    y=np.asarray(harmonic_curves[harmonic_count], dtype=float) / sigma_scale,
+                    y=_convert_log_offsets_to_sigma_levels(
+                        harmonic_curves[harmonic_count],
+                        logperiodic_sigma_offsets,
+                    ),
                     mode="lines",
                     name=f"DSI {harmonic_labels.get(harmonic_count, harmonic_count)}",
                     line=dict(
@@ -821,7 +844,10 @@ def render_main_model_chart(
             fig.add_trace(
                 go.Scatter(
                     x=plot_x_model,
-                    y=np.asarray(perrenod_curve["values"], dtype=float) / sigma_scale,
+                    y=_convert_log_offsets_to_sigma_levels(
+                        perrenod_curve["values"],
+                        logperiodic_sigma_offsets,
+                    ),
                     mode="lines",
                     name=perrenod_name,
                     line=dict(color="#f0b90b", width=3.0, dash="solid"),
@@ -841,11 +867,18 @@ def render_main_model_chart(
         logperiodic_y_range = _resolve_linear_y_span(
             osc_y_vals,
             (
-                np.asarray(extrema_values, dtype=float) / sigma_scale
+                _convert_log_offsets_to_sigma_levels(
+                    extrema_values,
+                    logperiodic_sigma_offsets,
+                )
                 if extrema_values is not None
                 else None
             ),
         )
+        logperiodic_y_range = [
+            LOGPERIODIC_SIGMA_DISPLAY_RANGE[0],
+            LOGPERIODIC_SIGMA_DISPLAY_RANGE[1],
+        ]
         fig.add_hline(y=0, line_width=1, line_color=pl_legend_color)
         fig.update_yaxes(
             type="linear",

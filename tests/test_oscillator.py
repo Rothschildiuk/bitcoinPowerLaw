@@ -22,60 +22,20 @@ class TestOscillator(unittest.TestCase):
             residuals,
             t1_cycle_age_years=1.0,
             cycle_lambda=1.0,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            impulse_damping=0.0,
         )
         self.assertIsNone(result)
-
-    def test_build_oscillator_curve_applies_asymmetric_amplitude_scaling(self):
-        log_days = np.array([0.0, 1.0, 2.0, 3.0])
-        curve = oscillator.build_oscillator_curve(
-            log_days=log_days,
-            amplitude=2.0,
-            angular_frequency=3.0,
-            phase_shift=0.0,
-            top_amplitude_factor=1.7,
-            bottom_amplitude_factor=0.5,
-            damping_factor=0.0,
-            reference_log_day=0.0,
-        )
-
-        positives = curve[curve > 0]
-        negatives = np.abs(curve[curve < 0])
-        self.assertGreater(positives.size, 0)
-        self.assertGreater(negatives.size, 0)
-        self.assertGreater(np.max(positives), np.max(negatives))
-
-    def test_compute_impulse_decay_is_one_at_reference_and_decreases_after(self):
-        log_days = np.array([1.0, 1.5, 2.0])
-        decay = oscillator.compute_impulse_decay(
-            log_days,
-            damping_factor=0.8,
-            reference_log_day=1.0,
-        )
-
-        self.assertTrue(np.isclose(decay[0], 1.0))
-        self.assertLess(decay[1], decay[0])
-        self.assertLess(decay[2], decay[1])
 
     def test_compute_oscillator_overlay_returns_full_length_series_from_masked_fit(self):
         log_days = np.linspace(0.5, 3.0, 250)
         settings = oscillator.OscillatorSettings(
             t1_age=1.0,
             lambda_val=2.01,
-            amp_factor_top=1.0,
-            amp_factor_bottom=1.0,
-            impulse_damping=0.0,
         )
         fit_result = oscillator.fit_oscillator_component(
             log_days,
             np.cos(log_days),
             settings.t1_age,
             settings.lambda_val,
-            settings.amp_factor_top,
-            settings.amp_factor_bottom,
-            settings.impulse_damping,
         )
         self.assertIsNotNone(fit_result)
         _, _, _, predicted_residuals = fit_result
@@ -118,9 +78,6 @@ class TestOscillator(unittest.TestCase):
             residuals,
             t1_age,
             lambda_val,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            impulse_damping=0.0,
             harmonic_count=1,
         )
         two_harmonic_r2 = oscillator.compute_oscillator_fit_r2(
@@ -128,9 +85,6 @@ class TestOscillator(unittest.TestCase):
             residuals,
             t1_age,
             lambda_val,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            impulse_damping=0.0,
             harmonic_count=2,
         )
         fit_result = oscillator.fit_oscillator_component(
@@ -138,9 +92,6 @@ class TestOscillator(unittest.TestCase):
             residuals,
             t1_age,
             lambda_val,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            impulse_damping=0.0,
             harmonic_count=2,
         )
 
@@ -167,9 +118,6 @@ class TestOscillator(unittest.TestCase):
             residuals,
             t1_age,
             lambda_val,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            impulse_damping=0.0,
             harmonic_count=3,
         )
         self.assertEqual(oscillator.resolve_harmonic_multipliers(3), (1, 2, 4))
@@ -182,9 +130,6 @@ class TestOscillator(unittest.TestCase):
             amplitude=0.0,
             angular_frequency=2.0,
             phase_shift=0.3,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            damping_factor=0.0,
             reference_log_day=float(log_days.min()),
             harmonic_coefficients=np.array([0.25, 0.65]),
         )
@@ -199,9 +144,6 @@ class TestOscillator(unittest.TestCase):
             amplitude=0.0,
             angular_frequency=2.0,
             phase_shift=0.3,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            damping_factor=0.0,
             reference_log_day=float(log_days.min()),
             harmonic_coefficients=np.array([0.25, 0.45, 0.65]),
         )
@@ -229,9 +171,6 @@ class TestOscillator(unittest.TestCase):
             residuals,
             t1_age,
             lambda_val,
-            top_amplitude_factor=1.0,
-            bottom_amplitude_factor=1.0,
-            impulse_damping=0.0,
             harmonic_count=2,
         )
 
@@ -319,9 +258,6 @@ class TestOscillator(unittest.TestCase):
             {
                 "t1_age": 1.0,
                 "lambda_val": 2.0,
-                "amp_factor_top": 1.0,
-                "amp_factor_bottom": 1.0,
-                "impulse_damping": 0.0,
             },
             harmonic_count=3,
             lambda_bounds=(2.0, 2.8),
@@ -334,9 +270,6 @@ class TestOscillator(unittest.TestCase):
             {
                 "t1_age": 1.0,
                 "lambda_val": 2.0,
-                "amp_factor_top": 1.0,
-                "amp_factor_bottom": 1.0,
-                "impulse_damping": 0.0,
             },
             harmonic_count=3,
             lambda_bounds=(2.0, 2.8),
@@ -375,9 +308,6 @@ class TestOscillator(unittest.TestCase):
         params = {
             "t1_age": 1.0,
             "lambda_val": lambda_val,
-            "amp_factor_top": 1.0,
-            "amp_factor_bottom": 1.0,
-            "impulse_damping": 0.0,
         }
 
         two_mode_r2 = oscillator.compute_sidebar_logperiodic_r2(
@@ -441,9 +371,6 @@ class TestOscillator(unittest.TestCase):
         settings = oscillator.OscillatorSettings(
             t1_age=1.0,
             lambda_val=1.0,
-            amp_factor_top=1.0,
-            amp_factor_bottom=1.0,
-            impulse_damping=0.0,
         )
 
         result = oscillator.compute_oscillator_overlay(
@@ -473,9 +400,6 @@ class TestOscillator(unittest.TestCase):
         settings = oscillator.OscillatorSettings(
             t1_age=1.0,
             lambda_val=1.0,
-            amp_factor_top=1.0,
-            amp_factor_bottom=1.0,
-            impulse_damping=0.0,
         )
 
         result = oscillator.compute_oscillator_overlay(
@@ -509,18 +433,12 @@ class TestOscillator(unittest.TestCase):
         initial_params = {
             "t1_age": 2.49,
             "lambda_val": 2.01,
-            "amp_factor_top": 1.13,
-            "amp_factor_bottom": 0.88,
-            "impulse_damping": 1.71,
         }
 
         optimized = oscillator.optimize_oscillator_parameters(log_days, residuals, initial_params)
 
         self.assertTrue(0.5 <= optimized["t1_age"] <= 3.0)
         self.assertTrue(1.5 <= optimized["lambda_val"] <= 3.0)
-        self.assertTrue(0.1 <= optimized["amp_factor_top"] <= 10.0)
-        self.assertTrue(0.1 <= optimized["amp_factor_bottom"] <= 10.0)
-        self.assertTrue(0.0 <= optimized["impulse_damping"] <= 2.0)
 
     def test_optimize_single_oscillator_parameter_returns_value_in_bounds(self):
         log_days = np.linspace(0.5, 3.0, 250)
@@ -528,9 +446,6 @@ class TestOscillator(unittest.TestCase):
         current_params = {
             "t1_age": 2.49,
             "lambda_val": 2.01,
-            "amp_factor_top": 1.13,
-            "amp_factor_bottom": 0.88,
-            "impulse_damping": 1.71,
         }
 
         best_value, best_r2 = oscillator.optimize_single_oscillator_parameter(
@@ -552,9 +467,6 @@ class TestOscillator(unittest.TestCase):
         initial_params = {
             "t1_age": 2.49,
             "lambda_val": 4.72,
-            "amp_factor_top": 0.69,
-            "amp_factor_bottom": 0.78,
-            "impulse_damping": 0.25,
         }
 
         optimized = oscillator.optimize_oscillator_parameters(
@@ -574,9 +486,6 @@ class TestOscillator(unittest.TestCase):
         initial_params = {
             "t1_age": 1.61,
             "lambda_val": 5.00,
-            "amp_factor_top": 0.68,
-            "amp_factor_bottom": 0.74,
-            "impulse_damping": 0.11,
         }
 
         optimized = oscillator.optimize_visible_oscillator_parameters(
@@ -593,18 +502,12 @@ class TestOscillator(unittest.TestCase):
             residuals,
             optimized["t1_age"],
             optimized["lambda_val"],
-            optimized["amp_factor_top"],
-            optimized["amp_factor_bottom"],
-            optimized["impulse_damping"],
         )
         baseline_r2 = oscillator.compute_oscillator_fit_r2(
             log_days,
             residuals,
             initial_params["t1_age"],
             initial_params["lambda_val"],
-            initial_params["amp_factor_top"],
-            initial_params["amp_factor_bottom"],
-            initial_params["impulse_damping"],
         )
 
         self.assertGreaterEqual(optimized_r2, baseline_r2)

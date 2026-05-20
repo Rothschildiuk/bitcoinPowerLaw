@@ -6,6 +6,7 @@ import pandas as pd
 
 from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
 from ui.charts import (
+    _convert_log_offsets_to_sigma_levels,
     _iter_logperiodic_extrema_lines,
     _main_chart_plotly_config,
     _resolve_optional_sigma_offsets,
@@ -18,6 +19,14 @@ from ui.charts import (
 
 
 class TestUIChartsHelpers(unittest.TestCase):
+    def test_convert_log_offsets_to_sigma_levels_uses_powerlaw_percentile_scale(self):
+        sigma_levels = _convert_log_offsets_to_sigma_levels(
+            np.array([-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3]),
+            (-0.2, -0.1, 0.1, 0.2),
+        )
+
+        np.testing.assert_allclose(sigma_levels, [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0])
+
     def test_iter_logperiodic_extrema_lines_uses_rendered_curve_extrema(self):
         lines = _iter_logperiodic_extrema_lines(
             plot_x_model=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),

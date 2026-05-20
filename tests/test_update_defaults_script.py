@@ -125,7 +125,6 @@ class TestUpdateDefaultsScript(unittest.TestCase):
 OSC_DEFAULTS_HASHRATE = {
     "lambda_val": 4.71,
     "t1_age": 1.69,
-    "amp_factor_top": 0.68,
     "harmonic_count": 1,
 }
 """

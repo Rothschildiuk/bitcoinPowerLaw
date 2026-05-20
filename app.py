@@ -1500,11 +1500,15 @@ if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
         active_mode=MODE_POWERLAW,
     )
     bitcoin_residual_overlay_df["Res"] = bitcoin_trend.residual_series
-    bitcoin_residual_sigma_log = calculate_residual_sigma_log(bitcoin_residual_overlay_df)
-    if bitcoin_residual_sigma_log > 0.0:
-        bitcoin_residual_overlay_df["ResidualSigma"] = (
-            bitcoin_residual_overlay_df["Res"] / bitcoin_residual_sigma_log
-        )
+    bitcoin_percentile_offsets = calculate_percentile_offsets(
+        bitcoin_residual_overlay_df,
+        price_genesis_offset,
+    )
+    if np.all(np.isfinite(bitcoin_percentile_offsets)):
+        bitcoin_residual_overlay_df["ResidualSigma"] = [
+            interpolate_sigma_level_from_log_offset(residual, bitcoin_percentile_offsets)
+            for residual in bitcoin_residual_overlay_df["Res"].to_numpy(dtype=float)
+        ]
     else:
         bitcoin_residual_overlay_df = None
 
@@ -1537,11 +1541,6 @@ residual_sigma_log = calculate_residual_sigma_log(df_display)
 osc_settings = oscillator.OscillatorSettings(
     t1_age=float(st.session_state.get("t1_age", OSC_DEFAULTS["t1_age"])),
     lambda_val=float(st.session_state.get("lambda_val", OSC_DEFAULTS["lambda_val"])),
-    amp_factor_top=float(st.session_state.get("amp_factor_top", OSC_DEFAULTS["amp_factor_top"])),
-    amp_factor_bottom=float(
-        st.session_state.get("amp_factor_bottom", OSC_DEFAULTS["amp_factor_bottom"])
-    ),
-    impulse_damping=float(st.session_state.get("impulse_damping", OSC_DEFAULTS["impulse_damping"])),
     harmonic_count=int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1)),
 )
 osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
@@ -1574,9 +1573,6 @@ if mode == MODE_LOGPERIODIC:
         stats_params = {
             "t1_age": osc_settings.t1_age,
             "lambda_val": osc_settings.lambda_val,
-            "amp_factor_top": osc_settings.amp_factor_top,
-            "amp_factor_bottom": osc_settings.amp_factor_bottom,
-            "impulse_damping": osc_settings.impulse_damping,
         }
         fit_log_days = df_display["LogD"].values[lp_r2_mask]
         fit_residuals = df_display["Res"].values[lp_r2_mask]
@@ -1601,9 +1597,6 @@ if mode == MODE_LOGPERIODIC:
         osc_settings = oscillator.OscillatorSettings(
             t1_age=OSC_DEFAULTS["t1_age"],
             lambda_val=OSC_DEFAULTS["lambda_val"],
-            amp_factor_top=OSC_DEFAULTS["amp_factor_top"],
-            amp_factor_bottom=OSC_DEFAULTS["amp_factor_bottom"],
-            impulse_damping=OSC_DEFAULTS["impulse_damping"],
             harmonic_count=1,
         )
         osc_amp, osc_omega, osc_phi, r2_combined = 0, 0, 0, current_r2
@@ -1624,9 +1617,6 @@ if mode == MODE_LOGPERIODIC:
         osc_amp,
         osc_omega,
         osc_phi,
-        osc_settings.amp_factor_top,
-        osc_settings.amp_factor_bottom,
-        osc_settings.impulse_damping,
         osc_reference_log_day,
         osc_harmonic_coefficients,
     )
@@ -1637,9 +1627,6 @@ if mode == MODE_LOGPERIODIC:
         harmonic_settings = oscillator.OscillatorSettings(
             t1_age=osc_settings.t1_age,
             lambda_val=osc_settings.lambda_val,
-            amp_factor_top=osc_settings.amp_factor_top,
-            amp_factor_bottom=osc_settings.amp_factor_bottom,
-            impulse_damping=osc_settings.impulse_damping,
             harmonic_count=harmonic_count,
         )
         harmonic_result = oscillator.compute_oscillator_overlay(
@@ -1656,9 +1643,6 @@ if mode == MODE_LOGPERIODIC:
             harmonic_result.amplitude,
             harmonic_result.angular_frequency,
             harmonic_result.phase_shift,
-            harmonic_result.settings.amp_factor_top,
-            harmonic_result.settings.amp_factor_bottom,
-            harmonic_result.settings.impulse_damping,
             harmonic_result.reference_log_day,
             harmonic_result.harmonic_coefficients,
         )

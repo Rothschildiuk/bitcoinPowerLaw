@@ -63,8 +63,8 @@ DEFAULT_LIGHTNING_CAPACITY_A = -1.524
 DEFAULT_LIGHTNING_CAPACITY_B = 1.553
 DEFAULT_LIQUID_BTC_A = -2.720
 DEFAULT_LIQUID_BTC_B = 1.944
-DEFAULT_LIQUID_TRANSACTIONS_A = 0.475
-DEFAULT_LIQUID_TRANSACTIONS_B = 1.101
+DEFAULT_LIQUID_TRANSACTIONS_A = 0.470
+DEFAULT_LIQUID_TRANSACTIONS_B = 1.103
 DEFAULT_FILECOIN_BTC_A = 0.022
 DEFAULT_FILECOIN_BTC_B = -1.317
 DEFAULT_MONERO_BTC_A = -2.663
@@ -82,99 +82,63 @@ POWERLAW_INTERCEPT_MAX = 45.0
 POWERLAW_SLOPE_MIN = 1.0
 POWERLAW_SLOPE_MAX = 15.0
 OSC_DEFAULTS = {
-    "lambda_val": 2.05,
-    "t1_age": 1.22,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "lambda_val": 2.06,
+    "t1_age": 1.74,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_EURO = {
     "lambda_val": 2.05,
-    "t1_age": 2.51,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "t1_age": 1.76,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_UAH = {
     "lambda_val": 2.05,
-    "t1_age": 1.22,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "t1_age": 2.51,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_RUB = {
     "lambda_val": 2.05,
-    "t1_age": 2.51,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "t1_age": 1.76,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_GOLD = {
     "lambda_val": 2.06,
-    "t1_age": 1.21,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "t1_age": 2.51,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_SILVER = {
-    "lambda_val": 2.05,
-    "t1_age": 2.52,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "lambda_val": 2.06,
+    "t1_age": 1.22,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_COPPER = {
     "lambda_val": 2.05,
-    "t1_age": 2.51,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "t1_age": 1.76,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_IRON = {
-    "lambda_val": 3.79,
+    "lambda_val": 3.78,
     "t1_age": 1.81,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_ALUMINUM = {
     "lambda_val": 2.05,
-    "t1_age": 2.51,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "t1_age": 1.76,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_US_HOUSING = {
     "lambda_val": 2.05,
-    "t1_age": 1.22,
-    "amp_factor_top": 1.00,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 1.72,
+    "t1_age": 2.51,
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_DIFFICULTY = {
-    "lambda_val": 3.88,
-    "t1_age": 1.04,
-    "amp_factor_top": 0.69,
-    "amp_factor_bottom": 0.78,
-    "impulse_damping": 0.25,
-    "harmonic_count": 2,
+    "lambda_val": 3.97,
+    "t1_age": 2.01,
+    "harmonic_count": 3,
 }
 OSC_DEFAULTS_HASHRATE = {
-    "lambda_val": 4.03,
+    "lambda_val": 4.04,
     "t1_age": 0.98,
-    "amp_factor_top": 0.68,
-    "amp_factor_bottom": 0.74,
-    "impulse_damping": 0.11,
     "harmonic_count": 3,
 }
 
