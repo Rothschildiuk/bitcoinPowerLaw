@@ -293,6 +293,17 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(difficulty_config.oscillator_parameter_bounds["lambda_val"], (1.5, 8.0))
         self.assertTrue(difficulty_config.lock_price_scale_to_log)
 
+    def test_bitcoin_price_shows_halving_lines_in_logperiodic(self):
+        price_config = get_active_model_config(
+            MODE_LOGPERIODIC,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(price_config.series_name, POWERLAW_SERIES_PRICE)
+        self.assertTrue(price_config.show_halving_lines)
+
     def test_portfolio_always_uses_bitcoin_price_series(self):
         self.assertEqual(
             get_selected_series_name(

@@ -1750,7 +1750,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         currency_decimals=currency_decimals,
         target_series_name=target_series_name,
         target_series_unit=target_series_unit,
-        show_halving_lines=mode == MODE_POWERLAW and active_model.show_halving_lines,
+        show_halving_lines=active_model.show_halving_lines,
         bitcoin_residual_overlay_df=bitcoin_residual_overlay_df,
         osc_visible_start_abs_day=(
             active_model.oscillator_min_abs_day if mode == MODE_LOGPERIODIC else None

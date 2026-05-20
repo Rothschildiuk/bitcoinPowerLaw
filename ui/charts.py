@@ -16,6 +16,11 @@ HALVING_DATES = [
 TIME_AXIS_LEADING_PADDING_DAYS = 90
 MODEL_FORWARD_YEARS = 10
 OPTIONAL_SIGMA_LEVELS = (-1.5, -0.5, 0.5, 1.5)
+LOGPERIODIC_EXTREMA_HARMONICS = (
+    (1, "ω", "solid", 1.5, 0.82),
+    (2, "ω,2ω", "dash", 1.15, 0.62),
+    (3, "ω,2ω,4ω", "dot", 0.95, 0.48),
+)
 
 
 def _main_chart_plotly_config():
@@ -137,6 +142,125 @@ def _optional_sigma_line_style(level):
     if level > 0.0:
         return dict(color="rgba(234, 61, 47, 0.72)", width=1.0, dash="dash")
     return dict(color="rgba(17, 153, 214, 0.72)", width=1.0, dash="dash")
+
+
+def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendrank=35):
+    if y_range is None or len(y_range) != 2:
+        return
+    y_min, y_max = float(y_range[0]), float(y_range[1])
+    if not np.isfinite(y_min) or not np.isfinite(y_max) or y_max <= y_min:
+        return
+
+    halving_x_values = []
+    halving_y_values = []
+    halving_hover_values = []
+    for halving_date in HALVING_DATES:
+        halving_x = (
+            max(1.0, float((halving_date - current_gen_date).days))
+            if is_log_time
+            else halving_date
+        )
+        halving_x_values.extend([halving_x, halving_x, None])
+        halving_y_values.extend([y_min, y_max, None])
+        halving_hover_values.extend(
+            [halving_date.strftime("%d.%m.%Y"), halving_date.strftime("%d.%m.%Y"), None]
+        )
+
+    fig.add_trace(
+        go.Scatter(
+            x=halving_x_values,
+            y=halving_y_values,
+            mode="lines",
+            name="Halvings",
+            legendgroup="halvings",
+            legendrank=legendrank,
+            line=dict(color="#f0b90b", width=1.1, dash="dash"),
+            opacity=0.75,
+            customdata=halving_hover_values,
+            hovertemplate="<b>Halving</b><br>%{customdata}<extra></extra>",
+        )
+    )
+
+
+def _resolve_linear_y_span(*series_parts):
+    finite_values = []
+    for values in series_parts:
+        if values is None:
+            continue
+        values_arr = np.asarray(values, dtype=float)
+        finite_values.extend(values_arr[np.isfinite(values_arr)].tolist())
+    if not finite_values:
+        return None
+
+    y_min = float(np.min(finite_values))
+    y_max = float(np.max(finite_values))
+    if y_max <= y_min:
+        y_max = y_min + 1.0
+    padding = max((y_max - y_min) * 0.02, 0.1)
+    return [y_min - padding, y_max + padding]
+
+
+def _iter_logperiodic_extrema_lines(plot_x_model, harmonic_curves, selected_harmonic_count):
+    if not harmonic_curves:
+        return []
+
+    x_values = np.asarray(plot_x_model)
+    extrema_lines = []
+    style_by_count = {
+        harmonic_count: (label, dash, width, opacity)
+        for harmonic_count, label, dash, width, opacity in LOGPERIODIC_EXTREMA_HARMONICS
+    }
+    harmonic_count = int(selected_harmonic_count)
+    if harmonic_count not in harmonic_curves or harmonic_count not in style_by_count:
+        return []
+
+    y_values = np.asarray(harmonic_curves[harmonic_count], dtype=float)
+    if x_values.size != y_values.size or y_values.size < 3:
+        return []
+
+    finite_mask = np.isfinite(y_values)
+    if not np.all(finite_mask):
+        x_curve = x_values[finite_mask]
+        y_curve = y_values[finite_mask]
+    else:
+        x_curve = x_values
+        y_curve = y_values
+    if y_curve.size < 3:
+        return []
+
+    label, dash, width, opacity = style_by_count[harmonic_count]
+    previous_values = y_curve[:-2]
+    current_values = y_curve[1:-1]
+    next_values = y_curve[2:]
+    local_high_mask = (current_values > previous_values) & (current_values >= next_values)
+    local_low_mask = (current_values < previous_values) & (current_values <= next_values)
+
+    for x_value in x_curve[1:-1][local_high_mask]:
+        extrema_lines.append(
+            {
+                "x": x_value,
+                "kind": "high",
+                "label": label,
+                "color": "#ea3d2f",
+                "dash": dash,
+                "width": width,
+                "opacity": opacity,
+            }
+        )
+    for x_value in x_curve[1:-1][local_low_mask]:
+        extrema_lines.append(
+            {
+                "x": x_value,
+                "kind": "low",
+                "label": label,
+                "color": "#1199d6",
+                "dash": dash,
+                "width": width,
+                "opacity": opacity,
+            }
+        )
+
+    return extrema_lines
 
 
 def render_main_model_chart(
@@ -514,30 +638,6 @@ def render_main_model_chart(
             "sigma_p2",
             legendrank=170,
         )
-        if show_halving_lines:
-            for halving_date in HALVING_DATES:
-                halving_x = (
-                    max(1.0, float((halving_date - current_gen_date).days))
-                    if is_log_time
-                    else halving_date
-                )
-                fig.add_vline(
-                    x=halving_x,
-                    line_width=1.1,
-                    line_dash="dash",
-                    line_color="#f0b90b",
-                    opacity=0.75,
-                )
-                fig.add_annotation(
-                    x=halving_x,
-                    y=0.02,
-                    yref="paper",
-                    text=f"Halving {halving_date.year}",
-                    showarrow=False,
-                    yshift=0,
-                    textangle=-90,
-                    font=dict(size=9, color=pl_legend_color),
-                )
         y_range_model_x = plot_x_model if is_log_time else m_dates
         y_range_visible_start = (
             max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
@@ -551,6 +651,13 @@ def render_main_model_chart(
             model_x=y_range_model_x,
             visible_start_day=y_range_visible_start,
         )
+        if show_halving_lines and powerlaw_y_range is not None:
+            halving_y_range = (
+                [10.0 ** powerlaw_y_range[0], 10.0 ** powerlaw_y_range[1]]
+                if price_scale == TIME_LOG
+                else powerlaw_y_range
+            )
+            _add_halving_trace(fig, current_gen_date, is_log_time, halving_y_range)
         fig.update_yaxes(
             type="log" if price_scale == TIME_LOG else "linear",
             range=powerlaw_y_range,
@@ -570,6 +677,8 @@ def render_main_model_chart(
             sigma_scale = 1.0
         osc_y_vals = df_display["Res"].to_numpy(dtype=float)[osc_mask] / sigma_scale
         osc_dates = df_display.index.strftime("%d.%m.%Y").to_numpy()[osc_mask]
+        osc_prices = df_display["CloseDisplay"].to_numpy(dtype=float)[osc_mask]
+        osc_hover_data = np.column_stack([osc_dates, osc_prices])
 
         if bitcoin_residual_overlay_df is not None and not bitcoin_residual_overlay_df.empty:
             btc_residual_x = (
@@ -604,8 +713,13 @@ def render_main_model_chart(
                 mode="lines",
                 name="power-law residual σ",
                 line=dict(color="rgba(180, 185, 192, 0.42)", width=1.1),
-                customdata=osc_dates,
-                hovertemplate="<b>power-law residual σ</b>: %{y:.2f}σ<extra></extra>",
+                customdata=osc_hover_data,
+                hovertemplate=(
+                    "<b>%{customdata[0]}</b>"
+                    f"<br>{target_series_name}: "
+                    f"{currency_prefix}%{{customdata[1]:,.{currency_decimals}f}}{currency_suffix}"
+                    "<br><b>power-law residual σ</b>: %{y:.2f}σ<extra></extra>"
+                ),
             )
         )
         if show_historical_powerlaw_slope:
@@ -663,10 +777,29 @@ def render_main_model_chart(
                     hoverinfo="skip",
                 )
             )
+        extrema_curves = harmonic_curves
+        extrema_harmonic_count = selected_harmonic_count
+        if perrenod_curve is not None and "values" in perrenod_curve:
+            extrema_curves = {3: perrenod_curve["values"]}
+            extrema_harmonic_count = 3
+        extrema_values = (
+            perrenod_curve["values"]
+            if perrenod_curve is not None and "values" in perrenod_curve
+            else harmonic_curves.get(selected_harmonic_count)
+        )
+        logperiodic_y_range = _resolve_linear_y_span(
+            osc_y_vals,
+            (
+                np.asarray(extrema_values, dtype=float) / sigma_scale
+                if extrema_values is not None
+                else None
+            ),
+        )
         fig.add_hline(y=0, line_width=1, line_color=pl_legend_color)
         fig.update_yaxes(
             type="linear",
             title_text="Sigma residual",
+            range=logperiodic_y_range,
             gridcolor=pl_grid_color,
             tickfont=tick_font,
             secondary_y=False,
@@ -679,18 +812,25 @@ def render_main_model_chart(
                 secondary_y=True,
             )
 
-        for i in range(6):
-            halving_days_val = osc_t1_age * (osc_lambda**i) * 365.25
-            # Skip far-future synthetic halvings outside the rendered model horizon.
-            if halving_days_val > float(view_max):
-                continue
-            hv_x = (
-                halving_days_val
-                if is_log_time
-                else current_gen_date + pd.Timedelta(days=halving_days_val)
-            )
+        for extrema_line in _iter_logperiodic_extrema_lines(
+            plot_x_model,
+            extrema_curves,
+            extrema_harmonic_count,
+        ):
             fig.add_vline(
-                x=hv_x, line_width=1.5, line_dash="dash", line_color="#ea3d2f", opacity=0.8
+                x=extrema_line["x"],
+                line_width=extrema_line["width"],
+                line_dash=extrema_line["dash"],
+                line_color=extrema_line["color"],
+                opacity=extrema_line["opacity"],
+            )
+        if show_halving_lines:
+            _add_halving_trace(
+                fig,
+                current_gen_date,
+                is_log_time,
+                logperiodic_y_range,
+                legendrank=35,
             )
 
     if is_log_time:

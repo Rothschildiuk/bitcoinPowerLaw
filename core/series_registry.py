@@ -194,6 +194,7 @@ _BASE_SERIES_CONFIGS = {
         currency_unit=CURRENCY_DOLLAR,
         supports_currency_selector=True,
         logperiodic_enabled=True,
+        show_halving_lines=True,
         oscillator_defaults=OSC_DEFAULTS,
     ),
     POWERLAW_SERIES_REVENUE: SeriesModelConfig(
