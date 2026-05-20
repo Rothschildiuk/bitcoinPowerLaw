@@ -610,12 +610,16 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(perrenod_traces[0].visible, None)
         self.assertEqual(len(locked_dsi_traces), 3)
         self.assertTrue(all(trace.visible == "legendonly" for trace in locked_dsi_traces))
-        vertical_shapes = [
-            shape
-            for shape in captured["fig"].layout.shapes
-            if shape.type == "line" and shape.x0 == shape.x1
-        ]
-        self.assertEqual([shape.x0 for shape in vertical_shapes], [4001.0, 4003.0])
+        high_traces = [trace for trace in captured["fig"].data if trace.name == "Cycle highs"]
+        low_traces = [trace for trace in captured["fig"].data if trace.name == "Cycle lows"]
+        self.assertEqual(len(high_traces), 1)
+        self.assertEqual(len(low_traces), 1)
+        self.assertEqual(high_traces[0].legendgroup, "cycle_highs")
+        self.assertEqual(low_traces[0].legendgroup, "cycle_lows")
+        self.assertEqual(high_traces[0].x[0], 4001.0)
+        self.assertEqual(low_traces[0].x[0], 4003.0)
+        self.assertEqual(high_traces[0].line.color, "#ea3d2f")
+        self.assertEqual(low_traces[0].line.color, "#1199d6")
 
     def test_logperiodic_bitcoin_residual_overlay_is_available_from_legend(self):
         dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])

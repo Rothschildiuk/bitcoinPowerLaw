@@ -182,6 +182,57 @@ def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendran
     )
 
 
+def _add_logperiodic_extrema_traces(fig, extrema_lines, current_gen_date, is_log_time, y_range):
+    if y_range is None or len(y_range) != 2:
+        return
+    y_min, y_max = float(y_range[0]), float(y_range[1])
+    if not np.isfinite(y_min) or not np.isfinite(y_max) or y_max <= y_min:
+        return
+
+    for kind, name, legendrank in (
+        ("high", "Cycle highs", 36),
+        ("low", "Cycle lows", 37),
+    ):
+        kind_lines = [line for line in extrema_lines if line["kind"] == kind]
+        if not kind_lines:
+            continue
+
+        x_values = []
+        y_values = []
+        hover_values = []
+        for line in kind_lines:
+            x_value = line["x"]
+            if is_log_time:
+                hover_date = current_gen_date + pd.Timedelta(days=float(x_value))
+            else:
+                hover_date = pd.Timestamp(x_value)
+            x_values.extend([x_value, x_value, None])
+            y_values.extend([y_min, y_max, None])
+            hover_values.extend(
+                [hover_date.strftime("%d.%m.%Y"), hover_date.strftime("%d.%m.%Y"), None]
+            )
+
+        line_style = kind_lines[0]
+        fig.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=y_values,
+                mode="lines",
+                name=name,
+                legendgroup=f"cycle_{kind}s",
+                legendrank=legendrank,
+                line=dict(
+                    color=line_style["color"],
+                    width=line_style["width"],
+                    dash=line_style["dash"],
+                ),
+                opacity=line_style["opacity"],
+                customdata=hover_values,
+                hovertemplate=f"<b>{name}</b><br>%{{customdata}}<extra></extra>",
+            )
+        )
+
+
 def _resolve_linear_y_span(*series_parts):
     finite_values = []
     for values in series_parts:
@@ -812,18 +863,18 @@ def render_main_model_chart(
                 secondary_y=True,
             )
 
-        for extrema_line in _iter_logperiodic_extrema_lines(
+        extrema_lines = _iter_logperiodic_extrema_lines(
             plot_x_model,
             extrema_curves,
             extrema_harmonic_count,
-        ):
-            fig.add_vline(
-                x=extrema_line["x"],
-                line_width=extrema_line["width"],
-                line_dash=extrema_line["dash"],
-                line_color=extrema_line["color"],
-                opacity=extrema_line["opacity"],
-            )
+        )
+        _add_logperiodic_extrema_traces(
+            fig,
+            extrema_lines,
+            current_gen_date,
+            is_log_time,
+            logperiodic_y_range,
+        )
         if show_halving_lines:
             _add_halving_trace(
                 fig,
