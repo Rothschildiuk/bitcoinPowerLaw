@@ -194,6 +194,8 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         )
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
         st.markdown("**Forecast unit**")
+        if KEY_PORTFOLIO_FORECAST_UNIT not in st.session_state:
+            st.session_state[KEY_PORTFOLIO_FORECAST_UNIT] = "Month"
         forecast_unit = st.radio(
             "Forecast unit",
             ["Year", "Month", "Day"],
