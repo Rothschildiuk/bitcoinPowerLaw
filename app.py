@@ -12,6 +12,7 @@ from core.constants import (
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_IRON,
+    CURRENCY_OPTIONS,
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
@@ -201,7 +202,9 @@ def calculate_peak_powerlaw_overlay(
     percentile_offsets,
     sigma_threshold,
 ):
-    close_values = pd.to_numeric(display_df["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
+    close_values = pd.to_numeric(display_df["CloseDisplay"], errors="coerce").to_numpy(
+        dtype=float
+    )
     log_prices = np.full(close_values.shape, np.nan, dtype=float)
     positive_mask = close_values > 0.0
     log_prices[positive_mask] = np.log10(close_values[positive_mask])
@@ -236,10 +239,16 @@ def calculate_peak_powerlaw_overlay(
 def resolve_current_sigma_level(df_display, percentile_offsets):
     current_price = float(df_display["CloseDisplay"].iloc[-1])
     current_model_log = float(df_display["ModelLog"].iloc[-1])
-    if current_price <= 0.0 or not np.isfinite(current_price) or not np.isfinite(current_model_log):
+    if (
+        current_price <= 0.0
+        or not np.isfinite(current_price)
+        or not np.isfinite(current_model_log)
+    ):
         return 0.0
     current_log_offset = float(np.log10(current_price) - current_model_log)
-    return interpolate_sigma_level_from_log_offset(current_log_offset, percentile_offsets)
+    return interpolate_sigma_level_from_log_offset(
+        current_log_offset, percentile_offsets
+    )
 
 
 def style_portfolio_table(table_df, style_format, currency_unit, portfolio_view):
@@ -285,7 +294,9 @@ def style_portfolio_table(table_df, style_format, currency_unit, portfolio_view)
     )
 
 
-def style_backtest_table(table_df, style_format, currency_unit, monthly_withdrawal_label):
+def style_backtest_table(
+    table_df, style_format, currency_unit, monthly_withdrawal_label
+):
     column_colors = {
         f"Actual BTC price ({currency_unit})": "#f0b90b",
         f"Hold-only value ({currency_unit})": "#f0b90b",
@@ -356,6 +367,114 @@ def prepare_bitcoin_network_simulation(base_df, seed, resolution_days):
     )
 
 
+SERIES_LOADERS = {
+    POWERLAW_SERIES_PRICE: ("BTC price", load_prepared_price_data),
+    POWERLAW_SERIES_REVENUE: ("miner revenue", load_prepared_miner_revenue_data),
+    POWERLAW_SERIES_DIFFICULTY: ("difficulty", load_prepared_difficulty_data),
+    POWERLAW_SERIES_HASHRATE: ("hashrate", load_prepared_hashrate_data),
+    POWERLAW_SERIES_LIGHTNING_NODES: (
+        "Lightning node",
+        load_prepared_lightning_nodes_data,
+    ),
+    POWERLAW_SERIES_LIGHTNING_CAPACITY: (
+        "Lightning capacity",
+        load_prepared_lightning_capacity_data,
+    ),
+    POWERLAW_SERIES_LIQUID_BTC: ("Liquid BTC", load_prepared_liquid_btc_data),
+    POWERLAW_SERIES_LIQUID_TRANSACTIONS: (
+        "Liquid transactions",
+        load_prepared_liquid_transactions_data,
+    ),
+    POWERLAW_SERIES_FILECOIN_BTC: ("Filecoin/BTC", load_prepared_filecoin_btc_data),
+    POWERLAW_SERIES_MONERO_BTC: ("Monero/BTC", load_prepared_monero_btc_data),
+    POWERLAW_SERIES_LITECOIN_BTC: ("Litecoin/BTC", load_prepared_litecoin_btc_data),
+    POWERLAW_SERIES_DOGECOIN_BTC: ("Dogecoin/BTC", load_prepared_dogecoin_btc_data),
+    POWERLAW_SERIES_US_M2: ("U.S. M2", load_prepared_us_m2_data),
+    POWERLAW_SERIES_RUSSIAN_M2: ("Russian M2", load_prepared_russian_m2_data),
+}
+
+
+def normalize_close_frame(data_df):
+    normalized_df = data_df[data_df["Close"] > 0].copy()
+    normalized_df["LogClose"] = np.log10(normalized_df["Close"])
+    return normalized_df
+
+
+def get_sidebar_currency():
+    sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
+    if sidebar_currency not in CURRENCY_OPTIONS:
+        return CURRENCY_DOLLAR
+    return sidebar_currency
+
+
+class SeriesFrameStore:
+    def __init__(self):
+        self._frames = {}
+
+    def get(self, series_name):
+        if series_name not in self._frames:
+            self._frames[series_name] = self._load(series_name)
+        return self._frames[series_name]
+
+    def _load(self, series_name):
+        if series_name not in SERIES_LOADERS and series_name not in {
+            POWERLAW_SERIES_BITCOIN_VOLATILITY,
+            POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
+        }:
+            st.error(f"Unknown data series: {series_name}")
+            st.stop()
+
+        try:
+            if series_name == POWERLAW_SERIES_BITCOIN_VOLATILITY:
+                return normalize_close_frame(
+                    build_prepared_bitcoin_volatility_data(
+                        self.get(POWERLAW_SERIES_PRICE)
+                    )
+                )
+            if series_name == POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION:
+                return normalize_close_frame(
+                    prepare_bitcoin_network_simulation(
+                        self.get(POWERLAW_SERIES_PRICE),
+                        seed=int(
+                            st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1)
+                        ),
+                        resolution_days=float(
+                            st.session_state.get(
+                                KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
+                                0.00001,
+                            )
+                        ),
+                    )
+                )
+
+            label, loader = SERIES_LOADERS[series_name]
+            return normalize_close_frame(loader())
+        except Exception as e:
+            label = SERIES_LOADERS.get(series_name, (series_name, None))[0]
+            st.error(f"Error loading {label} data: {e}")
+            st.stop()
+
+
+class SidebarSeriesData:
+    def __init__(self, series_store):
+        self._series_store = series_store
+
+    def __getitem__(self, series_name):
+        data_df = self._series_store.get(series_name)
+        if series_name == POWERLAW_SERIES_PRICE:
+            price_close = build_currency_close_series(data_df, get_sidebar_currency())
+            price_close = price_close[price_close > 0]
+            return {
+                "absolute_days": data_df.loc[price_close.index, "AbsDays"].values,
+                "log_close": np.log10(price_close.values),
+            }
+
+        return {
+            "absolute_days": data_df["AbsDays"].values,
+            "log_close": data_df["LogClose"].values,
+        }
+
+
 def render_portfolio_view(
     df_display,
     current_gen_date,
@@ -379,7 +498,9 @@ def render_portfolio_view(
     display_currency_decimals = int(currency_decimals)
 
     def format_portfolio_money(value):
-        return f"{currency_prefix}{value:,.{display_currency_decimals}f}{currency_suffix}"
+        return (
+            f"{currency_prefix}{value:,.{display_currency_decimals}f}{currency_suffix}"
+        )
 
     portfolio_strategy_view = st.session_state.get(
         KEY_PORTFOLIO_STRATEGY_VIEW, PORTFOLIO_VIEW_ACCUMULATION
@@ -400,12 +521,15 @@ def render_portfolio_view(
     st.markdown(f"### {title_by_view[portfolio_strategy_view]}")
     selected_sigma_level = (
         st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
-        if portfolio_strategy_view in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]
+        if portfolio_strategy_view
+        in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]
         else 0.0
     )
     use_current_sigma_scenario = selected_sigma_level == PORTFOLIO_SIGMA_CURRENT
     use_peak_powerlaw_scenario = selected_sigma_level == PORTFOLIO_SIGMA_PEAK_POWERLAW
-    use_trough_powerlaw_scenario = selected_sigma_level == PORTFOLIO_SIGMA_TROUGH_POWERLAW
+    use_trough_powerlaw_scenario = (
+        selected_sigma_level == PORTFOLIO_SIGMA_TROUGH_POWERLAW
+    )
     projection_intercept_a = a_active
     projection_slope_b = b_active
     selected_envelope = None
@@ -417,7 +541,9 @@ def render_portfolio_view(
             percentile_offsets,
             st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0),
         )
-        selected_envelope = envelope_overlay.get("peak" if use_peak_powerlaw_scenario else "trough")
+        selected_envelope = envelope_overlay.get(
+            "peak" if use_peak_powerlaw_scenario else "trough"
+        )
         if selected_envelope is not None:
             projection_intercept_a = float(selected_envelope["intercept"])
             projection_slope_b = float(selected_envelope["slope"])
@@ -449,7 +575,9 @@ def render_portfolio_view(
         ),
         forecast_unit=st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Month"),
         forecast_horizon=int(
-            st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
+            st.session_state.get(
+                KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON
+            )
         ),
         sigma_level=scenario_sigma_level,
         residual_sigma_log=calculate_residual_sigma_log(df_display),
@@ -484,7 +612,9 @@ def render_portfolio_view(
         return
 
     money_fmt = f"{currency_prefix}{{:,.{display_currency_decimals}f}}{currency_suffix}"
-    scenario_multiplier = np.power(10.0, resolve_portfolio_scenario_log_offset(settings))
+    scenario_multiplier = np.power(
+        10.0, resolve_portfolio_scenario_log_offset(settings)
+    )
     current_projection_day = max(
         float((df_display.index[-1] - current_gen_date).days),
         1.0,
@@ -494,7 +624,9 @@ def render_portfolio_view(
         projection_intercept_a,
         projection_slope_b,
     )
-    current_scenario_price = float(current_scenario_base[0]) * float(scenario_multiplier)
+    current_scenario_price = float(current_scenario_base[0]) * float(
+        scenario_multiplier
+    )
     if use_peak_powerlaw_scenario:
         current_price_label = "Current Peak PowerLaw Price"
     elif use_trough_powerlaw_scenario:
@@ -631,7 +763,8 @@ def render_portfolio_view(
                 gridcolor=pl_grid_color,
                 tickfont=dict(color=pl_text_color),
                 range=[
-                    portfolio_view.portfolio_display_df["Date"].min() - pd.Timedelta(days=90),
+                    portfolio_view.portfolio_display_df["Date"].min()
+                    - pd.Timedelta(days=90),
                     portfolio_view.portfolio_display_df["Date"].max(),
                 ],
             ),
@@ -728,14 +861,19 @@ def render_portfolio_view(
                     key=KEY_PORTFOLIO_PENSION_PAYOUT_PCT,
                 )
         conservative_payout_pct = min(
-            max(float(st.session_state.get(KEY_PORTFOLIO_PENSION_PAYOUT_PCT, 100.0)), 1.0),
+            max(
+                float(st.session_state.get(KEY_PORTFOLIO_PENSION_PAYOUT_PCT, 100.0)),
+                1.0,
+            ),
             100.0,
         )
         conservative_payout_ratio = conservative_payout_pct / 100.0
         conservative_monthly_withdrawal = (
             pension_estimate.minimum_monthly_withdrawal * conservative_payout_ratio
         )
-        conservative_btc_to_sell = pension_estimate.minimum_btc_to_sell * conservative_payout_ratio
+        conservative_btc_to_sell = (
+            pension_estimate.minimum_btc_to_sell * conservative_payout_ratio
+        )
         conservative_btc_to_sell_today = (
             pension_estimate.minimum_btc_to_sell_today * conservative_payout_ratio
         )
@@ -749,7 +887,9 @@ def render_portfolio_view(
         else:
             today_btc_sell_delta_label = f"cheaper than {pension_floor_label}"
             today_btc_sell_delta_class = "pension-metric-note-negative"
-        current_portfolio_value = current_price_display * max(float(settings.btc_amount), 0.0)
+        current_portfolio_value = current_price_display * max(
+            float(settings.btc_amount), 0.0
+        )
         st.markdown(
             (
                 "<div class='pension-metric-grid'>"
@@ -803,7 +943,9 @@ def render_portfolio_view(
             dtype=float,
         )
         pension_floor_offset = float(
-            np.interp(pension_floor_sigma, sigma_scenario_levels, sigma_scenario_offsets)
+            np.interp(
+                pension_floor_sigma, sigma_scenario_levels, sigma_scenario_offsets
+            )
         )
         sigma_table_rows = []
         for sigma_label, sigma_level in sigma_table_levels:
@@ -811,10 +953,14 @@ def render_portfolio_view(
                 sigma_price = current_price_display
                 sigma_next_price = pension_estimate.next_month_price
                 sigma_diff_pct = 0.0
-                sigma_label = f"Current σ ({pension_estimate.current_sigma_level:+.2f}σ)"
+                sigma_label = (
+                    f"Current σ ({pension_estimate.current_sigma_level:+.2f}σ)"
+                )
             else:
                 sigma_offset = float(
-                    np.interp(sigma_level, sigma_scenario_levels, sigma_scenario_offsets)
+                    np.interp(
+                        sigma_level, sigma_scenario_levels, sigma_scenario_offsets
+                    )
                 )
                 sigma_price = float(np.power(10.0, current_model_log + sigma_offset))
                 sigma_next_price = float(
@@ -922,14 +1068,18 @@ def render_portfolio_view(
         with s4:
             st.markdown("**Currency**")
             st.markdown(f"`{currency_unit}`")
-        submitted = st.form_submit_button("Test strategy", type="primary", width="stretch")
+        submitted = st.form_submit_button(
+            "Test strategy", type="primary", width="stretch"
+        )
         if submitted:
             st.session_state[KEY_PORTFOLIO_BACKTEST_HAS_RUN] = True
 
     if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False):
         selected_sell_pct = float(st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT])
         backtest_years = int(st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS])
-        selected_floor_model = st.session_state.get(KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL, "-2σ")
+        selected_floor_model = st.session_state.get(
+            KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL, "-2σ"
+        )
         floor_intercept_a = None
         floor_slope_b = None
         floor_model_label = floor_model_options.get(selected_floor_model, "-2σ")
@@ -967,7 +1117,10 @@ def render_portfolio_view(
     else:
         st.caption("Choose a strategy and period, then click Test strategy.")
 
-    if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False) and result is not None:
+    if (
+        st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False)
+        and result is not None
+    ):
         st.markdown(f"##### Last {backtest_years} years: {result.strategy_name}")
         total_withdrawal = float(result.backtest_df["MonthlyWithdrawal"].sum())
         m1, m2, m3, m4 = st.columns(4)
@@ -1114,235 +1267,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-try:
-    raw_df_usd = load_prepared_price_data()
-except Exception as e:
-    st.error(f"Error loading BTC price data: {e}")
-    st.stop()
-
-try:
-    raw_revenue_df = load_prepared_miner_revenue_data()
-except Exception as e:
-    st.error(f"Error loading miner revenue data: {e}")
-    st.stop()
-
-try:
-    raw_difficulty_df = load_prepared_difficulty_data()
-except Exception as e:
-    st.error(f"Error loading difficulty data: {e}")
-    st.stop()
-
-try:
-    raw_hashrate_df = load_prepared_hashrate_data()
-except Exception as e:
-    st.error(f"Error loading hashrate data: {e}")
-    st.stop()
-
-try:
-    raw_lightning_nodes_df = load_prepared_lightning_nodes_data()
-except Exception as e:
-    st.error(f"Error loading Lightning node data: {e}")
-    st.stop()
-
-try:
-    raw_lightning_capacity_df = load_prepared_lightning_capacity_data()
-except Exception as e:
-    st.error(f"Error loading Lightning capacity data: {e}")
-    st.stop()
-
-try:
-    raw_liquid_btc_df = load_prepared_liquid_btc_data()
-except Exception as e:
-    st.error(f"Error loading Liquid BTC data: {e}")
-    st.stop()
-
-try:
-    raw_liquid_transactions_df = load_prepared_liquid_transactions_data()
-except Exception as e:
-    st.error(f"Error loading Liquid transactions data: {e}")
-    st.stop()
-
-try:
-    raw_filecoin_btc_df = load_prepared_filecoin_btc_data()
-except Exception as e:
-    st.error(f"Error loading Filecoin/BTC data: {e}")
-    st.stop()
-
-try:
-    raw_monero_btc_df = load_prepared_monero_btc_data()
-except Exception as e:
-    st.error(f"Error loading Monero/BTC data: {e}")
-    st.stop()
-
-try:
-    raw_litecoin_btc_df = load_prepared_litecoin_btc_data()
-except Exception as e:
-    st.error(f"Error loading Litecoin/BTC data: {e}")
-    st.stop()
-
-try:
-    raw_dogecoin_btc_df = load_prepared_dogecoin_btc_data()
-except Exception as e:
-    st.error(f"Error loading Dogecoin/BTC data: {e}")
-    st.stop()
-
-try:
-    raw_us_m2_df = load_prepared_us_m2_data()
-except Exception as e:
-    st.error(f"Error loading U.S. M2 data: {e}")
-    st.stop()
-
-try:
-    raw_russian_m2_df = load_prepared_russian_m2_data()
-except Exception as e:
-    st.error(f"Error loading Russian M2 data: {e}")
-    st.stop()
-
-if KEY_CURRENCY_SELECTOR not in st.session_state:
-    st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_EURO
-
-raw_df_usd = raw_df_usd[raw_df_usd["Close"] > 0].copy()
-raw_df_usd["LogClose"] = np.log10(raw_df_usd["Close"])
-raw_revenue_df = raw_revenue_df[raw_revenue_df["Close"] > 0].copy()
-raw_revenue_df["LogClose"] = np.log10(raw_revenue_df["Close"])
-raw_difficulty_df = raw_difficulty_df[raw_difficulty_df["Close"] > 0].copy()
-raw_difficulty_df["LogClose"] = np.log10(raw_difficulty_df["Close"])
-raw_hashrate_df = raw_hashrate_df[raw_hashrate_df["Close"] > 0].copy()
-raw_hashrate_df["LogClose"] = np.log10(raw_hashrate_df["Close"])
-raw_lightning_nodes_df = raw_lightning_nodes_df[raw_lightning_nodes_df["Close"] > 0].copy()
-raw_lightning_nodes_df["LogClose"] = np.log10(raw_lightning_nodes_df["Close"])
-raw_lightning_capacity_df = raw_lightning_capacity_df[raw_lightning_capacity_df["Close"] > 0].copy()
-raw_lightning_capacity_df["LogClose"] = np.log10(raw_lightning_capacity_df["Close"])
-raw_liquid_btc_df = raw_liquid_btc_df[raw_liquid_btc_df["Close"] > 0].copy()
-raw_liquid_btc_df["LogClose"] = np.log10(raw_liquid_btc_df["Close"])
-raw_liquid_transactions_df = raw_liquid_transactions_df[
-    raw_liquid_transactions_df["Close"] > 0
-].copy()
-raw_liquid_transactions_df["LogClose"] = np.log10(raw_liquid_transactions_df["Close"])
-raw_filecoin_btc_df = raw_filecoin_btc_df[raw_filecoin_btc_df["Close"] > 0].copy()
-raw_filecoin_btc_df["LogClose"] = np.log10(raw_filecoin_btc_df["Close"])
-raw_monero_btc_df = raw_monero_btc_df[raw_monero_btc_df["Close"] > 0].copy()
-raw_monero_btc_df["LogClose"] = np.log10(raw_monero_btc_df["Close"])
-raw_litecoin_btc_df = raw_litecoin_btc_df[raw_litecoin_btc_df["Close"] > 0].copy()
-raw_litecoin_btc_df["LogClose"] = np.log10(raw_litecoin_btc_df["Close"])
-raw_dogecoin_btc_df = raw_dogecoin_btc_df[raw_dogecoin_btc_df["Close"] > 0].copy()
-raw_dogecoin_btc_df["LogClose"] = np.log10(raw_dogecoin_btc_df["Close"])
-raw_us_m2_df = raw_us_m2_df[raw_us_m2_df["Close"] > 0].copy()
-raw_us_m2_df["LogClose"] = np.log10(raw_us_m2_df["Close"])
-raw_russian_m2_df = raw_russian_m2_df[raw_russian_m2_df["Close"] > 0].copy()
-raw_russian_m2_df["LogClose"] = np.log10(raw_russian_m2_df["Close"])
-raw_bitcoin_volatility_df = build_prepared_bitcoin_volatility_data(raw_df_usd)
-raw_bitcoin_network_simulation_df = prepare_bitcoin_network_simulation(
-    raw_df_usd,
-    seed=int(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1)),
-    resolution_days=float(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION, 0.00001)),
-)
-
-# Use current session currency for sidebar AF/R2 calculations in PowerLaw Bitcoin mode.
-sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
-if sidebar_currency not in [
-    CURRENCY_EURO,
-    CURRENCY_DOLLAR,
-    CURRENCY_UAH,
-    CURRENCY_RUB,
-    CURRENCY_GOLD,
-    CURRENCY_SILVER,
-    CURRENCY_COPPER,
-    CURRENCY_IRON,
-    CURRENCY_ALUMINUM,
-    CURRENCY_US_HOUSING,
-]:
-    sidebar_currency = CURRENCY_DOLLAR
-sidebar_price_close = build_currency_close_series(raw_df_usd, sidebar_currency)
-sidebar_price_close = sidebar_price_close[sidebar_price_close > 0]
-sidebar_price_log_close = np.log10(sidebar_price_close.values)
-
-raw_series_frames = {
-    POWERLAW_SERIES_PRICE: raw_df_usd,
-    POWERLAW_SERIES_REVENUE: raw_revenue_df,
-    POWERLAW_SERIES_BITCOIN_VOLATILITY: raw_bitcoin_volatility_df,
-    POWERLAW_SERIES_DIFFICULTY: raw_difficulty_df,
-    POWERLAW_SERIES_HASHRATE: raw_hashrate_df,
-    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION: raw_bitcoin_network_simulation_df,
-    POWERLAW_SERIES_LIGHTNING_NODES: raw_lightning_nodes_df,
-    POWERLAW_SERIES_LIGHTNING_CAPACITY: raw_lightning_capacity_df,
-    POWERLAW_SERIES_LIQUID_BTC: raw_liquid_btc_df,
-    POWERLAW_SERIES_LIQUID_TRANSACTIONS: raw_liquid_transactions_df,
-    POWERLAW_SERIES_FILECOIN_BTC: raw_filecoin_btc_df,
-    POWERLAW_SERIES_MONERO_BTC: raw_monero_btc_df,
-    POWERLAW_SERIES_LITECOIN_BTC: raw_litecoin_btc_df,
-    POWERLAW_SERIES_DOGECOIN_BTC: raw_dogecoin_btc_df,
-    POWERLAW_SERIES_US_M2: raw_us_m2_df,
-    POWERLAW_SERIES_RUSSIAN_M2: raw_russian_m2_df,
-}
-sidebar_series_data = {
-    POWERLAW_SERIES_PRICE: {
-        "absolute_days": raw_df_usd["AbsDays"].values,
-        "log_close": sidebar_price_log_close,
-    },
-    POWERLAW_SERIES_REVENUE: {
-        "absolute_days": raw_revenue_df["AbsDays"].values,
-        "log_close": raw_revenue_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_BITCOIN_VOLATILITY: {
-        "absolute_days": raw_bitcoin_volatility_df["AbsDays"].values,
-        "log_close": raw_bitcoin_volatility_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_DIFFICULTY: {
-        "absolute_days": raw_difficulty_df["AbsDays"].values,
-        "log_close": raw_difficulty_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_HASHRATE: {
-        "absolute_days": raw_hashrate_df["AbsDays"].values,
-        "log_close": raw_hashrate_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION: {
-        "absolute_days": raw_bitcoin_network_simulation_df["AbsDays"].values,
-        "log_close": raw_bitcoin_network_simulation_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_LIGHTNING_NODES: {
-        "absolute_days": raw_lightning_nodes_df["AbsDays"].values,
-        "log_close": raw_lightning_nodes_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_LIGHTNING_CAPACITY: {
-        "absolute_days": raw_lightning_capacity_df["AbsDays"].values,
-        "log_close": raw_lightning_capacity_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_LIQUID_BTC: {
-        "absolute_days": raw_liquid_btc_df["AbsDays"].values,
-        "log_close": raw_liquid_btc_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_LIQUID_TRANSACTIONS: {
-        "absolute_days": raw_liquid_transactions_df["AbsDays"].values,
-        "log_close": raw_liquid_transactions_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_FILECOIN_BTC: {
-        "absolute_days": raw_filecoin_btc_df["AbsDays"].values,
-        "log_close": raw_filecoin_btc_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_MONERO_BTC: {
-        "absolute_days": raw_monero_btc_df["AbsDays"].values,
-        "log_close": raw_monero_btc_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_LITECOIN_BTC: {
-        "absolute_days": raw_litecoin_btc_df["AbsDays"].values,
-        "log_close": raw_litecoin_btc_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_DOGECOIN_BTC: {
-        "absolute_days": raw_dogecoin_btc_df["AbsDays"].values,
-        "log_close": raw_dogecoin_btc_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_US_M2: {
-        "absolute_days": raw_us_m2_df["AbsDays"].values,
-        "log_close": raw_us_m2_df["LogClose"].values,
-    },
-    POWERLAW_SERIES_RUSSIAN_M2: {
-        "absolute_days": raw_russian_m2_df["AbsDays"].values,
-        "log_close": raw_russian_m2_df["LogClose"].values,
-    },
-}
-
 # --- THEME + STATE ---
 initialize_app_session_state()
 
@@ -1360,6 +1284,9 @@ c_hover_bg = theme["c_hover_bg"]
 c_hover_text = theme["c_hover_text"]
 c_border = theme["c_border"]
 
+series_store = SeriesFrameStore()
+sidebar_series_data = SidebarSeriesData(series_store)
+
 # --- SIDEBAR ASSEMBLY ---
 (
     mode,
@@ -1376,16 +1303,28 @@ c_border = theme["c_border"]
     FORECAST_HORIZON_MIN,
     FORECAST_HORIZON_MAX,
 )
-active_model = get_active_model_config(mode, powerlaw_series, logperiodic_series, currency)
-st.session_state[KEY_A] = float(st.session_state.get(active_model.a_key, active_model.default_a))
-st.session_state[KEY_B] = float(st.session_state.get(active_model.b_key, active_model.default_b))
+active_model = get_active_model_config(
+    mode, powerlaw_series, logperiodic_series, currency
+)
+st.session_state[KEY_A] = float(
+    st.session_state.get(active_model.a_key, active_model.default_a)
+)
+st.session_state[KEY_B] = float(
+    st.session_state.get(active_model.b_key, active_model.default_b)
+)
 
-selected_series_name = get_selected_series_name(mode, powerlaw_series, logperiodic_series)
+selected_series_name = get_selected_series_name(
+    mode, powerlaw_series, logperiodic_series
+)
 active_series_supports_currency = series_supports_currency_selector(
     mode, powerlaw_series, logperiodic_series
 )
 
-if mode == MODE_POWERLAW and (not active_series_supports_currency) and currency != CURRENCY_DOLLAR:
+if (
+    mode == MODE_POWERLAW
+    and (not active_series_supports_currency)
+    and currency != CURRENCY_DOLLAR
+):
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
     st.rerun()
 if active_series_supports_currency and currency != st.session_state.get(
@@ -1401,7 +1340,9 @@ if (
     st.rerun()
 
 # --- MAIN CALCULATIONS ---
-active_model = get_active_model_config(mode, powerlaw_series, logperiodic_series, currency)
+active_model = get_active_model_config(
+    mode, powerlaw_series, logperiodic_series, currency
+)
 session_genesis_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, 0))
 genesis_offset = (
     int(active_model.model_origin_abs_day)
@@ -1410,12 +1351,13 @@ genesis_offset = (
 )
 current_gen_date = GENESIS_DATE + pd.Timedelta(days=genesis_offset)
 if active_model.supports_currency_selector:
+    raw_df_usd = series_store.get(POWERLAW_SERIES_PRICE)
     raw_df = raw_df_usd.copy()
     raw_df["Close"] = build_currency_close_series(raw_df_usd, currency)
     raw_df = raw_df[raw_df["Close"] > 0].copy()
     raw_df["LogClose"] = np.log10(raw_df["Close"])
 else:
-    raw_df = raw_series_frames[selected_series_name].copy()
+    raw_df = series_store.get(selected_series_name).copy()
 
 active_abs_days = raw_df["AbsDays"].values
 active_a_key = active_model.a_key
@@ -1470,6 +1412,7 @@ df_display["FairDisplay"] = df_display["Fair"]
 
 bitcoin_residual_overlay_df = None
 if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
+    raw_df_usd = series_store.get(POWERLAW_SERIES_PRICE)
     price_model = get_active_model_config(
         MODE_POWERLAW,
         POWERLAW_SERIES_PRICE,
@@ -1482,12 +1425,16 @@ if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
         else session_genesis_offset
     )
     bitcoin_residual_overlay_df = raw_df_usd.copy()
-    bitcoin_residual_overlay_df["Close"] = build_currency_close_series(raw_df_usd, currency)
+    bitcoin_residual_overlay_df["Close"] = build_currency_close_series(
+        raw_df_usd, currency
+    )
     bitcoin_residual_overlay_df = bitcoin_residual_overlay_df[
         (bitcoin_residual_overlay_df["AbsDays"] > price_genesis_offset)
         & (bitcoin_residual_overlay_df["Close"] > 0)
     ].copy()
-    bitcoin_residual_overlay_df["LogClose"] = np.log10(bitcoin_residual_overlay_df["Close"])
+    bitcoin_residual_overlay_df["LogClose"] = np.log10(
+        bitcoin_residual_overlay_df["Close"]
+    )
     bitcoin_residual_overlay_df["Days"] = (
         bitcoin_residual_overlay_df["AbsDays"] - price_genesis_offset
     )
@@ -1495,7 +1442,9 @@ if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
     bitcoin_trend = resolve_trend_parameters(
         bitcoin_residual_overlay_df["LogD"].values,
         bitcoin_residual_overlay_df["LogClose"].values,
-        intercept_a=float(st.session_state.get(price_model.a_key, price_model.default_a)),
+        intercept_a=float(
+            st.session_state.get(price_model.a_key, price_model.default_a)
+        ),
         slope_b=float(st.session_state.get(price_model.b_key, price_model.default_b)),
         active_mode=MODE_POWERLAW,
     )
@@ -1506,7 +1455,9 @@ if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
     )
     if np.all(np.isfinite(bitcoin_percentile_offsets)):
         bitcoin_residual_overlay_df["ResidualSigma"] = [
-            interpolate_sigma_level_from_log_offset(residual, bitcoin_percentile_offsets)
+            interpolate_sigma_level_from_log_offset(
+                residual, bitcoin_percentile_offsets
+            )
             for residual in bitcoin_residual_overlay_df["Res"].to_numpy(dtype=float)
         ]
     else:
@@ -1547,7 +1498,9 @@ osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
 r2_combined = current_r2
 osc_reference_log_day = float(df_display["LogD"].min())
 osc_harmonic_coefficients = np.array([], dtype=float)
-selected_harmonic_count = max(1, min(3, int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1))))
+selected_harmonic_count = max(
+    1, min(3, int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1)))
+)
 logperiodic_stats_rows = None
 perrenod_stats_rows = None
 perrenod_curve = None
@@ -1646,7 +1599,9 @@ if mode == MODE_LOGPERIODIC:
             harmonic_result.reference_log_day,
             harmonic_result.harmonic_coefficients,
         )
-    if perrenod_stats_rows and bool(st.session_state.get(KEY_LOGPERIODIC_SHOW_DECAYED_DSI, True)):
+    if perrenod_stats_rows and bool(
+        st.session_state.get(KEY_LOGPERIODIC_SHOW_DECAYED_DSI, True)
+    ):
         target_perrenod_row = next(
             (
                 row
@@ -1738,6 +1693,12 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         bitcoin_residual_overlay_df=bitcoin_residual_overlay_df,
         osc_visible_start_abs_day=(
             active_model.oscillator_min_abs_day if mode == MODE_LOGPERIODIC else None
+        ),
+        moving_average_windows=(
+            (10, 30, 90)
+            if mode == MODE_POWERLAW
+            and powerlaw_series == POWERLAW_SERIES_BITCOIN_VOLATILITY
+            else None
         ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"

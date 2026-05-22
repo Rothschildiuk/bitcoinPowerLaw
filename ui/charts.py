@@ -22,6 +22,11 @@ LOGPERIODIC_EXTREMA_HARMONICS = (
     (2, "ω,2ω", "dash", 1.15, 0.62),
     (3, "ω,2ω,4ω", "dot", 0.95, 0.48),
 )
+MOVING_AVERAGE_LINE_STYLES = (
+    "#22c55e",
+    "#f97316",
+    "#a78bfa",
+)
 
 
 def _main_chart_plotly_config():
@@ -35,7 +40,9 @@ def _main_chart_plotly_config():
     }
 
 
-def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS):
+def _resolve_time_axis_start_date(
+    df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS
+):
     first_data_date = pd.Timestamp(df_display.index.min())
     return first_data_date - pd.Timedelta(days=int(padding_days))
 
@@ -48,7 +55,9 @@ def _resolve_model_view_max(
 ):
     latest_data_date = pd.Timestamp(df_display.index.max()).normalize()
     today_date = (
-        pd.Timestamp.today().normalize() if today is None else pd.Timestamp(today).normalize()
+        pd.Timestamp.today().normalize()
+        if today is None
+        else pd.Timestamp(today).normalize()
     )
     anchor_date = max(latest_data_date, today_date)
     horizon_end_date = anchor_date + pd.DateOffset(years=int(forward_years))
@@ -65,7 +74,9 @@ def _resolve_powerlaw_y_range(
     visible_start_day=None,
     include_bands=True,
 ):
-    btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
+    btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(
+        dtype=float
+    )
     fair_vals = np.asarray(m_fair_display, dtype=float)
     if model_x is not None and visible_start_day is not None:
         model_x_arr = np.asarray(model_x)
@@ -153,6 +164,26 @@ def _convert_log_offsets_to_sigma_levels(values, percentile_offsets):
     return sigma_values
 
 
+def _iter_moving_average_series(df_display, windows):
+    if not windows:
+        return []
+
+    close_values = pd.to_numeric(df_display["CloseDisplay"], errors="coerce")
+    lines = []
+    for window in windows:
+        window_days = int(window)
+        if window_days <= 1:
+            continue
+
+        rolling_values = close_values.rolling(
+            window_days, min_periods=window_days
+        ).mean()
+        if rolling_values.notna().any():
+            lines.append((window_days, rolling_values))
+
+    return lines
+
+
 def _format_sigma_line_name(level):
     return f"{level:+g}σ"
 
@@ -201,7 +232,9 @@ def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendran
     )
 
 
-def _add_logperiodic_extrema_traces(fig, extrema_lines, current_gen_date, is_log_time, y_range):
+def _add_logperiodic_extrema_traces(
+    fig, extrema_lines, current_gen_date, is_log_time, y_range
+):
     if y_range is None or len(y_range) != 2:
         return
     y_min, y_max = float(y_range[0]), float(y_range[1])
@@ -270,7 +303,9 @@ def _resolve_linear_y_span(*series_parts):
     return [y_min - padding, y_max + padding]
 
 
-def _iter_logperiodic_extrema_lines(plot_x_model, harmonic_curves, selected_harmonic_count):
+def _iter_logperiodic_extrema_lines(
+    plot_x_model, harmonic_curves, selected_harmonic_count
+):
     if not harmonic_curves:
         return []
 
@@ -302,8 +337,12 @@ def _iter_logperiodic_extrema_lines(plot_x_model, harmonic_curves, selected_harm
     previous_values = y_curve[:-2]
     current_values = y_curve[1:-1]
     next_values = y_curve[2:]
-    local_high_mask = (current_values > previous_values) & (current_values >= next_values)
-    local_low_mask = (current_values < previous_values) & (current_values <= next_values)
+    local_high_mask = (current_values > previous_values) & (
+        current_values >= next_values
+    )
+    local_low_mask = (current_values < previous_values) & (
+        current_values <= next_values
+    )
 
     for x_value in x_curve[1:-1][local_high_mask]:
         extrema_lines.append(
@@ -380,9 +419,12 @@ def render_main_model_chart(
     chart_key,
     bitcoin_residual_overlay_df=None,
     osc_visible_start_abs_day=None,
+    moving_average_windows=None,
 ):
     fig = (
-        make_subplots(specs=[[{"secondary_y": True}]]) if mode == MODE_LOGPERIODIC else go.Figure()
+        make_subplots(specs=[[{"secondary_y": True}]])
+        if mode == MODE_LOGPERIODIC
+        else go.Figure()
     )
     tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
     hover_label = dict(
@@ -396,10 +438,18 @@ def render_main_model_chart(
         p16_5_name = "-1σ (16.5th percentile)"
         p2_5_name = "-2σ (2.5th percentile)"
 
-        p2_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p2_5, 1.0)
-        p16_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p16_5, 1.0)
-        p83_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p83_5, 1.0)
-        p97_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p97_5, 1.0)
+        p2_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p2_5, 1.0
+        )
+        p16_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p16_5, 1.0
+        )
+        p83_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p83_5, 1.0
+        )
+        p97_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p97_5, 1.0
+        )
 
         if is_log_time:
             fig.add_trace(
@@ -440,6 +490,29 @@ def render_main_model_chart(
                 hovertemplate=btc_hover,
             )
         )
+        for ma_index, (window_days, moving_average) in enumerate(
+            _iter_moving_average_series(df_display, moving_average_windows)
+        ):
+            ma_name = f"{window_days}D MA"
+            ma_color = MOVING_AVERAGE_LINE_STYLES[
+                ma_index % len(MOVING_AVERAGE_LINE_STYLES)
+            ]
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_x_main,
+                    y=moving_average,
+                    mode="lines",
+                    name=ma_name,
+                    line=dict(color=ma_color, width=1.4),
+                    legendrank=11 + ma_index,
+                    customdata=df_display.index.strftime("%d.%m.%Y"),
+                    hovertemplate=(
+                        f"<b>{ma_name}</b>: "
+                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                        "<br>%{customdata}<extra></extra>"
+                    ),
+                )
+            )
 
         def add_model_line(y_values, name, line, legendgroup, visible=True):
             fig.add_trace(
@@ -494,26 +567,26 @@ def render_main_model_chart(
             p97_5_series,
             p97_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
-            "sigma_p2",
+            "sigma_abs_2",
         )
         add_model_line(
             optional_sigma_series[1.5],
             _format_sigma_line_name(1.5),
             _optional_sigma_line_style(1.5),
-            "sigma_p1_5",
+            "sigma_abs_1_5",
             visible="legendonly",
         )
         add_model_line(
             p83_5_series,
             p83_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
-            "sigma_p1",
+            "sigma_abs_1",
         )
         add_model_line(
             optional_sigma_series[0.5],
             _format_sigma_line_name(0.5),
             _optional_sigma_line_style(0.5),
-            "sigma_p0_5",
+            "sigma_abs_0_5",
             visible="legendonly",
         )
         add_model_line(
@@ -522,7 +595,10 @@ def render_main_model_chart(
             dict(color="#f0b90b", width=1.8),
             "power_regression",
         )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
+        if (
+            peak_powerlaw_overlay is not None
+            and peak_powerlaw_overlay.get("peak") is not None
+        ):
             peak_overlay = peak_powerlaw_overlay["peak"]
             peak_values = peak_overlay["model_values"]
             add_model_line(
@@ -536,7 +612,10 @@ def render_main_model_chart(
             peak_x = (
                 peak_days
                 if is_log_time
-                else [current_gen_date + pd.Timedelta(days=float(day)) for day in peak_days]
+                else [
+                    current_gen_date + pd.Timedelta(days=float(day))
+                    for day in peak_days
+                ]
             )
             fig.add_trace(
                 go.Scatter(
@@ -555,7 +634,9 @@ def render_main_model_chart(
                     visible="legendonly",
                     showlegend=True,
                     customdata=[
-                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
+                        (current_gen_date + pd.Timedelta(days=float(day))).strftime(
+                            "%d.%m.%Y"
+                        )
                         for day in peak_days
                     ],
                     hovertemplate=(
@@ -565,7 +646,10 @@ def render_main_model_chart(
                     ),
                 )
             )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
+        if (
+            peak_powerlaw_overlay is not None
+            and peak_powerlaw_overlay.get("trough") is not None
+        ):
             trough_overlay = peak_powerlaw_overlay["trough"]
             trough_values = trough_overlay["model_values"]
             add_model_line(
@@ -579,7 +663,10 @@ def render_main_model_chart(
             trough_x = (
                 trough_days
                 if is_log_time
-                else [current_gen_date + pd.Timedelta(days=float(day)) for day in trough_days]
+                else [
+                    current_gen_date + pd.Timedelta(days=float(day))
+                    for day in trough_days
+                ]
             )
             fig.add_trace(
                 go.Scatter(
@@ -598,7 +685,9 @@ def render_main_model_chart(
                     visible="legendonly",
                     showlegend=True,
                     customdata=[
-                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
+                        (current_gen_date + pd.Timedelta(days=float(day))).strftime(
+                            "%d.%m.%Y"
+                        )
                         for day in trough_days
                     ],
                     hovertemplate=(
@@ -612,51 +701,51 @@ def render_main_model_chart(
             optional_sigma_series[-0.5],
             _format_sigma_line_name(-0.5),
             _optional_sigma_line_style(-0.5),
-            "sigma_m0_5",
+            "sigma_abs_0_5",
             visible="legendonly",
         )
         add_model_line(
             p16_5_series,
             p16_5_name,
             dict(color="#1199d6", width=1.2, dash="dot"),
-            "sigma_m1",
+            "sigma_abs_1",
         )
         add_model_line(
             optional_sigma_series[-1.5],
             _format_sigma_line_name(-1.5),
             _optional_sigma_line_style(-1.5),
-            "sigma_m1_5",
+            "sigma_abs_1_5",
             visible="legendonly",
         )
         add_model_line(
             p2_5_series,
             p2_5_name,
             dict(color="#ea3d2f", width=1.2, dash="dot"),
-            "sigma_m2",
+            "sigma_abs_2",
         )
         add_legend_item(
-            p2_5_name,
+            "±2σ (2.5th/97.5th percentile)",
             dict(color="#ea3d2f", width=1.2, dash="dot"),
-            "sigma_m2",
+            "sigma_abs_2",
             legendrank=100,
         )
         add_legend_item(
-            _format_sigma_line_name(-1.5),
+            "±1.5σ",
             _optional_sigma_line_style(-1.5),
-            "sigma_m1_5",
+            "sigma_abs_1_5",
             visible="legendonly",
             legendrank=110,
         )
         add_legend_item(
-            p16_5_name,
+            "±1σ (16.5th/83.5th percentile)",
             dict(color="#1199d6", width=1.2, dash="dot"),
-            "sigma_m1",
+            "sigma_abs_1",
             legendrank=120,
         )
         add_legend_item(
-            _format_sigma_line_name(-0.5),
+            "±0.5σ",
             _optional_sigma_line_style(-0.5),
-            "sigma_m0_5",
+            "sigma_abs_0_5",
             visible="legendonly",
             legendrank=130,
         )
@@ -666,7 +755,10 @@ def render_main_model_chart(
             "power_regression",
             legendrank=20,
         )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
+        if (
+            peak_powerlaw_overlay is not None
+            and peak_powerlaw_overlay.get("peak") is not None
+        ):
             add_legend_item(
                 "Peak PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
@@ -674,7 +766,10 @@ def render_main_model_chart(
                 visible="legendonly",
                 legendrank=30,
             )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
+        if (
+            peak_powerlaw_overlay is not None
+            and peak_powerlaw_overlay.get("trough") is not None
+        ):
             add_legend_item(
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
@@ -682,35 +777,11 @@ def render_main_model_chart(
                 visible="legendonly",
                 legendrank=40,
             )
-        add_legend_item(
-            _format_sigma_line_name(0.5),
-            _optional_sigma_line_style(0.5),
-            "sigma_p0_5",
-            visible="legendonly",
-            legendrank=140,
-        )
-        add_legend_item(
-            p83_5_name,
-            dict(color="#1199d6", width=1.2, dash="dot"),
-            "sigma_p1",
-            legendrank=150,
-        )
-        add_legend_item(
-            _format_sigma_line_name(1.5),
-            _optional_sigma_line_style(1.5),
-            "sigma_p1_5",
-            visible="legendonly",
-            legendrank=160,
-        )
-        add_legend_item(
-            p97_5_name,
-            dict(color="#ea3d2f", width=1.2, dash="dot"),
-            "sigma_p2",
-            legendrank=170,
-        )
         y_range_model_x = plot_x_model if is_log_time else m_dates
         y_range_visible_start = (
-            max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
+            max(1.0, float(df_display["Days"].min()))
+            if is_log_time
+            else df_display.index.min()
         )
         powerlaw_y_range = _resolve_powerlaw_y_range(
             df_display,
@@ -751,7 +822,10 @@ def render_main_model_chart(
         osc_prices = df_display["CloseDisplay"].to_numpy(dtype=float)[osc_mask]
         osc_hover_data = np.column_stack([osc_dates, osc_prices])
 
-        if bitcoin_residual_overlay_df is not None and not bitcoin_residual_overlay_df.empty:
+        if (
+            bitcoin_residual_overlay_df is not None
+            and not bitcoin_residual_overlay_df.empty
+        ):
             btc_residual_x = (
                 bitcoin_residual_overlay_df["Days"]
                 if is_log_time
@@ -769,9 +843,9 @@ def render_main_model_chart(
                         mode="lines",
                         name="Bitcoin price residual σ",
                         line=dict(color=pl_btc_color, width=1.4),
-                        customdata=bitcoin_residual_overlay_df.index.strftime("%d.%m.%Y").to_numpy()[
-                            btc_residual_mask
-                        ],
+                        customdata=bitcoin_residual_overlay_df.index.strftime(
+                            "%d.%m.%Y"
+                        ).to_numpy()[btc_residual_mask],
                         hovertemplate="<b>%{customdata}</b><br>Bitcoin price residual: %{y:.2f}σ<extra></extra>",
                         visible="legendonly",
                     )
@@ -796,7 +870,9 @@ def render_main_model_chart(
         if show_historical_powerlaw_slope:
             slope_vals = np.asarray(historical_powerlaw_slopes, dtype=float)[osc_mask]
             finite_slope_vals = slope_vals[np.isfinite(slope_vals)]
-            final_slope_label = f" {finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
+            final_slope_label = (
+                f" {finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
+            )
             fig.add_trace(
                 go.Scatter(
                     x=osc_x_vals,
@@ -827,7 +903,11 @@ def render_main_model_chart(
                     name=f"DSI {harmonic_labels.get(harmonic_count, harmonic_count)}",
                     line=dict(
                         color=harmonic_colors.get(harmonic_count, "#ea3d2f"),
-                        width=2.6 if harmonic_count == int(selected_harmonic_count) else 1.9,
+                        width=(
+                            2.6
+                            if harmonic_count == int(selected_harmonic_count)
+                            else 1.9
+                        ),
                     ),
                     hoverinfo="skip",
                     visible="legendonly",
@@ -952,12 +1032,12 @@ def render_main_model_chart(
 
     fig.update_layout(
         height=600,
-        margin=dict(t=86, b=10, l=50, r=20),
+        margin=dict(t=40, b=72, l=50, r=20),
         template=pl_template,
         font=dict(color=pl_text_color),
         legend=dict(
             orientation="h",
-            y=1.0,
+            y=-0.12,
             yanchor="top",
             x=0,
             xanchor="left",
