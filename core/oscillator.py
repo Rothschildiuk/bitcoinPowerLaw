@@ -267,6 +267,8 @@ def _format_mode_label(mode_multipliers):
 
 
 def _format_metric_value(value, precision):
+    if value is None:
+        return "-"
     if not np.isfinite(value):
         return "-"
     return f"{value:.{precision}f}"
@@ -519,10 +521,7 @@ def compute_perrenod_comparison_stats_table(
     lambda_bounds,
 ):
     min_lambda, max_lambda = lambda_bounds
-    rows = [
-        compute_linear_cycle_regression_stats(days_since_genesis, residual_series, 3.5),
-        compute_linear_cycle_regression_stats(days_since_genesis, residual_series, 4.0),
-    ]
+    rows = []
     for decay_model in ("none", "reciprocal_age"):
         for harmonic_count in (1, 2, 3):
             rows.append(
@@ -539,28 +538,30 @@ def compute_perrenod_comparison_stats_table(
     return rows
 
 
-def render_logperiodic_regression_stats_table(
-    logperiodic_stats_rows, perrenod_stats_rows
-):
+def render_logperiodic_regression_stats_table(logperiodic_stats_rows, perrenod_stats_rows):
     combined_rows = []
-    for row in logperiodic_stats_rows or []:
-        combined_rows.append(
-            {
-                "model": f"Current λ DSI {_format_mode_label(row.mode_multipliers)}",
-                "fit": "current λ",
-                "params": row.parameter_count,
-                "r2": row.r2,
-            }
-        )
-    for row in perrenod_stats_rows or []:
+    perrenod_rows = [row for row in perrenod_stats_rows or [] if row is not None]
+    decayed_rows_by_model = {
+        row.label.removesuffix(" decayed"): row
+        for row in perrenod_rows
+        if row.label.startswith("DSI ") and row.label.endswith(" decayed")
+    }
+    for row in perrenod_rows:
         if row is None:
             continue
+        if not row.label.startswith("DSI "):
+            continue
+        if row.label.endswith(" decayed"):
+            continue
+
+        decayed_row = decayed_rows_by_model.get(row.label)
         combined_rows.append(
             {
                 "model": row.label,
                 "fit": row.parameter_label,
                 "params": row.parameter_count,
                 "r2": row.r2,
+                "decayed_r2": decayed_row.r2 if decayed_row is not None else None,
             }
         )
 
@@ -575,6 +576,7 @@ def render_logperiodic_regression_stats_table(
             f"<td>{row['fit']}</td>"
             f"<td>{row['params']}</td>"
             f"<td>{_format_metric_value(row['r2'], 2)}</td>"
+            f"<td>{_format_metric_value(row['decayed_r2'], 2)}</td>"
             "</tr>"
         )
         for index, row in enumerate(combined_rows)
@@ -592,7 +594,7 @@ def render_logperiodic_regression_stats_table(
             "<div class='lp-stats-table-wrap'>"
             "<table class='lp-stats-table lp-combined-table'>"
             "<thead><tr>"
-            "<th>Model</th><th>Fit</th><th>Params</th><th>R²%</th>"
+            "<th>Model</th><th>Fit</th><th>Params</th><th>R²%</th><th>Decayed R²%</th>"
             "</tr></thead>"
             f"<tbody>{rows_html}</tbody>"
             "</table>"
@@ -859,6 +861,55 @@ _auto_fit_oscillator = optimize_oscillator_parameters
 get_oscillator_wave = build_oscillator_wave
 oscillator_func_manual = build_oscillator_curve
 
+KEY_LOGPERIODIC_DSI_MODE = "logperiodic_dsi_mode"
+DSI_MODE_STANDARD_1 = "standard_1"
+DSI_MODE_STANDARD_2 = "standard_2"
+DSI_MODE_STANDARD_3 = "standard_3"
+DSI_MODE_DECAYED_3 = "decayed_3"
+DSI_MODE_OPTIONS = (
+    DSI_MODE_STANDARD_1,
+    DSI_MODE_STANDARD_2,
+    DSI_MODE_STANDARD_3,
+    DSI_MODE_DECAYED_3,
+)
+DSI_MODE_CONFIGS = {
+    DSI_MODE_STANDARD_1: (1, False, "ω"),
+    DSI_MODE_STANDARD_2: (2, False, "ω,2ω"),
+    DSI_MODE_STANDARD_3: (3, False, "ω,2ω,4ω"),
+    DSI_MODE_DECAYED_3: (3, True, "ω,2ω,4ω Decayed"),
+}
+DEFAULT_DSI_MODE = DSI_MODE_DECAYED_3
+
+
+def resolve_dsi_mode_option(harmonic_count, show_decayed_regression=False):
+    if show_decayed_regression:
+        return DSI_MODE_DECAYED_3
+
+    harmonic_count = _normalize_harmonic_count(harmonic_count)
+    return {
+        1: DSI_MODE_STANDARD_1,
+        2: DSI_MODE_STANDARD_2,
+        3: DSI_MODE_STANDARD_3,
+    }.get(harmonic_count, DSI_MODE_STANDARD_1)
+
+
+def apply_dsi_mode_option(option, *, sync_widget_key=True):
+    harmonic_count, show_decayed_regression, _ = DSI_MODE_CONFIGS.get(
+        option,
+        DSI_MODE_CONFIGS[DSI_MODE_STANDARD_1],
+    )
+    st.session_state[KEY_LOGPERIODIC_HARMONICS] = harmonic_count
+    st.session_state[KEY_LOGPERIODIC_SHOW_DECAYED_DSI] = show_decayed_regression
+    if sync_widget_key:
+        st.session_state[KEY_LOGPERIODIC_DSI_MODE] = resolve_dsi_mode_option(
+            harmonic_count,
+            show_decayed_regression,
+        )
+
+
+def format_dsi_mode_option(option):
+    return DSI_MODE_CONFIGS.get(option, DSI_MODE_CONFIGS[DSI_MODE_STANDARD_1])[2]
+
 
 # --- SIDEBAR RENDERER ---
 def render_sidebar(
@@ -888,6 +939,7 @@ def render_sidebar(
                 st.session_state[KEY_LOGPERIODIC_HARMONICS] = int(v)
                 continue
             st.session_state[k] = v
+        apply_dsi_mode_option(DEFAULT_DSI_MODE)
 
     days_since_genesis = all_abs_days - st.session_state.get(KEY_GENESIS_OFFSET, 0)
     valid_days_mask = days_since_genesis > 0
@@ -980,24 +1032,20 @@ def render_sidebar(
         f"{format_cycle_anchor_date(st.session_state['t1_age'], st.session_state.get(KEY_GENESIS_OFFSET, 0))}"
     )
     render_oscillator_control("Lambda", "lambda_val", 0.01, lambda_min, lambda_max)
-    st.markdown("**DSI modes**")
-    st.radio(
-        "DSI modes",
-        harmonic_options,
-        format_func=lambda count: _format_mode_label(resolve_harmonic_multipliers(count)),
-        key=KEY_LOGPERIODIC_HARMONICS,
+    if KEY_LOGPERIODIC_SHOW_DECAYED_DSI not in st.session_state:
+        st.session_state[KEY_LOGPERIODIC_SHOW_DECAYED_DSI] = True
+    if KEY_LOGPERIODIC_DSI_MODE not in st.session_state:
+        st.session_state[KEY_LOGPERIODIC_DSI_MODE] = DEFAULT_DSI_MODE
+    st.markdown("**DSI mode**")
+    selected_dsi_mode = st.radio(
+        "DSI mode",
+        DSI_MODE_OPTIONS,
+        format_func=format_dsi_mode_option,
+        key=KEY_LOGPERIODIC_DSI_MODE,
         horizontal=True,
         label_visibility="collapsed",
     )
-    if KEY_LOGPERIODIC_SHOW_DECAYED_DSI not in st.session_state:
-        st.session_state[KEY_LOGPERIODIC_SHOW_DECAYED_DSI] = False
-    st.radio(
-        "DSI regression",
-        [False, True],
-        format_func=lambda use_decay: "Decayed" if use_decay else "Standard",
-        key=KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
-        horizontal=True,
-    )
+    apply_dsi_mode_option(selected_dsi_mode, sync_widget_key=False)
     # --- R2 Calculation for Sidebar Display ---
     if has_fit_data:
         harmonic_count = _normalize_harmonic_count(

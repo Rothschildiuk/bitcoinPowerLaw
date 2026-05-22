@@ -14,6 +14,7 @@ from core.constants import (
     KEY_LAST_MODE,
     KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_LAST_SERIES,
+    KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     KEY_MODE_SELECTOR,
     KEY_LOGPERIODIC_SERIES,
     KEY_POWERLAW_ENVELOPE_SIGMA,
@@ -58,6 +59,18 @@ from core.series_registry import (
 )
 
 KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
+KEY_LAST_PORTFOLIO_VIEW = "last_portfolio_strategy_view"
+
+
+def _sync_portfolio_forecast_unit_default(selected_portfolio_view):
+    last_portfolio_view = st.session_state.get(KEY_LAST_PORTFOLIO_VIEW)
+    entering_accumulation = (
+        selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION
+        and last_portfolio_view != PORTFOLIO_VIEW_ACCUMULATION
+    )
+    if entering_accumulation or KEY_PORTFOLIO_FORECAST_UNIT not in st.session_state:
+        st.session_state[KEY_PORTFOLIO_FORECAST_UNIT] = "Month"
+    st.session_state[KEY_LAST_PORTFOLIO_VIEW] = selected_portfolio_view
 
 
 def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_max):
@@ -82,6 +95,8 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         key=KEY_PORTFOLIO_STRATEGY_VIEW,
         label_visibility="collapsed",
     )
+    _sync_portfolio_forecast_unit_default(selected_portfolio_view)
+
     if float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)) == 0.0:
         st.session_state[KEY_PORTFOLIO_BTC_AMOUNT] = 2.0
     if KEY_PORTFOLIO_BTC_AMOUNT_INPUT not in st.session_state:
@@ -145,7 +160,10 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             1.5,
             2.0,
         ]
-        if selected_portfolio_view in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]:
+        if selected_portfolio_view in [
+            PORTFOLIO_VIEW_ACCUMULATION,
+            PORTFOLIO_VIEW_PENSION,
+        ]:
             sigma_options.extend(
                 [
                     PORTFOLIO_SIGMA_PEAK_POWERLAW,
@@ -194,8 +212,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         )
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
         st.markdown("**Forecast unit**")
-        if KEY_PORTFOLIO_FORECAST_UNIT not in st.session_state:
-            st.session_state[KEY_PORTFOLIO_FORECAST_UNIT] = "Month"
         forecast_unit = st.radio(
             "Forecast unit",
             ["Year", "Month", "Day"],
@@ -527,6 +543,7 @@ def render_sidebar_panel(
                 for k, v in active_osc_defaults.items():
                     if k == "harmonic_count":
                         st.session_state[KEY_LOGPERIODIC_HARMONICS] = int(v)
+                        oscillator.apply_dsi_mode_option(oscillator.DEFAULT_DSI_MODE)
                         continue
                     st.session_state[k] = v
                 st.session_state[KEY_LOGPERIODIC_LAST_SERIES] = logperiodic_defaults_signature

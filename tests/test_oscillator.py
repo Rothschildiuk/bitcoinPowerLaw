@@ -1,7 +1,9 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
+from core.constants import KEY_LOGPERIODIC_HARMONICS, KEY_LOGPERIODIC_SHOW_DECAYED_DSI
 from core import oscillator
 
 
@@ -25,7 +27,9 @@ class TestOscillator(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    def test_compute_oscillator_overlay_returns_full_length_series_from_masked_fit(self):
+    def test_compute_oscillator_overlay_returns_full_length_series_from_masked_fit(
+        self,
+    ):
         log_days = np.linspace(0.5, 3.0, 250)
         settings = oscillator.OscillatorSettings(
             t1_age=1.0,
@@ -122,6 +126,27 @@ class TestOscillator(unittest.TestCase):
         )
         self.assertEqual(oscillator.resolve_harmonic_multipliers(3), (1, 2, 4))
         self.assertGreater(three_mode_r2, 99.0)
+
+    def test_dsi_mode_option_combines_harmonics_and_decay(self):
+        self.assertEqual(
+            oscillator.resolve_dsi_mode_option(3, True),
+            oscillator.DSI_MODE_DECAYED_3,
+        )
+        self.assertEqual(
+            oscillator.format_dsi_mode_option(oscillator.DSI_MODE_DECAYED_3),
+            "ω,2ω,4ω Decayed",
+        )
+        session_state = {}
+
+        with patch.object(oscillator.st, "session_state", session_state):
+            oscillator.apply_dsi_mode_option(oscillator.DSI_MODE_DECAYED_3)
+
+        self.assertEqual(session_state[KEY_LOGPERIODIC_HARMONICS], 3)
+        self.assertTrue(session_state[KEY_LOGPERIODIC_SHOW_DECAYED_DSI])
+        self.assertEqual(
+            session_state[oscillator.KEY_LOGPERIODIC_DSI_MODE],
+            oscillator.DSI_MODE_DECAYED_3,
+        )
 
     def test_build_oscillator_curve_sums_harmonic_coefficients(self):
         log_days = np.linspace(0.5, 3.0, 300)
@@ -363,7 +388,66 @@ class TestOscillator(unittest.TestCase):
         self.assertEqual(stats.parameter_count, 3)
         self.assertGreater(stats.r2, 99.0)
 
-    def test_compute_oscillator_overlay_keeps_baseline_r2_when_fit_is_not_possible(self):
+    def test_regression_stats_table_uses_decayed_r2_column_without_linear_rows(self):
+        current_rows = [
+            oscillator.OscillatorModelStats(
+                harmonic_count=1,
+                mode_multipliers=(1,),
+                parameter_count=3,
+                r2=34.11,
+                aic=0.0,
+                bic=0.0,
+                rmse=0.0,
+            )
+        ]
+        rows = [
+            oscillator.RegressionComparisonStats(
+                label="Linear 4y",
+                parameter_label="4y",
+                parameter_count=3,
+                r2=21.83,
+                aic=0.0,
+                bic=0.0,
+                rmse=0.0,
+            ),
+            oscillator.RegressionComparisonStats(
+                label="DSI ω,2ω",
+                parameter_label="λ 4.26",
+                parameter_count=6,
+                r2=38.20,
+                aic=0.0,
+                bic=0.0,
+                rmse=0.0,
+            ),
+            oscillator.RegressionComparisonStats(
+                label="DSI ω,2ω decayed",
+                parameter_label="λ 4.17",
+                parameter_count=6,
+                r2=49.30,
+                aic=0.0,
+                bic=0.0,
+                rmse=0.0,
+            ),
+        ]
+        captured = {}
+
+        with patch.object(
+            oscillator.st,
+            "markdown",
+            side_effect=lambda html, **_: captured.setdefault("html", html),
+        ):
+            oscillator.render_logperiodic_regression_stats_table(current_rows, rows)
+
+        self.assertIn("<th>Decayed R²%</th>", captured["html"])
+        self.assertIn("<td>38.20</td><td>49.30</td>", captured["html"])
+        self.assertNotIn("Current λ DSI ω", captured["html"])
+        self.assertNotIn("34.11", captured["html"])
+        self.assertNotIn("Linear 4y", captured["html"])
+        self.assertNotIn("DSI ω,2ω decayed</td>", captured["html"])
+
+    def test_compute_oscillator_overlay_keeps_baseline_r2_when_fit_is_not_possible(
+        self,
+    ):
         log_days = np.array([1.0, 2.0, 3.0])
         residuals = np.array([0.1, 0.2, 0.3])
         model_log_values = np.array([10.0, 10.1, 10.2])
@@ -480,7 +564,9 @@ class TestOscillator(unittest.TestCase):
         self.assertTrue(0.5 <= optimized["t1_age"] <= 3.0)
         self.assertTrue(1.5 <= optimized["lambda_val"] <= 8.0)
 
-    def test_optimize_visible_oscillator_parameters_matches_sequential_af_strategy(self):
+    def test_optimize_visible_oscillator_parameters_matches_sequential_af_strategy(
+        self,
+    ):
         log_days = np.linspace(0.5, 3.0, 250)
         residuals = np.cos(2.5 * log_days) * np.exp(-0.3 * (log_days - log_days.min()))
         initial_params = {

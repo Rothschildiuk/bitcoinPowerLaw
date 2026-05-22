@@ -31,9 +31,7 @@ class TestUIChartsHelpers(unittest.TestCase):
     def test_iter_moving_average_series_uses_requested_windows(self):
         df_display = pd.DataFrame(
             {"CloseDisplay": [10.0, 20.0, 30.0, 40.0]},
-            index=pd.to_datetime(
-                ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"]
-            ),
+            index=pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"]),
         )
 
         lines = _iter_moving_average_series(df_display, (2, 3))
@@ -53,32 +51,22 @@ class TestUIChartsHelpers(unittest.TestCase):
             selected_harmonic_count=3,
         )
 
-        highs = {
-            (line["label"], float(line["x"]))
-            for line in lines
-            if line["kind"] == "high"
-        }
-        lows = {
-            (line["label"], float(line["x"])) for line in lines if line["kind"] == "low"
-        }
+        highs = {(line["label"], float(line["x"])) for line in lines if line["kind"] == "high"}
+        lows = {(line["label"], float(line["x"])) for line in lines if line["kind"] == "low"}
 
         self.assertIn(("ω,2ω,4ω", 2.0), highs)
         self.assertIn(("ω,2ω,4ω", 4.0), highs)
         self.assertIn(("ω,2ω,4ω", 3.0), lows)
         self.assertNotIn(("ω", 2.0), highs)
         self.assertNotIn(("ω,2ω", 4.0), highs)
-        self.assertTrue(
-            all(line["color"] == "#1199d6" for line in lines if line["kind"] == "low")
-        )
+        self.assertTrue(all(line["color"] == "#1199d6" for line in lines if line["kind"] == "low"))
 
     def test_main_chart_config_adds_spike_lines_toggle(self):
         config = _main_chart_plotly_config()
 
         self.assertTrue(config["displayModeBar"])
         modebar_buttons = [
-            button
-            for button_group in config["modeBarButtons"]
-            for button in button_group
+            button for button_group in config["modeBarButtons"] for button in button_group
         ]
         self.assertIn("toggleSpikelines", modebar_buttons)
         self.assertLess(
@@ -214,9 +202,7 @@ class TestUIChartsHelpers(unittest.TestCase):
         )
 
         self.assertEqual([level for level, _ in offsets], [-1.5, -0.5, 0.5, 1.5])
-        self.assertTrue(
-            np.allclose([offset for _, offset in offsets], [-0.7, -0.2, 0.3, 0.9])
-        )
+        self.assertTrue(np.allclose([offset for _, offset in offsets], [-0.7, -0.2, 0.3, 0.9]))
 
     def test_powerlaw_chart_defaults_hide_fit_points_and_show_major_sigma_lines(self):
         dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
@@ -304,13 +290,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(traces_by_name["Peak PowerLaw"].visible, "legendonly")
         self.assertEqual(traces_by_name["Trough PowerLaw"].visible, "legendonly")
         self.assertEqual(traces_by_name["Peak fit points"].visible, "legendonly")
-        self.assertEqual(
-            traces_by_name["Peak fit points"].legendgroup, "peak_fit_points"
-        )
+        self.assertEqual(traces_by_name["Peak fit points"].legendgroup, "peak_fit_points")
         self.assertEqual(traces_by_name["Trough fit points"].visible, "legendonly")
-        self.assertEqual(
-            traces_by_name["Trough fit points"].legendgroup, "trough_fit_points"
-        )
+        self.assertEqual(traces_by_name["Trough fit points"].legendgroup, "trough_fit_points")
         self.assertLess(
             traces_by_name["Peak PowerLaw"].legendrank,
             traces_by_name["Peak fit points"].legendrank,
@@ -420,9 +402,7 @@ class TestUIChartsHelpers(unittest.TestCase):
                 chart_key="test-powerlaw-halvings",
             )
 
-        halving_traces = [
-            trace for trace in captured["fig"].data if trace.name == "Halvings"
-        ]
+        halving_traces = [trace for trace in captured["fig"].data if trace.name == "Halvings"]
         self.assertEqual(len(halving_traces), 1)
         self.assertEqual(halving_traces[0].legendgroup, "halvings")
         self.assertEqual(halving_traces[0].mode, "lines")
@@ -493,9 +473,7 @@ class TestUIChartsHelpers(unittest.TestCase):
             )
 
         slope_traces = [
-            trace
-            for trace in captured["fig"].data
-            if str(trace.name).startswith("PowerLaw B")
+            trace for trace in captured["fig"].data if str(trace.name).startswith("PowerLaw B")
         ]
         self.assertEqual(len(slope_traces), 1)
         self.assertEqual(slope_traces[0].visible, "legendonly")
@@ -564,9 +542,7 @@ class TestUIChartsHelpers(unittest.TestCase):
                 chart_key="test-logperiodic-halvings",
             )
 
-        halving_traces = [
-            trace for trace in captured["fig"].data if trace.name == "Halvings"
-        ]
+        halving_traces = [trace for trace in captured["fig"].data if trace.name == "Halvings"]
         self.assertEqual(len(halving_traces), 1)
         self.assertEqual(halving_traces[0].legendgroup, "halvings")
         self.assertEqual(halving_traces[0].mode, "lines")
@@ -578,9 +554,7 @@ class TestUIChartsHelpers(unittest.TestCase):
             [halving_traces[0].y[0], halving_traces[0].y[1]],
         )
         residual_trace = next(
-            trace
-            for trace in captured["fig"].data
-            if trace.name == "power-law residual σ"
+            trace for trace in captured["fig"].data if trace.name == "power-law residual σ"
         )
         self.assertIn("%{customdata[0]}", residual_trace.hovertemplate)
         self.assertIn("%{customdata[1]:,.0f}", residual_trace.hovertemplate)
@@ -670,9 +644,7 @@ class TestUIChartsHelpers(unittest.TestCase):
             )
 
         perrenod_traces = [
-            trace
-            for trace in captured["fig"].data
-            if str(trace.name).startswith("DSI ω,2ω,4ω decayed")
+            trace for trace in captured["fig"].data if str(trace.name) == "DSI ω,2ω,4ω Decayed"
         ]
         locked_dsi_traces = [
             trace
@@ -682,15 +654,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(len(perrenod_traces), 1)
         self.assertEqual(perrenod_traces[0].visible, None)
         self.assertEqual(len(locked_dsi_traces), 3)
-        self.assertTrue(
-            all(trace.visible == "legendonly" for trace in locked_dsi_traces)
-        )
-        high_traces = [
-            trace for trace in captured["fig"].data if trace.name == "Cycle highs"
-        ]
-        low_traces = [
-            trace for trace in captured["fig"].data if trace.name == "Cycle lows"
-        ]
+        self.assertTrue(all(trace.visible == "legendonly" for trace in locked_dsi_traces))
+        high_traces = [trace for trace in captured["fig"].data if trace.name == "Cycle highs"]
+        low_traces = [trace for trace in captured["fig"].data if trace.name == "Cycle lows"]
         self.assertEqual(len(high_traces), 1)
         self.assertEqual(len(low_traces), 1)
         self.assertEqual(high_traces[0].legendgroup, "cycle_highs")
@@ -773,9 +739,7 @@ class TestUIChartsHelpers(unittest.TestCase):
             )
 
         btc_traces = [
-            trace
-            for trace in captured["fig"].data
-            if trace.name == "Bitcoin price residual σ"
+            trace for trace in captured["fig"].data if trace.name == "Bitcoin price residual σ"
         ]
         self.assertEqual(len(btc_traces), 1)
         np.testing.assert_allclose(btc_traces[0].y, [-0.5, 0.0, 0.5])

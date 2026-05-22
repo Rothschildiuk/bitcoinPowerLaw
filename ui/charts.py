@@ -40,9 +40,7 @@ def _main_chart_plotly_config():
     }
 
 
-def _resolve_time_axis_start_date(
-    df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS
-):
+def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS):
     first_data_date = pd.Timestamp(df_display.index.min())
     return first_data_date - pd.Timedelta(days=int(padding_days))
 
@@ -55,9 +53,7 @@ def _resolve_model_view_max(
 ):
     latest_data_date = pd.Timestamp(df_display.index.max()).normalize()
     today_date = (
-        pd.Timestamp.today().normalize()
-        if today is None
-        else pd.Timestamp(today).normalize()
+        pd.Timestamp.today().normalize() if today is None else pd.Timestamp(today).normalize()
     )
     anchor_date = max(latest_data_date, today_date)
     horizon_end_date = anchor_date + pd.DateOffset(years=int(forward_years))
@@ -74,9 +70,7 @@ def _resolve_powerlaw_y_range(
     visible_start_day=None,
     include_bands=True,
 ):
-    btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(
-        dtype=float
-    )
+    btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
     fair_vals = np.asarray(m_fair_display, dtype=float)
     if model_x is not None and visible_start_day is not None:
         model_x_arr = np.asarray(model_x)
@@ -158,8 +152,7 @@ def _convert_log_offsets_to_sigma_levels(values, percentile_offsets):
         return values_arr
 
     sigma_values[valid_mask] = [
-        interpolate_sigma_level_from_log_offset(value, offsets)
-        for value in values_arr[valid_mask]
+        interpolate_sigma_level_from_log_offset(value, offsets) for value in values_arr[valid_mask]
     ]
     return sigma_values
 
@@ -175,9 +168,7 @@ def _iter_moving_average_series(df_display, windows):
         if window_days <= 1:
             continue
 
-        rolling_values = close_values.rolling(
-            window_days, min_periods=window_days
-        ).mean()
+        rolling_values = close_values.rolling(window_days, min_periods=window_days).mean()
         if rolling_values.notna().any():
             lines.append((window_days, rolling_values))
 
@@ -206,9 +197,7 @@ def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendran
     halving_hover_values = []
     for halving_date in HALVING_DATES:
         halving_x = (
-            max(1.0, float((halving_date - current_gen_date).days))
-            if is_log_time
-            else halving_date
+            max(1.0, float((halving_date - current_gen_date).days)) if is_log_time else halving_date
         )
         halving_x_values.extend([halving_x, halving_x, None])
         halving_y_values.extend([y_min, y_max, None])
@@ -232,9 +221,7 @@ def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendran
     )
 
 
-def _add_logperiodic_extrema_traces(
-    fig, extrema_lines, current_gen_date, is_log_time, y_range
-):
+def _add_logperiodic_extrema_traces(fig, extrema_lines, current_gen_date, is_log_time, y_range):
     if y_range is None or len(y_range) != 2:
         return
     y_min, y_max = float(y_range[0]), float(y_range[1])
@@ -303,9 +290,7 @@ def _resolve_linear_y_span(*series_parts):
     return [y_min - padding, y_max + padding]
 
 
-def _iter_logperiodic_extrema_lines(
-    plot_x_model, harmonic_curves, selected_harmonic_count
-):
+def _iter_logperiodic_extrema_lines(plot_x_model, harmonic_curves, selected_harmonic_count):
     if not harmonic_curves:
         return []
 
@@ -337,12 +322,8 @@ def _iter_logperiodic_extrema_lines(
     previous_values = y_curve[:-2]
     current_values = y_curve[1:-1]
     next_values = y_curve[2:]
-    local_high_mask = (current_values > previous_values) & (
-        current_values >= next_values
-    )
-    local_low_mask = (current_values < previous_values) & (
-        current_values <= next_values
-    )
+    local_high_mask = (current_values > previous_values) & (current_values >= next_values)
+    local_low_mask = (current_values < previous_values) & (current_values <= next_values)
 
     for x_value in x_curve[1:-1][local_high_mask]:
         extrema_lines.append(
@@ -422,9 +403,7 @@ def render_main_model_chart(
     moving_average_windows=None,
 ):
     fig = (
-        make_subplots(specs=[[{"secondary_y": True}]])
-        if mode == MODE_LOGPERIODIC
-        else go.Figure()
+        make_subplots(specs=[[{"secondary_y": True}]]) if mode == MODE_LOGPERIODIC else go.Figure()
     )
     tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
     hover_label = dict(
@@ -438,18 +417,10 @@ def render_main_model_chart(
         p16_5_name = "-1σ (16.5th percentile)"
         p2_5_name = "-2σ (2.5th percentile)"
 
-        p2_5_series, _, _ = evaluate_powerlaw_values(
-            np.log10(m_fair_display), p2_5, 1.0
-        )
-        p16_5_series, _, _ = evaluate_powerlaw_values(
-            np.log10(m_fair_display), p16_5, 1.0
-        )
-        p83_5_series, _, _ = evaluate_powerlaw_values(
-            np.log10(m_fair_display), p83_5, 1.0
-        )
-        p97_5_series, _, _ = evaluate_powerlaw_values(
-            np.log10(m_fair_display), p97_5, 1.0
-        )
+        p2_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p2_5, 1.0)
+        p16_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p16_5, 1.0)
+        p83_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p83_5, 1.0)
+        p97_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p97_5, 1.0)
 
         if is_log_time:
             fig.add_trace(
@@ -494,9 +465,7 @@ def render_main_model_chart(
             _iter_moving_average_series(df_display, moving_average_windows)
         ):
             ma_name = f"{window_days}D MA"
-            ma_color = MOVING_AVERAGE_LINE_STYLES[
-                ma_index % len(MOVING_AVERAGE_LINE_STYLES)
-            ]
+            ma_color = MOVING_AVERAGE_LINE_STYLES[ma_index % len(MOVING_AVERAGE_LINE_STYLES)]
             fig.add_trace(
                 go.Scatter(
                     x=plot_x_main,
@@ -595,10 +564,7 @@ def render_main_model_chart(
             dict(color="#f0b90b", width=1.8),
             "power_regression",
         )
-        if (
-            peak_powerlaw_overlay is not None
-            and peak_powerlaw_overlay.get("peak") is not None
-        ):
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
             peak_overlay = peak_powerlaw_overlay["peak"]
             peak_values = peak_overlay["model_values"]
             add_model_line(
@@ -612,10 +578,7 @@ def render_main_model_chart(
             peak_x = (
                 peak_days
                 if is_log_time
-                else [
-                    current_gen_date + pd.Timedelta(days=float(day))
-                    for day in peak_days
-                ]
+                else [current_gen_date + pd.Timedelta(days=float(day)) for day in peak_days]
             )
             fig.add_trace(
                 go.Scatter(
@@ -634,9 +597,7 @@ def render_main_model_chart(
                     visible="legendonly",
                     showlegend=True,
                     customdata=[
-                        (current_gen_date + pd.Timedelta(days=float(day))).strftime(
-                            "%d.%m.%Y"
-                        )
+                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
                         for day in peak_days
                     ],
                     hovertemplate=(
@@ -646,10 +607,7 @@ def render_main_model_chart(
                     ),
                 )
             )
-        if (
-            peak_powerlaw_overlay is not None
-            and peak_powerlaw_overlay.get("trough") is not None
-        ):
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
             trough_overlay = peak_powerlaw_overlay["trough"]
             trough_values = trough_overlay["model_values"]
             add_model_line(
@@ -663,10 +621,7 @@ def render_main_model_chart(
             trough_x = (
                 trough_days
                 if is_log_time
-                else [
-                    current_gen_date + pd.Timedelta(days=float(day))
-                    for day in trough_days
-                ]
+                else [current_gen_date + pd.Timedelta(days=float(day)) for day in trough_days]
             )
             fig.add_trace(
                 go.Scatter(
@@ -685,9 +640,7 @@ def render_main_model_chart(
                     visible="legendonly",
                     showlegend=True,
                     customdata=[
-                        (current_gen_date + pd.Timedelta(days=float(day))).strftime(
-                            "%d.%m.%Y"
-                        )
+                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
                         for day in trough_days
                     ],
                     hovertemplate=(
@@ -755,10 +708,7 @@ def render_main_model_chart(
             "power_regression",
             legendrank=20,
         )
-        if (
-            peak_powerlaw_overlay is not None
-            and peak_powerlaw_overlay.get("peak") is not None
-        ):
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
             add_legend_item(
                 "Peak PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
@@ -766,10 +716,7 @@ def render_main_model_chart(
                 visible="legendonly",
                 legendrank=30,
             )
-        if (
-            peak_powerlaw_overlay is not None
-            and peak_powerlaw_overlay.get("trough") is not None
-        ):
+        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
             add_legend_item(
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
@@ -779,9 +726,7 @@ def render_main_model_chart(
             )
         y_range_model_x = plot_x_model if is_log_time else m_dates
         y_range_visible_start = (
-            max(1.0, float(df_display["Days"].min()))
-            if is_log_time
-            else df_display.index.min()
+            max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
         )
         powerlaw_y_range = _resolve_powerlaw_y_range(
             df_display,
@@ -822,10 +767,7 @@ def render_main_model_chart(
         osc_prices = df_display["CloseDisplay"].to_numpy(dtype=float)[osc_mask]
         osc_hover_data = np.column_stack([osc_dates, osc_prices])
 
-        if (
-            bitcoin_residual_overlay_df is not None
-            and not bitcoin_residual_overlay_df.empty
-        ):
+        if bitcoin_residual_overlay_df is not None and not bitcoin_residual_overlay_df.empty:
             btc_residual_x = (
                 bitcoin_residual_overlay_df["Days"]
                 if is_log_time
@@ -870,9 +812,7 @@ def render_main_model_chart(
         if show_historical_powerlaw_slope:
             slope_vals = np.asarray(historical_powerlaw_slopes, dtype=float)[osc_mask]
             finite_slope_vals = slope_vals[np.isfinite(slope_vals)]
-            final_slope_label = (
-                f" {finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
-            )
+            final_slope_label = f" {finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
             fig.add_trace(
                 go.Scatter(
                     x=osc_x_vals,
@@ -903,23 +843,15 @@ def render_main_model_chart(
                     name=f"DSI {harmonic_labels.get(harmonic_count, harmonic_count)}",
                     line=dict(
                         color=harmonic_colors.get(harmonic_count, "#ea3d2f"),
-                        width=(
-                            2.6
-                            if harmonic_count == int(selected_harmonic_count)
-                            else 1.9
-                        ),
+                        width=(2.6 if harmonic_count == int(selected_harmonic_count) else 1.9),
                     ),
                     hoverinfo="skip",
                     visible="legendonly",
                 )
             )
         if perrenod_curve is not None:
-            perrenod_label = str(perrenod_curve.get("label", "DSI decayed"))
-            perrenod_r2 = perrenod_curve.get("r2")
-            perrenod_name = (
-                f"{perrenod_label} R² {perrenod_r2:.2f}%"
-                if perrenod_r2 is not None and np.isfinite(perrenod_r2)
-                else perrenod_label
+            perrenod_name = str(perrenod_curve.get("label", "DSI ω,2ω,4ω Decayed")).replace(
+                " decayed", " Decayed"
             )
             fig.add_trace(
                 go.Scatter(

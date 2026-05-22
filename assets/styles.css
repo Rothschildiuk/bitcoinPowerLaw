@@ -544,14 +544,26 @@ div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checke
 [data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar-container,
 [data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar {
     pointer-events: all !important;
-    top: 10px !important;
+    top: 8px !important;
     bottom: auto !important;
     right: 8px !important;
+    background: transparent !important;
+}
+
+[data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar-group {
+    background: rgba(14, 17, 23, 0.34) !important;
+    border-radius: 5px !important;
+    margin-left: 2px !important;
 }
 
 [data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar-btn {
     pointer-events: all !important;
     cursor: pointer !important;
+    opacity: 0.62 !important;
+}
+
+[data-testid="stPlotlyChart"] .js-plotly-plot .plotly .modebar-btn:hover {
+    opacity: 1 !important;
 }
 
 @media (max-width: 900px) {
