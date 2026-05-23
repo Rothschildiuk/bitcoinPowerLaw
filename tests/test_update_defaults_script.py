@@ -108,7 +108,7 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             "load_prepared_litecoin_btc_data",
             "load_prepared_dogecoin_btc_data",
             "load_prepared_us_m2_data",
-            "load_prepared_russian_m2_data",
+            "load_prepared_usdt_supply_data",
         ]
         with ExitStack() as stack:
             for loader_name in loader_names:

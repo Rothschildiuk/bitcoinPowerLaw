@@ -385,46 +385,27 @@ class TestPriceService(unittest.TestCase):
             ["2009-01-03", "2009-01-04"],
         )
 
-    @patch("services.price_service.pd.read_excel")
-    def test_fetch_cbr_russian_m2_data_parses_monthly_trillion_rub(self, mock_read_excel):
-        workbook_rows = [[None, "Dec 1992", "Jan 1993", "Feb 1993"]]
-        workbook_rows.extend([[f"Unused {row}", None, None, None] for row in range(12)])
-        workbook_rows.append(["Monetary aggregate М2", 1000.0, 2000.0, 3000.0])
-        mock_read_excel.return_value = pd.DataFrame(workbook_rows)
+    @patch("services.price_service._fetch_json_with_retry")
+    def test_load_prepared_usdt_supply_data_parses_billion_unit_history(self, mock_fetch_json):
+        price_service.load_prepared_usdt_supply_data.clear()
+        mock_fetch_json.return_value = {
+            "tokens": [
+                {"date": 1511913600, "circulating": {"peggedUSD": 109_970}},
+                {"date": 1512000000, "circulating": {"peggedUSD": 1_250_000_000}},
+                {"date": 1512086400, "circulating": {"peggedUSD": 3_000_000_000}},
+            ]
+        }
 
-        result = price_service._fetch_cbr_russian_m2_data("unused.xlsx")
-
-        self.assertListEqual(
-            result.index.strftime("%Y-%m-%d").tolist(),
-            ["1992-12-01", "1993-01-01", "1993-02-01"],
-        )
-        self.assertListEqual(result["Close"].tolist(), [1.0, 2.0, 3.0])
-        self.assertTrue((result["AbsDays"] < 0).all())
-        self.assertListEqual(result["LogClose"].round(6).tolist(), [0.0, 0.30103, 0.477121])
-
-    @patch("services.price_service.pd.read_csv")
-    @patch("services.price_service.pd.read_excel")
-    def test_load_prepared_russian_m2_data_falls_back_to_fred(self, mock_read_excel, mock_read_csv):
-        price_service.load_prepared_russian_m2_data.clear()
-        mock_read_excel.side_effect = ValueError("CBR unavailable")
-        mock_read_csv.return_value = pd.DataFrame(
-            {
-                "observation_date": ["1996-12-01", "1997-01-01", "1997-02-01"],
-                "MYAGM2RUM189N": [1_000_000_000_000.0, 2_000_000_000_000.0, 3_000_000_000_000.0],
-            }
-        )
-
-        result = price_service.load_prepared_russian_m2_data(
-            cbr_history_url="unused.xlsx",
-            fred_fallback_url="unused.csv",
+        result = price_service.load_prepared_usdt_supply_data(
+            stablecoin_url="https://stablecoins.llama.fi/stablecoin/1",
             source="live",
         )
 
         self.assertListEqual(
             result.index.strftime("%Y-%m-%d").tolist(),
-            ["1996-12-01", "1997-01-01", "1997-02-01"],
+            ["2017-11-29", "2017-11-30", "2017-12-01"],
         )
-        self.assertListEqual(result["Close"].tolist(), [1.0, 2.0, 3.0])
+        self.assertListEqual(result["Close"].round(6).tolist(), [0.00011, 1.25, 3.0])
 
     @patch("services.price_service._fetch_json_with_retry")
     def test_safe_download_cryptocompare_histoday_parses_daily_close_series(self, mock_fetch_json):

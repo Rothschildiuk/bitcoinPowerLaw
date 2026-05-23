@@ -49,7 +49,7 @@ from core.constants import (  # noqa: E402
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
-    POWERLAW_SERIES_RUSSIAN_M2,
+    POWERLAW_SERIES_USDT_SUPPLY,
     POWERLAW_SERIES_US_M2,
 )
 from core import oscillator  # noqa: E402
@@ -71,7 +71,7 @@ from services.price_service import (  # noqa: E402
     load_prepared_miner_revenue_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
-    load_prepared_russian_m2_data,
+    load_prepared_usdt_supply_data,
     load_prepared_us_m2_data,
 )
 
@@ -147,10 +147,10 @@ DEFAULT_CASES = [
     ),
     (POWERLAW_SERIES_US_M2, CURRENCY_DOLLAR, "DEFAULT_US_M2_A", "DEFAULT_US_M2_B"),
     (
-        POWERLAW_SERIES_RUSSIAN_M2,
+        POWERLAW_SERIES_USDT_SUPPLY,
         CURRENCY_DOLLAR,
-        "DEFAULT_RUSSIAN_M2_A",
-        "DEFAULT_RUSSIAN_M2_B",
+        "DEFAULT_USDT_SUPPLY_A",
+        "DEFAULT_USDT_SUPPLY_B",
     ),
 ]
 
@@ -249,7 +249,7 @@ def _load_series_frames():
         POWERLAW_SERIES_LITECOIN_BTC: load_prepared_litecoin_btc_data(),
         POWERLAW_SERIES_DOGECOIN_BTC: load_prepared_dogecoin_btc_data(),
         POWERLAW_SERIES_US_M2: load_prepared_us_m2_data(),
-        POWERLAW_SERIES_RUSSIAN_M2: load_prepared_russian_m2_data(),
+        POWERLAW_SERIES_USDT_SUPPLY: load_prepared_usdt_supply_data(),
     }
 
 

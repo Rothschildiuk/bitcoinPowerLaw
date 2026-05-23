@@ -69,7 +69,7 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
-    POWERLAW_SERIES_RUSSIAN_M2,
+    POWERLAW_SERIES_USDT_SUPPLY,
     POWERLAW_SERIES_US_M2,
     PORTFOLIO_SIGMA_CURRENT,
     PORTFOLIO_SIGMA_PEAK_POWERLAW,
@@ -115,7 +115,7 @@ from services.price_service import (
     load_prepared_miner_revenue_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
-    load_prepared_russian_m2_data,
+    load_prepared_usdt_supply_data,
     load_prepared_us_m2_data,
 )
 from ui.charts import (
@@ -380,7 +380,7 @@ SERIES_LOADERS = {
     POWERLAW_SERIES_LITECOIN_BTC: ("Litecoin/BTC", load_prepared_litecoin_btc_data),
     POWERLAW_SERIES_DOGECOIN_BTC: ("Dogecoin/BTC", load_prepared_dogecoin_btc_data),
     POWERLAW_SERIES_US_M2: ("U.S. M2", load_prepared_us_m2_data),
-    POWERLAW_SERIES_RUSSIAN_M2: ("Russian M2", load_prepared_russian_m2_data),
+    POWERLAW_SERIES_USDT_SUPPLY: ("USDT supply", load_prepared_usdt_supply_data),
 }
 
 

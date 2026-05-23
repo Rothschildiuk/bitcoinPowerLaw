@@ -46,13 +46,10 @@ LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month
 LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
 FRED_M2SL_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL"
 FRED_US_HOUSING_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CSUSHPISA"
-CBR_MONETARY_AGGREGATES_XLSX_URL = (
-    "https://www.cbr.ru/vfs/eng/statistics/credit_statistics/monetary_agg_e.xlsx"
-)
-FRED_RUSSIAN_M2_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MYAGM2RUM189N"
+DEFILLAMA_USDT_STABLECOIN_URL = "https://stablecoins.llama.fi/stablecoin/1"
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
 SNAPSHOT_DATA_DIR = Path("data/snapshots")
-LOCAL_CACHE_SCHEMA_VERSION = 4
+LOCAL_CACHE_SCHEMA_VERSION = 5
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
@@ -392,12 +389,12 @@ def _validate_prepared_us_m2_data(data_df):
     )
 
 
-def _validate_prepared_russian_m2_data(data_df):
+def _validate_prepared_usdt_supply_data(data_df):
     return (
         isinstance(data_df, pd.DataFrame)
         and len(data_df) >= 300
         and "Close" in data_df.columns
-        and data_df.index.min() <= pd.Timestamp("1992-12-01")
+        and data_df.index.min() <= pd.Timestamp("2017-12-01")
     )
 
 
@@ -515,15 +512,6 @@ def _build_blockchain_chart_adapter(cache_key, source_url):
     )
 
 
-def _parse_cbr_month_label(raw_label):
-    label = re.sub(r"\s+", " ", str(raw_label).replace(",", " ")).strip()
-    for date_format in ("%b %Y", "%B %Y"):
-        parsed = pd.to_datetime(label, format=date_format, errors="coerce")
-        if not pd.isna(parsed):
-            return parsed
-    return pd.to_datetime(label, errors="coerce")
-
-
 def _normalize_prepared_close_frame(date_values, close_values):
     prepared_df = pd.DataFrame({"Date": date_values, "Close": close_values})
     prepared_df["Date"] = pd.to_datetime(prepared_df["Date"], errors="coerce")
@@ -537,31 +525,69 @@ def _normalize_prepared_close_frame(date_values, close_values):
     return prepared_df
 
 
-def _fetch_cbr_russian_m2_data(source_url=CBR_MONETARY_AGGREGATES_XLSX_URL):
-    workbook_df = pd.read_excel(source_url, sheet_name="Monetary aggregates", header=None)
-    row_labels = workbook_df.iloc[:, 0].astype(str).str.replace("М", "M", regex=False)
-    m2_rows = row_labels[row_labels == "Monetary aggregate M2"].index
-    if len(m2_rows) == 0:
-        raise ValueError("CBR monetary aggregates workbook is missing Russian M2 row.")
+def _fetch_coinlore_supply_billion_units(coin_slug, start_date, end_date=None):
+    if not coin_slug:
+        raise ValueError("Coin slug is required for CoinLore supply history.")
 
-    date_values = [_parse_cbr_month_label(value) for value in workbook_df.iloc[0, 1:]]
-    # CBR workbook values are in billions of rubles; display this app series in trillion RUB.
-    close_values = pd.to_numeric(workbook_df.iloc[int(m2_rows[0]), 1:], errors="coerce") / 1000.0
-    prepared_df = _normalize_prepared_close_frame(date_values, close_values.to_numpy())
+    start_ts = int(pd.Timestamp(start_date).timestamp())
+    end_ts = int(pd.Timestamp(end_date or pd.Timestamp.utcnow().normalize()).timestamp())
+    url = f"https://www.coinlore.com/coin/{coin_slug}/historical-data/{start_ts}/{end_ts}"
+    payload_text = _fetch_text_with_retry(url, retries=3, timeout=20)
+    if not payload_text:
+        raise ValueError(f"Unable to load CoinLore history for {coin_slug}.")
+
+    row_pattern = re.compile(
+        r'<tr class="txtr">\s*<td class="nwt txtl font-bold">\s*(.*?)\s*</td>\s*'
+        r'<td class="nwt">\$(.*?)</td>\s*'
+        r'<td class="nwt">\$(.*?)</td>\s*'
+        r'<td class="nwt">\$(.*?)</td>\s*'
+        r'<td class="nwt">\$(.*?)</td>\s*'
+        r'<td class="nwt">\$(.*?)</td>\s*'
+        r'<td class="nwt">(.*?)</td>\s*'
+        r'<td class="nwt">\$(.*?)</td>',
+        re.DOTALL,
+    )
+    rows = row_pattern.findall(payload_text)
+    if not rows:
+        raise ValueError(f"CoinLore returned no supply rows for {coin_slug}.")
+
+    history_df = pd.DataFrame(
+        rows,
+        columns=["Date", "Open", "High", "Low", "Close", "MarketCap", "Supply", "Volume"],
+    )
+    supply_units = pd.to_numeric(
+        history_df["Supply"].astype(str).str.replace(",", "", regex=False),
+        errors="coerce",
+    )
+    prepared_df = _normalize_prepared_close_frame(history_df["Date"], supply_units / 1_000_000_000.0)
     if prepared_df.empty:
-        raise ValueError("CBR monetary aggregates workbook returned no Russian M2 rows.")
+        raise ValueError(f"CoinLore returned no usable supply rows for {coin_slug}.")
     return prepared_df
 
 
-def _fetch_fred_russian_m2_data(source_url=FRED_RUSSIAN_M2_CSV_URL):
-    fred_df = pd.read_csv(source_url)
-    if "observation_date" not in fred_df.columns or "MYAGM2RUM189N" not in fred_df.columns:
-        raise ValueError("FRED Russian M2 payload is missing required columns.")
-    # FRED values are in national currency units; display this app series in trillion RUB.
-    close_values = pd.to_numeric(fred_df["MYAGM2RUM189N"], errors="coerce") / 1_000_000_000_000.0
-    prepared_df = _normalize_prepared_close_frame(fred_df["observation_date"], close_values)
+def _fetch_defillama_stablecoin_supply_billion_units(stablecoin_url):
+    payload = _fetch_json_with_retry(stablecoin_url, retries=3, timeout=20)
+    if not isinstance(payload, dict):
+        raise ValueError("Unable to load DeFiLlama stablecoin supply history.")
+
+    rows = payload.get("tokens")
+    if not isinstance(rows, list) or len(rows) == 0:
+        raise ValueError("DeFiLlama returned no stablecoin supply rows.")
+
+    history_df = pd.DataFrame(rows)
+    if "date" not in history_df.columns or "circulating" not in history_df.columns:
+        raise ValueError("DeFiLlama stablecoin payload is missing required columns.")
+
+    circulating_values = history_df["circulating"].apply(
+        lambda value: value.get("peggedUSD") if isinstance(value, dict) else None
+    )
+    date_values = pd.to_datetime(history_df["date"], unit="s", utc=True).dt.tz_localize(None)
+    prepared_df = _normalize_prepared_close_frame(
+        date_values,
+        pd.to_numeric(circulating_values, errors="coerce") / 1_000_000_000.0,
+    )
     if prepared_df.empty:
-        raise ValueError("FRED Russian M2 returned no usable rows.")
+        raise ValueError("DeFiLlama returned no usable stablecoin supply rows.")
     return prepared_df
 
 
@@ -1239,26 +1265,21 @@ def load_prepared_us_m2_data(m2_history_url=FRED_M2SL_CSV_URL, source="auto"):
 
 
 @st.cache_data(ttl=3600)
-def load_prepared_russian_m2_data(
-    cbr_history_url=CBR_MONETARY_AGGREGATES_XLSX_URL,
-    fred_fallback_url=FRED_RUSSIAN_M2_CSV_URL,
+def load_prepared_usdt_supply_data(
+    stablecoin_url=DEFILLAMA_USDT_STABLECOIN_URL,
     source="auto",
 ):
-    def fetch_russian_m2_data():
-        try:
-            return _fetch_cbr_russian_m2_data(cbr_history_url)
-        except Exception:
-            return _fetch_fred_russian_m2_data(fred_fallback_url)
-
     return _load_snapshot_or_live(
-        "prepared_russian_m2_data",
-        _validate_prepared_russian_m2_data,
+        "prepared_usdt_supply_data",
+        _validate_prepared_usdt_supply_data,
         lambda: _load_source_adapter(
             DataFrameSourceAdapter(
-                cache_key="prepared_russian_m2_data",
+                cache_key="prepared_usdt_supply_data",
                 refresh_seconds=REFERENCE_REFRESH_SECONDS,
-                fetch_fn=fetch_russian_m2_data,
-                validator_fn=_validate_prepared_russian_m2_data,
+                fetch_fn=lambda: _fetch_defillama_stablecoin_supply_billion_units(
+                    stablecoin_url
+                ),
+                validator_fn=_validate_prepared_usdt_supply_data,
             )
         ),
         source=source,

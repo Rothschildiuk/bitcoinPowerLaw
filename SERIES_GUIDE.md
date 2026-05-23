@@ -9,7 +9,7 @@ Each series config owns its session keys, defaults, display label/unit, currency
 - Bitcoin network: Bitcoin, Miner revenue, Bitcoin volatility, Difficulty, Hashrate.
 - Lightning: Lightning nodes, Lightning BTC.
 - Liquid: Liquid BTC, Liquid transactions.
-- Fiat money: U.S. M2, Russian M2.
+- Fiat money: U.S. M2, USDT supply.
 - BTC pairs: Filecoin/BTC, Monero/BTC, Litecoin/BTC, Dogecoin/BTC.
 
 ## Special Behavior

@@ -17,13 +17,14 @@ Read this file only when changing loaders, cache behavior, snapshot refreshes, o
 - Lightning nodes/capacity: `bitcoinvisuals.com/static/data/data_daily.csv`.
 - Liquid BTC/transactions: Liquid reserves API plus `liquid.net/api/getChartsData`.
 - U.S. M2: FRED `M2SL`, billions USD, monthly.
-- Russian M2: Bank of Russia workbook primary; FRED `MYAGM2RUM189N` fallback, trillions RUB, monthly.
+- USDT supply: DeFiLlama stablecoin API, billions of circulating pegged USD for Tether, daily.
 
 ## Origins and Filters
 - Filecoin origin: official mainnet genesis reset timestamp `2020-08-24T22:00:00Z`.
 - Monero origin: first mined mainnet block date `2014-04-18` because block 0 timestamp is `0`.
 - Litecoin origin: block 0 timestamp `2011-10-07`.
 - Dogecoin origin: block 0 timestamp `2013-12-06`.
+- USDT supply origin: first DeFiLlama stablecoin API row `2017-11-29`.
 - Lightning origin: first checked-in snapshot row `2018-01-19`.
 - Liquid BTC origin: first checked-in row `2018-09-01`; Liquid transactions origin: `2018-09-24`.
 - Difficulty/Hashrate raw early rows can be noisy; app analysis starts at `2010-01-01`.

@@ -34,10 +34,10 @@ from core.constants import (
     POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
-    POWERLAW_SERIES_RUSSIAN_M2,
+    POWERLAW_SERIES_USDT_SUPPLY,
     POWERLAW_SERIES_US_M2,
     MONERO_BTC_MODEL_ORIGIN_ABS_DAYS,
-    RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS,
+    USDT_SUPPLY_MODEL_ORIGIN_ABS_DAYS,
     US_M2_MODEL_ORIGIN_ABS_DAYS,
 )
 from core.series_registry import (
@@ -101,13 +101,13 @@ class TestSeriesRegistry(unittest.TestCase):
         )
         self.assertEqual(get_powerlaw_series_group_for_series(POWERLAW_SERIES_US_M2), "Fiat Money")
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_RUSSIAN_M2), "Fiat Money"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_USDT_SUPPLY), "Fiat Money"
         )
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_VOLATILITY, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
-        self.assertIn(POWERLAW_SERIES_RUSSIAN_M2, group_map["Fiat Money"])
+        self.assertIn(POWERLAW_SERIES_USDT_SUPPLY, group_map["Fiat Money"])
 
     def test_bitcoin_volatility_config_uses_percent_units(self):
         volatility_config = get_active_model_config(
@@ -396,21 +396,21 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(m2_config.model_origin_abs_day, US_M2_MODEL_ORIGIN_ABS_DAYS)
         self.assert_default_params_are_within_powerlaw_bounds(m2_config)
 
-    def test_russian_m2_config_uses_cbr_trillion_rub_units(self):
+    def test_usdt_supply_config_uses_billion_usdt_units(self):
         m2_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_RUSSIAN_M2,
+            POWERLAW_SERIES_USDT_SUPPLY,
             POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 
-        self.assertEqual(m2_config.target_series_name, "Russian M2 money supply")
-        self.assertEqual(m2_config.target_series_unit, "Trillion RUB")
-        self.assertEqual(m2_config.currency_prefix, "₽")
-        self.assertEqual(m2_config.currency_suffix, "T")
+        self.assertEqual(m2_config.target_series_name, "USDT supply")
+        self.assertEqual(m2_config.target_series_unit, "Billions USDT")
+        self.assertEqual(m2_config.currency_prefix, "")
+        self.assertEqual(m2_config.currency_suffix, "B")
         self.assertFalse(m2_config.supports_currency_selector)
         self.assertTrue(m2_config.lock_price_scale_to_log)
-        self.assertEqual(m2_config.model_origin_abs_day, RUSSIAN_M2_MODEL_ORIGIN_ABS_DAYS)
+        self.assertEqual(m2_config.model_origin_abs_day, USDT_SUPPLY_MODEL_ORIGIN_ABS_DAYS)
         self.assert_default_params_are_within_powerlaw_bounds(m2_config)
 
     def test_session_defaults_include_price_and_series_specific_models(self):
@@ -426,8 +426,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn("B_liquid_transactions", defaults)
         self.assertIn("A_us_m2", defaults)
         self.assertIn("B_us_m2", defaults)
-        self.assertIn("A_russian_m2", defaults)
-        self.assertIn("B_russian_m2", defaults)
+        self.assertIn("A_usdt_supply", defaults)
+        self.assertIn("B_usdt_supply", defaults)
         self.assertIn("A_bitcoin_network_simulation", defaults)
         self.assertIn("B_bitcoin_network_simulation", defaults)
 
