@@ -458,7 +458,6 @@ def render_sidebar_panel(
 
         if is_non_price_series:
             currency = CURRENCY_DOLLAR
-            st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
             st.markdown("**Currency**")
             st.caption("This series does not use currency conversion.")
         else:
