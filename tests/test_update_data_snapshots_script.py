@@ -19,6 +19,18 @@ class TestUpdateDataSnapshotsScript(unittest.TestCase):
         mock_load_prepared_price_data.assert_called_once_with(source="auto")
         self.assertEqual(float(result.iloc[0]["Close"]), 1.0)
 
+    @patch("scripts.update_data_snapshots.load_prepared_bitcoin_supply_data")
+    def test_bitcoin_supply_snapshot_job_uses_live_source(self, mock_load_prepared_supply):
+        mock_load_prepared_supply.return_value = pd.DataFrame(
+            {"Close": [19_000_000.0]},
+            index=pd.to_datetime(["2024-01-01"]),
+        )
+
+        result = update_data_snapshots._build_snapshot_jobs()["prepared_bitcoin_supply_data"]()
+
+        mock_load_prepared_supply.assert_called_once_with(source="live")
+        self.assertEqual(float(result.iloc[0]["Close"]), 19_000_000.0)
+
     @patch("scripts.update_data_snapshots.build_incremental_reference_series_snapshot")
     def test_reference_snapshot_job_uses_incremental_builder(
         self,

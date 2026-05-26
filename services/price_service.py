@@ -32,6 +32,10 @@ MINER_REVENUE_CSV_URL = (
     "https://api.blockchain.info/charts/miners-revenue"
     "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
 )
+BITCOIN_SUPPLY_CSV_URL = (
+    "https://api.blockchain.info/charts/total-bitcoins"
+    "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
+)
 DIFFICULTY_CSV_URL = (
     "https://api.blockchain.info/charts/difficulty"
     "?timespan=all&sampled=false&metadata=false&cors=true&format=csv"
@@ -502,12 +506,13 @@ def _build_normalized_csv_adapter(
     )
 
 
-def _build_blockchain_chart_adapter(cache_key, source_url):
+def _build_blockchain_chart_adapter(cache_key, source_url, postprocess_fn=None):
     return _build_normalized_csv_adapter(
         cache_key,
         source_url,
         refresh_seconds=SLOW_REFRESH_SECONDS,
         validator_fn=_validate_prepared_chart_data,
+        postprocess_fn=postprocess_fn,
         read_csv_kwargs={"header": None, "names": ["Timestamp", "Value"]},
     )
 
@@ -523,6 +528,13 @@ def _normalize_prepared_close_frame(date_values, close_values):
     prepared_df["AbsDays"] = (prepared_df.index - GENESIS_DATE).days
     prepared_df["LogClose"] = np.log10(prepared_df["Close"])
     return prepared_df
+
+
+def _collapse_prepared_frame_to_daily_last(prepared_df):
+    return _normalize_prepared_close_frame(
+        prepared_df.index.normalize(),
+        prepared_df["Close"].values,
+    )
 
 
 def _fetch_coinlore_supply_billion_units(coin_slug, start_date, end_date=None):
@@ -559,7 +571,9 @@ def _fetch_coinlore_supply_billion_units(coin_slug, start_date, end_date=None):
         history_df["Supply"].astype(str).str.replace(",", "", regex=False),
         errors="coerce",
     )
-    prepared_df = _normalize_prepared_close_frame(history_df["Date"], supply_units / 1_000_000_000.0)
+    prepared_df = _normalize_prepared_close_frame(
+        history_df["Date"], supply_units / 1_000_000_000.0
+    )
     if prepared_df.empty:
         raise ValueError(f"CoinLore returned no usable supply rows for {coin_slug}.")
     return prepared_df
@@ -1168,6 +1182,20 @@ def build_prepared_bitcoin_volatility_data(raw_df, rolling_window_days=30):
 
 
 @st.cache_data(ttl=3600)
+def build_prepared_bitcoin_market_cap_data(price_df, supply_df):
+    price_values = pd.to_numeric(price_df["Close"], errors="coerce").dropna()
+    price_values = price_values[price_values > 0].sort_index()
+    supply_values = pd.to_numeric(supply_df["Close"], errors="coerce").dropna()
+    supply_values = supply_values[supply_values > 0].sort_index()
+    aligned_index = supply_values.index.union(price_values.index).sort_values()
+    aligned_supply = (
+        supply_values.reindex(aligned_index).interpolate("time").ffill().reindex(price_values.index)
+    )
+    market_cap_values = price_values * aligned_supply
+    return _normalize_prepared_close_frame(market_cap_values.index, market_cap_values.values)
+
+
+@st.cache_data(ttl=3600)
 def load_prepared_price_data(
     price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=0, source="auto"
 ):
@@ -1218,6 +1246,22 @@ def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL, 
         _validate_prepared_chart_data,
         lambda: _load_source_adapter(
             _build_blockchain_chart_adapter("prepared_miner_revenue_data", revenue_history_url)
+        ),
+        source=source,
+    )
+
+
+@st.cache_data(ttl=3600)
+def load_prepared_bitcoin_supply_data(supply_history_url=BITCOIN_SUPPLY_CSV_URL, source="auto"):
+    return _load_snapshot_or_live(
+        "prepared_bitcoin_supply_data",
+        _validate_prepared_chart_data,
+        lambda: _load_source_adapter(
+            _build_blockchain_chart_adapter(
+                "prepared_bitcoin_supply_data",
+                supply_history_url,
+                postprocess_fn=_collapse_prepared_frame_to_daily_last,
+            )
         ),
         source=source,
     )
@@ -1276,9 +1320,7 @@ def load_prepared_usdt_supply_data(
             DataFrameSourceAdapter(
                 cache_key="prepared_usdt_supply_data",
                 refresh_seconds=REFERENCE_REFRESH_SECONDS,
-                fetch_fn=lambda: _fetch_defillama_stablecoin_supply_billion_units(
-                    stablecoin_url
-                ),
+                fetch_fn=lambda: _fetch_defillama_stablecoin_supply_billion_units(stablecoin_url),
                 validator_fn=_validate_prepared_usdt_supply_data,
             )
         ),

@@ -37,6 +37,7 @@ from core.constants import (  # noqa: E402
     OSC_DEFAULTS_UAH,
     OSC_DEFAULTS_US_HOUSING,
     POWERLAW_SERIES_DOGECOIN_BTC,
+    POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
@@ -58,6 +59,7 @@ from core.series_registry import get_active_model_config  # noqa: E402
 from core.utils import get_stable_trend_fit  # noqa: E402
 from services.price_service import (  # noqa: E402
     build_currency_close_series,
+    build_prepared_bitcoin_market_cap_data,
     build_prepared_bitcoin_volatility_data,
     load_prepared_dogecoin_btc_data,
     load_prepared_difficulty_data,
@@ -69,6 +71,7 @@ from services.price_service import (  # noqa: E402
     load_prepared_liquid_btc_data,
     load_prepared_liquid_transactions_data,
     load_prepared_miner_revenue_data,
+    load_prepared_bitcoin_supply_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
     load_prepared_usdt_supply_data,
@@ -94,6 +97,12 @@ DEFAULT_CASES = [
         "DEFAULT_US_HOUSING_B",
     ),
     (POWERLAW_SERIES_REVENUE, CURRENCY_DOLLAR, "DEFAULT_REVENUE_A", "DEFAULT_REVENUE_B"),
+    (
+        POWERLAW_SERIES_BITCOIN_MARKET_CAP,
+        CURRENCY_DOLLAR,
+        "DEFAULT_BITCOIN_MARKET_CAP_A",
+        "DEFAULT_BITCOIN_MARKET_CAP_B",
+    ),
     (
         POWERLAW_SERIES_BITCOIN_VOLATILITY,
         CURRENCY_DOLLAR,
@@ -232,9 +241,14 @@ OSCILLATOR_DEFAULT_CASES = [
 
 def _load_series_frames():
     prepared_price_data = load_prepared_price_data()
+    prepared_bitcoin_supply_data = load_prepared_bitcoin_supply_data()
     return {
         POWERLAW_SERIES_PRICE: prepared_price_data,
         POWERLAW_SERIES_REVENUE: load_prepared_miner_revenue_data(),
+        POWERLAW_SERIES_BITCOIN_MARKET_CAP: build_prepared_bitcoin_market_cap_data(
+            prepared_price_data,
+            prepared_bitcoin_supply_data,
+        ),
         POWERLAW_SERIES_BITCOIN_VOLATILITY: build_prepared_bitcoin_volatility_data(
             prepared_price_data
         ),

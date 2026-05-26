@@ -11,6 +11,7 @@ from core.constants import (
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
+    POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_PRICE,
 )
 from scripts import update_powerlaw_defaults
@@ -26,6 +27,17 @@ class TestUpdateDefaultsScript(unittest.TestCase):
         self.assertEqual(len(volatility_cases), 1)
         self.assertEqual(volatility_cases[0][2], "DEFAULT_BITCOIN_VOLATILITY_A")
         self.assertEqual(volatility_cases[0][3], "DEFAULT_BITCOIN_VOLATILITY_B")
+
+    def test_default_cases_include_bitcoin_market_cap(self):
+        self.assertIn(
+            (
+                POWERLAW_SERIES_BITCOIN_MARKET_CAP,
+                update_powerlaw_defaults.CURRENCY_DOLLAR,
+                "DEFAULT_BITCOIN_MARKET_CAP_A",
+                "DEFAULT_BITCOIN_MARKET_CAP_B",
+            ),
+            DEFAULT_CASES,
+        )
 
     def test_default_cases_include_uah_price_model(self):
         self.assertIn(
@@ -97,6 +109,7 @@ class TestUpdateDefaultsScript(unittest.TestCase):
         loader_names = [
             "load_prepared_price_data",
             "load_prepared_miner_revenue_data",
+            "load_prepared_bitcoin_supply_data",
             "load_prepared_difficulty_data",
             "load_prepared_hashrate_data",
             "load_prepared_lightning_nodes_data",
@@ -118,7 +131,9 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             series_frames = update_powerlaw_defaults._load_series_frames()
 
         self.assertIn(POWERLAW_SERIES_BITCOIN_VOLATILITY, series_frames)
+        self.assertIn(POWERLAW_SERIES_BITCOIN_MARKET_CAP, series_frames)
         self.assertGreater(len(series_frames[POWERLAW_SERIES_BITCOIN_VOLATILITY]), 0)
+        self.assertGreater(len(series_frames[POWERLAW_SERIES_BITCOIN_MARKET_CAP]), 0)
 
     def test_update_constants_content_updates_scalars_and_mapping_entries(self):
         original = """DEFAULT_A = -16.511

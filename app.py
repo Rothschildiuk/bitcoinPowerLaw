@@ -60,6 +60,7 @@ from core.constants import (
     POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
+    POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_LITECOIN_BTC,
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
@@ -102,6 +103,7 @@ from core.utils import (
 )
 from services.price_service import (
     build_currency_close_series,
+    build_prepared_bitcoin_market_cap_data,
     build_prepared_bitcoin_volatility_data,
     load_prepared_dogecoin_btc_data,
     load_prepared_difficulty_data,
@@ -113,6 +115,7 @@ from services.price_service import (
     load_prepared_liquid_btc_data,
     load_prepared_liquid_transactions_data,
     load_prepared_miner_revenue_data,
+    load_prepared_bitcoin_supply_data,
     load_prepared_monero_btc_data,
     load_prepared_price_data,
     load_prepared_usdt_supply_data,
@@ -409,6 +412,7 @@ class SeriesFrameStore:
     def _load(self, series_name):
         if series_name not in SERIES_LOADERS and series_name not in {
             POWERLAW_SERIES_BITCOIN_VOLATILITY,
+            POWERLAW_SERIES_BITCOIN_MARKET_CAP,
             POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
         }:
             st.error(f"Unknown data series: {series_name}")
@@ -418,6 +422,13 @@ class SeriesFrameStore:
             if series_name == POWERLAW_SERIES_BITCOIN_VOLATILITY:
                 return normalize_close_frame(
                     build_prepared_bitcoin_volatility_data(self.get(POWERLAW_SERIES_PRICE))
+                )
+            if series_name == POWERLAW_SERIES_BITCOIN_MARKET_CAP:
+                return normalize_close_frame(
+                    build_prepared_bitcoin_market_cap_data(
+                        self.get(POWERLAW_SERIES_PRICE),
+                        load_prepared_bitcoin_supply_data(),
+                    )
                 )
             if series_name == POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION:
                 return normalize_close_frame(

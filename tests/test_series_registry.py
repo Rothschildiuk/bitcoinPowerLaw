@@ -22,6 +22,7 @@ from core.constants import (
     MODE_POWERLAW,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
+    POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
@@ -64,6 +65,7 @@ class TestSeriesRegistry(unittest.TestCase):
 
     def test_options_follow_registry_capabilities(self):
         self.assertIn(POWERLAW_SERIES_REVENUE, get_powerlaw_series_options())
+        self.assertIn(POWERLAW_SERIES_BITCOIN_MARKET_CAP, get_powerlaw_series_options())
         self.assertIn(POWERLAW_SERIES_LIQUID_TRANSACTIONS, get_powerlaw_series_options())
         self.assertIn(POWERLAW_SERIES_DIFFICULTY, get_logperiodic_series_options())
         self.assertIn(POWERLAW_SERIES_HASHRATE, get_logperiodic_series_options())
@@ -104,6 +106,7 @@ class TestSeriesRegistry(unittest.TestCase):
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_USDT_SUPPLY), "Fiat Money"
         )
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
+        self.assertIn(POWERLAW_SERIES_BITCOIN_MARKET_CAP, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_VOLATILITY, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
@@ -122,6 +125,20 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertFalse(volatility_config.supports_currency_selector)
         self.assertTrue(volatility_config.lock_price_scale_to_log)
         self.assert_default_params_are_within_powerlaw_bounds(volatility_config)
+
+    def test_bitcoin_market_cap_config_uses_usd_units(self):
+        market_cap_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_BITCOIN_MARKET_CAP,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_DOLLAR,
+        )
+
+        self.assertEqual(market_cap_config.target_series_unit, "USD")
+        self.assertEqual(market_cap_config.currency_prefix, "$")
+        self.assertFalse(market_cap_config.supports_currency_selector)
+        self.assertTrue(market_cap_config.lock_price_scale_to_log)
+        self.assert_default_params_are_within_powerlaw_bounds(market_cap_config)
 
     def test_filecoin_btc_config_uses_btc_units(self):
         filecoin_config = get_active_model_config(
@@ -430,6 +447,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn("B_usdt_supply", defaults)
         self.assertIn("A_bitcoin_network_simulation", defaults)
         self.assertIn("B_bitcoin_network_simulation", defaults)
+        self.assertIn("A_bitcoin_market_cap", defaults)
+        self.assertIn("B_bitcoin_market_cap", defaults)
 
 
 if __name__ == "__main__":

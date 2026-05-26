@@ -78,6 +78,21 @@ class TestPriceService(unittest.TestCase):
         np.testing.assert_allclose(result["Close"].values, expected_volatility.values)
         np.testing.assert_allclose(result["LogClose"].values, np.log10(result["Close"].values))
 
+    def test_build_prepared_bitcoin_market_cap_data_multiplies_price_by_aligned_supply(self):
+        price_dates = pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"])
+        price_df = pd.DataFrame({"Close": [40_000.0, 42_000.0, 41_000.0]}, index=price_dates)
+        supply_df = pd.DataFrame(
+            {"Close": [19_000_000.0, 19_000_200.0]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-03"]),
+        )
+
+        result = price_service.build_prepared_bitcoin_market_cap_data(price_df, supply_df)
+
+        expected_supply = np.array([19_000_000.0, 19_000_100.0, 19_000_200.0])
+        expected_market_cap = np.array([40_000.0, 42_000.0, 41_000.0]) * expected_supply
+        np.testing.assert_allclose(result["Close"].values, expected_market_cap)
+        np.testing.assert_allclose(result["LogClose"].values, np.log10(expected_market_cap))
+
     def test_load_or_refresh_dataframe_cache_uses_fresh_local_snapshot(self):
         cached_df = pd.DataFrame(
             {"Close": [100.0]},
@@ -950,6 +965,27 @@ class TestPriceService(unittest.TestCase):
             ["2009-01-03", "2020-01-01", "2020-01-02"],
         )
         self.assertListEqual(result["Close"].tolist(), [10_000_000.0, 11_000_000.0, 12_500_000.0])
+        self.assertIn("AbsDays", result.columns)
+        self.assertIn("LogClose", result.columns)
+
+    @patch("services.price_service.pd.read_csv")
+    def test_load_prepared_bitcoin_supply_data_parses_timestamp_value(self, mock_read_csv):
+        price_service.load_prepared_bitcoin_supply_data.clear()
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "Timestamp": [
+                    "2009-01-03 00:00:00",
+                    "2020-01-01 00:00:00",
+                    "2020-01-01 12:00:00",
+                    "2020-01-02 00:00:00",
+                ],
+                "Value": [50.0, 18_000_000.0, 18_000_050.0, 18_000_100.0],
+            }
+        )
+
+        result = price_service.load_prepared_bitcoin_supply_data("unused.csv")
+
+        self.assertListEqual(result["Close"].tolist(), [50.0, 18_000_050.0, 18_000_100.0])
         self.assertIn("AbsDays", result.columns)
         self.assertIn("LogClose", result.columns)
 
