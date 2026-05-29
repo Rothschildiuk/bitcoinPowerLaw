@@ -260,6 +260,26 @@ class TestPriceService(unittest.TestCase):
         mock_fetch_reference_series_frame.assert_called_once_with("2010-01-01")
         self.assertTrue(result.equals(full_df))
 
+    @patch("services.price_service._load_snapshot_or_live")
+    def test_load_reference_series_uses_date_column_as_series_index(
+        self, mock_load_snapshot_or_live
+    ):
+        price_service.load_reference_series.clear()
+        dates = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        mock_load_snapshot_or_live.return_value = pd.DataFrame(
+            {
+                "Date": dates,
+                **{
+                    column: [float(index + 1), float(index + 2)]
+                    for index, column in enumerate(price_service.REFERENCE_SERIES_COLUMNS)
+                },
+            }
+        )
+
+        eur_usd, *_ = price_service.load_reference_series("2024-01-01")
+
+        self.assertEqual(eur_usd.index.tolist(), dates.tolist())
+
     @patch("services.price_service.pd.read_csv")
     def test_load_prepared_price_data_live_source_bypasses_valid_snapshot(self, mock_read_csv):
         price_service.load_prepared_price_data.clear()
@@ -509,6 +529,32 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service.build_currency_close_series(raw_df, "EUR")
         self.assertListEqual(result.round(6).tolist(), [50.0, 60.0])
+
+    @patch("services.price_service.load_reference_series")
+    def test_build_currency_close_series_interpolates_reference_dates_before_reindexing(
+        self, mock_load_reference_series
+    ):
+        idx = pd.to_datetime(["2024-01-02", "2024-01-03"])
+        raw_df = pd.DataFrame({"Close": [100.0, 120.0]}, index=idx)
+        eur_usd = pd.Series(
+            [2.0, 4.0],
+            index=pd.to_datetime(["2024-01-01", "2024-01-05"]),
+        )
+        mock_load_reference_series.return_value = (
+            eur_usd,
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+        )
+
+        result = price_service.build_currency_close_series(raw_df, "EUR")
+
+        self.assertListEqual(result.round(6).tolist(), [40.0, 40.0])
 
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_uah(self, mock_load_reference_series):

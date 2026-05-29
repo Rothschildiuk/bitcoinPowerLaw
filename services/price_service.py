@@ -1044,6 +1044,14 @@ def load_reference_series(start_date, source="auto"):
         ),
         source=source,
     )
+    reference_df = reference_df.copy()
+    if "Date" in reference_df.columns:
+        reference_df["Date"] = pd.to_datetime(reference_df["Date"], errors="coerce")
+        reference_df = reference_df.dropna(subset=["Date"]).set_index("Date").sort_index()
+    elif not isinstance(reference_df.index, pd.DatetimeIndex):
+        reference_df.index = pd.to_datetime(reference_df.index, errors="coerce")
+        reference_df = reference_df[~reference_df.index.isna()].sort_index()
+
     eur_usd = (
         pd.to_numeric(reference_df["EURUSD"], errors="coerce").dropna()
         if "EURUSD" in reference_df.columns
@@ -1129,44 +1137,53 @@ def build_currency_close_series(raw_df, selected_currency):
         us_housing,
     ) = load_reference_series(start_date)
 
+    def align_reference_to_close(reference_series):
+        reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
+        reference_series.index = pd.to_datetime(reference_series.index)
+        close_index = pd.to_datetime(close_usd.index)
+        aligned_index = reference_series.index.union(close_index).sort_values()
+        return (
+            reference_series.reindex(aligned_index)
+            .interpolate("time")
+            .ffill()
+            .bfill()
+            .reindex(close_index)
+        )
+
     if selected_currency == CURRENCY_EURO and not eur_usd.empty:
-        eur_usd_aligned = eur_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        eur_usd_aligned = align_reference_to_close(eur_usd)
         return close_usd / eur_usd_aligned
 
     if selected_currency == CURRENCY_UAH and not usd_uah.empty:
-        usd_uah_aligned = usd_uah.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        usd_uah_aligned = align_reference_to_close(usd_uah)
         return close_usd * usd_uah_aligned
 
     if selected_currency == CURRENCY_RUB and not usd_rub.empty:
-        usd_rub_aligned = usd_rub.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        usd_rub_aligned = align_reference_to_close(usd_rub)
         return close_usd * usd_rub_aligned
 
     if selected_currency == CURRENCY_GOLD and not xau_usd.empty:
-        xau_usd_aligned = xau_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        xau_usd_aligned = align_reference_to_close(xau_usd)
         return close_usd / xau_usd_aligned
 
     if selected_currency == CURRENCY_SILVER and not xag_usd.empty:
-        xag_usd_aligned = xag_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        xag_usd_aligned = align_reference_to_close(xag_usd)
         return close_usd / xag_usd_aligned
 
     if selected_currency == CURRENCY_COPPER and not copper_usd.empty:
-        copper_usd_aligned = copper_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        copper_usd_aligned = align_reference_to_close(copper_usd)
         return close_usd / copper_usd_aligned
 
     if selected_currency == CURRENCY_IRON and not iron_ore_usd.empty:
-        iron_ore_usd_aligned = (
-            iron_ore_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
-        )
+        iron_ore_usd_aligned = align_reference_to_close(iron_ore_usd)
         return close_usd / iron_ore_usd_aligned
 
     if selected_currency == CURRENCY_ALUMINUM and not aluminum_usd.empty:
-        aluminum_usd_aligned = (
-            aluminum_usd.reindex(close_usd.index).interpolate("time").ffill().bfill()
-        )
+        aluminum_usd_aligned = align_reference_to_close(aluminum_usd)
         return close_usd / aluminum_usd_aligned
 
     if selected_currency == CURRENCY_US_HOUSING and not us_housing.empty:
-        us_housing_aligned = us_housing.reindex(close_usd.index).interpolate("time").ffill().bfill()
+        us_housing_aligned = align_reference_to_close(us_housing)
         return close_usd / us_housing_aligned
 
     return close_usd

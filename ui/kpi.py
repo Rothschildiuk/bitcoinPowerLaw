@@ -1,10 +1,13 @@
 import numpy as np
+import pandas as pd
 import streamlit as st
 
+from core.constants import KEY_SIGMA_BAND_HISTORY_YEARS
 from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_log_offset
 
 SIGMA_STEP = 0.125
 SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.0, 2.0 + SIGMA_STEP, SIGMA_STEP))
+SIGMA_BAND_HISTORY_ALL = 0
 
 
 def _kpi_card(col, label, value, delta=None, d_color=None):
@@ -21,6 +24,43 @@ def _kpi_card(col, label, value, delta=None, d_color=None):
 
 def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
     return f"{currency_prefix}{value:,.{currency_decimals}f}{currency_suffix}"
+
+
+def _resolve_sigma_band_history_max_years(df_display):
+    if df_display.empty:
+        return 1
+
+    date_index = pd.to_datetime(df_display.index, errors="coerce")
+    valid_dates = date_index[~pd.isna(date_index)]
+    if valid_dates.empty:
+        return 15
+
+    history_days = max((valid_dates.max() - valid_dates.min()).days, 0)
+    return max(1, int(np.ceil(history_days / 365.25)))
+
+
+def _format_sigma_band_history_option(years):
+    years = int(years)
+    if years == SIGMA_BAND_HISTORY_ALL:
+        return "All history"
+    if years == 1:
+        return "Last 1 year"
+    return f"Last {years} years"
+
+
+def filter_sigma_band_history(df_display, history_years):
+    history_years = int(history_years or SIGMA_BAND_HISTORY_ALL)
+    if history_years <= 0 or df_display.empty:
+        return df_display
+
+    date_index = pd.to_datetime(df_display.index, errors="coerce")
+    valid_mask = ~pd.isna(date_index)
+    if not np.any(valid_mask):
+        return df_display
+
+    latest_date = date_index[valid_mask].max()
+    start_date = latest_date - pd.DateOffset(years=history_years)
+    return df_display.loc[np.asarray(date_index >= start_date)]
 
 
 def _empty_band_shares():
@@ -163,7 +203,11 @@ def _sigma_band_contains_level(band, sigma_level):
     return float(lower_level) <= sigma_level < float(upper_level)
 
 
-def _render_sigma_band_chart(band_shares, current_sigma_level=None):
+def _render_sigma_band_chart(
+    band_shares,
+    current_sigma_level=None,
+    history_label="History share",
+):
     max_share = max((float(band["share"]) for band in band_shares), default=0.0)
     scale_max = max(max_share, 1.0)
 
@@ -183,15 +227,13 @@ def _render_sigma_band_chart(band_shares, current_sigma_level=None):
             "</div>"
         )
 
-    bars = "".join(
-        render_bar(band) for band in band_shares
-    )
+    bars = "".join(render_bar(band) for band in band_shares)
     st.markdown(
         (
             "<div class='sigma-chart-card'>"
             "<div class='sigma-chart-header'>"
             "<span>Sigma band</span>"
-            "<span>History share</span>"
+            f"<span>{history_label}</span>"
             "</div>"
             f"<div class='sigma-bars'>{bars}</div>"
             "</div>"
@@ -229,10 +271,6 @@ def render_model_kpis(
     )
     pot_target = float(pot_target[0])
     pot = ((pot_target - l_p) / l_p) * 100
-    band_shares = calculate_powerlaw_band_shares(df_display, p2_5, p16_5, p83_5, p97_5)
-    current_sigma_level = calculate_current_powerlaw_sigma_level(
-        df_display, p2_5, p16_5, p83_5, p97_5
-    )
 
     k1, k2, k3 = st.columns(3)
     _kpi_card(
@@ -256,4 +294,31 @@ def render_model_kpis(
 
         render_logperiodic_regression_stats_table(logperiodic_stats_rows, perrenod_stats_rows)
 
-    _render_sigma_band_chart(band_shares, current_sigma_level)
+    max_history_years = _resolve_sigma_band_history_max_years(df_display)
+    selected_history_years = int(
+        st.session_state.get(KEY_SIGMA_BAND_HISTORY_YEARS, SIGMA_BAND_HISTORY_ALL)
+    )
+    if (
+        selected_history_years < SIGMA_BAND_HISTORY_ALL
+        or selected_history_years > max_history_years
+    ):
+        selected_history_years = max_history_years
+        st.session_state[KEY_SIGMA_BAND_HISTORY_YEARS] = selected_history_years
+    history_control_col, _ = st.columns([1, 3])
+    with history_control_col:
+        selected_history_years = st.slider(
+            "Sigma band history (years)",
+            min_value=SIGMA_BAND_HISTORY_ALL,
+            max_value=max_history_years,
+            value=selected_history_years,
+            step=1,
+            key=KEY_SIGMA_BAND_HISTORY_YEARS,
+        )
+        st.caption(_format_sigma_band_history_option(selected_history_years))
+    band_df = filter_sigma_band_history(df_display, selected_history_years)
+    band_shares = calculate_powerlaw_band_shares(band_df, p2_5, p16_5, p83_5, p97_5)
+    current_sigma_level = calculate_current_powerlaw_sigma_level(
+        df_display, p2_5, p16_5, p83_5, p97_5
+    )
+    history_label = _format_sigma_band_history_option(selected_history_years)
+    _render_sigma_band_chart(band_shares, current_sigma_level, history_label)

@@ -6,6 +6,7 @@ import pandas as pd
 from ui.kpi import (
     calculate_current_powerlaw_sigma_level,
     calculate_powerlaw_band_shares,
+    filter_sigma_band_history,
     _render_sigma_band_chart,
 )
 
@@ -117,6 +118,26 @@ class TestUIKpi(unittest.TestCase):
         )
 
         self.assertEqual([band["share"] for band in shares], [0.0] * 34)
+
+    def test_filter_sigma_band_history_keeps_only_recent_years(self):
+        df_display = pd.DataFrame(
+            {"Res": [-1.0, 0.0, 1.0]},
+            index=pd.to_datetime(["2020-01-01", "2023-01-01", "2024-01-01"]),
+        )
+
+        filtered = filter_sigma_band_history(df_display, history_years=1)
+
+        self.assertEqual(filtered["Res"].tolist(), [0.0, 1.0])
+
+    def test_filter_sigma_band_history_zero_keeps_all_history(self):
+        df_display = pd.DataFrame(
+            {"Res": [-1.0, 0.0, 1.0]},
+            index=pd.to_datetime(["2020-01-01", "2023-01-01", "2024-01-01"]),
+        )
+
+        filtered = filter_sigma_band_history(df_display, history_years=0)
+
+        pd.testing.assert_frame_equal(filtered, df_display)
 
     def test_calculate_current_powerlaw_sigma_level_uses_latest_valid_residual(self):
         df_display = pd.DataFrame({"Res": [-0.5, np.nan, 0.25]})
