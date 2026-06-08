@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "${POWERLAW_SKIP_VERSION_BUMP:-}" = "1" ]; then
+  echo "Skipping PowerLaw version bump because POWERLAW_SKIP_VERSION_BUMP=1"
+  exit 0
+fi
+
+python3 scripts/bump_version.py patch
+git add core/constants.py package.json package-lock.json
