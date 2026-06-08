@@ -3,9 +3,9 @@ name: Refresh PowerLaw data
 on:
   workflow_dispatch:
   schedule:
-    # GitHub cron is UTC. Running at both 23:00 and 00:00 UTC lets the
-    # job keep a 01:00 Europe/Vienna local-time guard across DST changes.
-    - cron: "0 23,0 * * *"
+    # GitHub cron is UTC. Running at both 23:10 and 00:10 UTC lets the
+    # job keep a 01:10 Europe/Vienna local-time guard across DST changes.
+    - cron: "10 23,0 * * *"
 
 permissions:
   contents: write
@@ -28,7 +28,7 @@ jobs:
           if [ "$(TZ=Europe/Vienna date +%H)" = "01" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Not 01:00 Europe/Vienna; skipping."
+            echo "Not 01:10 Europe/Vienna; skipping."
             echo "should_run=false" >> "$GITHUB_OUTPUT"
           fi
 
