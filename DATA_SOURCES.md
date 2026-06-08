@@ -31,7 +31,10 @@ Read this file only when changing loaders, cache behavior, snapshot refreshes, o
 - Difficulty/Hashrate raw early rows can be noisy; app analysis starts at `2010-01-01`.
 
 ## Maintenance
+- App runtime uses checked-in snapshots by default (`POWERLAW_DATA_SOURCE=snapshot`) so page loads do not wait on external APIs. For local debugging, set `POWERLAW_DATA_SOURCE=auto` or `POWERLAW_DATA_SOURCE=live`.
 - Refresh snapshots: `make update-data-snapshots` or `venv/bin/python scripts/update_data_snapshots.py`.
 - Refresh model defaults: `make update-defaults`.
+- Refresh both in the correct order: `make update-all-data`.
+- GitHub Actions runs `.github/workflows/refresh-data.yml` on a daily schedule guarded to `01:00 Europe/Vienna`, and can also be started manually with `workflow_dispatch`.
 - Preview defaults: `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`.
 - Default refresh rewrites PowerLaw `A/B` and LogPeriodic defaults in `core/constants.py`.

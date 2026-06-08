@@ -106,6 +106,7 @@ from services.price_service import (
     build_currency_close_series,
     build_prepared_bitcoin_market_cap_data,
     build_prepared_bitcoin_volatility_data,
+    get_runtime_data_source,
     load_prepared_dogecoin_btc_data,
     load_prepared_difficulty_data,
     load_prepared_filecoin_btc_data,
@@ -403,8 +404,13 @@ def get_sidebar_currency():
 
 
 class SeriesFrameStore:
-    def __init__(self):
+    def __init__(self, data_source=None):
         self._frames = {}
+        self._data_source = data_source or get_runtime_data_source()
+
+    @property
+    def data_source(self):
+        return self._data_source
 
     def get(self, series_name):
         if series_name not in self._frames:
@@ -429,7 +435,7 @@ class SeriesFrameStore:
                 return normalize_close_frame(
                     build_prepared_bitcoin_market_cap_data(
                         self.get(POWERLAW_SERIES_PRICE),
-                        load_prepared_bitcoin_supply_data(),
+                        load_prepared_bitcoin_supply_data(source=self._data_source),
                     )
                 )
             if series_name == POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION:
@@ -447,7 +453,7 @@ class SeriesFrameStore:
                 )
 
             label, loader = SERIES_LOADERS[series_name]
-            return normalize_close_frame(loader())
+            return normalize_close_frame(loader(source=self._data_source))
         except Exception as e:
             label = SERIES_LOADERS.get(series_name, (series_name, None))[0]
             st.error(f"Error loading {label} data: {e}")
@@ -461,7 +467,11 @@ class SidebarSeriesData:
     def __getitem__(self, series_name):
         data_df = self._series_store.get(series_name)
         if series_name == POWERLAW_SERIES_PRICE:
-            price_close = build_currency_close_series(data_df, get_sidebar_currency())
+            price_close = build_currency_close_series(
+                data_df,
+                get_sidebar_currency(),
+                source=self._series_store.data_source,
+            )
             price_close = price_close[price_close > 0]
             return {
                 "absolute_days": data_df.loc[price_close.index, "AbsDays"].values,
@@ -1307,7 +1317,11 @@ current_gen_date = GENESIS_DATE + pd.Timedelta(days=genesis_offset)
 if active_model.supports_currency_selector:
     raw_df_usd = series_store.get(POWERLAW_SERIES_PRICE)
     raw_df = raw_df_usd.copy()
-    raw_df["Close"] = build_currency_close_series(raw_df_usd, currency)
+    raw_df["Close"] = build_currency_close_series(
+        raw_df_usd,
+        currency,
+        source=series_store.data_source,
+    )
     raw_df = raw_df[raw_df["Close"] > 0].copy()
     raw_df["LogClose"] = np.log10(raw_df["Close"])
 else:
@@ -1379,7 +1393,11 @@ if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
         else session_genesis_offset
     )
     bitcoin_residual_overlay_df = raw_df_usd.copy()
-    bitcoin_residual_overlay_df["Close"] = build_currency_close_series(raw_df_usd, currency)
+    bitcoin_residual_overlay_df["Close"] = build_currency_close_series(
+        raw_df_usd,
+        currency,
+        source=series_store.data_source,
+    )
     bitcoin_residual_overlay_df = bitcoin_residual_overlay_df[
         (bitcoin_residual_overlay_df["AbsDays"] > price_genesis_offset)
         & (bitcoin_residual_overlay_df["Close"] > 0)

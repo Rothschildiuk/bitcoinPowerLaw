@@ -9,7 +9,7 @@ PY_TARGETS := app.py core services tests ui
 UI_TEST_TARGETS := tests/test_oscillator.py tests/test_ui_charts_helpers.py tests/test_ui_sidebar_helpers.py
 UI_CHECK_TARGETS := core/oscillator.py ui/charts.py ui/sidebar.py tests/test_oscillator.py tests/test_ui_charts_helpers.py tests/test_ui_sidebar_helpers.py
 
-.PHONY: help install run format format-ui check check-ui compile test test-ui test-charts test-oscillator test-sidebar verify clean update-defaults update-data-snapshots
+.PHONY: help install run format format-ui check check-ui compile test test-ui test-charts test-oscillator test-sidebar verify clean update-defaults update-data-snapshots update-all-data
 
 $(PY):
 	python3 -m venv $(VENV)
@@ -31,6 +31,7 @@ help:
 	@echo "  make verify   - run format check, compile, and targeted UI tests"
 	@echo "  make update-defaults - recompute and rewrite PowerLaw and LogPeriodic defaults"
 	@echo "  make update-data-snapshots - refresh checked-in daily snapshot CSV files"
+	@echo "  make update-all-data - refresh snapshots, then recompute checked-in defaults"
 	@echo "  make clean    - remove Python cache folders"
 
 install: $(PY)
@@ -77,6 +78,8 @@ update-defaults: $(PY)
 
 update-data-snapshots: $(PY)
 	$(PY) scripts/update_data_snapshots.py
+
+update-all-data: update-data-snapshots update-defaults
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 import re
 import time
 import urllib.request
@@ -53,6 +54,8 @@ FRED_US_HOUSING_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CS
 DEFILLAMA_USDT_STABLECOIN_URL = "https://stablecoins.llama.fi/stablecoin/1"
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
 SNAPSHOT_DATA_DIR = Path("data/snapshots")
+DATA_SOURCE_ENV_VAR = "POWERLAW_DATA_SOURCE"
+DATA_SOURCE_MODES = {"auto", "snapshot", "live"}
 LOCAL_CACHE_SCHEMA_VERSION = 5
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
@@ -91,6 +94,24 @@ class DataFrameSourceAdapter:
             min_check_interval_seconds=self.refresh_seconds,
             validator_fn=self.validator_fn,
         )
+
+
+def normalize_data_source(source):
+    normalized_source = str(source or "").strip().lower()
+    if normalized_source not in DATA_SOURCE_MODES:
+        raise ValueError(
+            f"Unsupported source mode: {source!r}. "
+            f"Use one of: {', '.join(sorted(DATA_SOURCE_MODES))}."
+        )
+    return normalized_source
+
+
+def get_runtime_data_source(default="snapshot"):
+    default = normalize_data_source(default)
+    configured_source = os.getenv(DATA_SOURCE_ENV_VAR, default).strip()
+    if not configured_source:
+        return default
+    return normalize_data_source(configured_source)
 
 
 def _ensure_local_data_cache_dir():
@@ -277,8 +298,7 @@ def _load_cached_dataframe_snapshot(cache_keys, validator_fn=None):
 
 
 def _load_snapshot_or_live(snapshot_key, validator_fn, live_loader, *, source="auto"):
-    if source not in {"auto", "snapshot", "live"}:
-        raise ValueError(f"Unsupported source mode: {source}")
+    source = normalize_data_source(source)
 
     snapshot_df = None
     if source in {"auto", "snapshot"}:
@@ -1119,7 +1139,7 @@ def load_reference_series(start_date, source="auto"):
     )
 
 
-def build_currency_close_series(raw_df, selected_currency):
+def build_currency_close_series(raw_df, selected_currency, source="auto"):
     close_usd = raw_df["Close"].astype(float)
     if selected_currency == CURRENCY_DOLLAR:
         return close_usd
@@ -1135,7 +1155,7 @@ def build_currency_close_series(raw_df, selected_currency):
         iron_ore_usd,
         aluminum_usd,
         us_housing,
-    ) = load_reference_series(start_date)
+    ) = load_reference_series(start_date, source=source)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()

@@ -186,6 +186,14 @@ class TestPriceService(unittest.TestCase):
             ["2024-01-01", "2024-01-02"],
         )
 
+    def test_get_runtime_data_source_defaults_to_snapshot(self):
+        with patch.dict(price_service.os.environ, {}, clear=True):
+            self.assertEqual(price_service.get_runtime_data_source(), "snapshot")
+
+    def test_get_runtime_data_source_uses_env_override(self):
+        with patch.dict(price_service.os.environ, {"POWERLAW_DATA_SOURCE": "live"}, clear=True):
+            self.assertEqual(price_service.get_runtime_data_source(), "live")
+
     def test_extract_close_series_handles_empty_input(self):
         series = price_service._extract_close_series(pd.DataFrame())
         self.assertTrue(series.empty)
@@ -529,6 +537,28 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service.build_currency_close_series(raw_df, "EUR")
         self.assertListEqual(result.round(6).tolist(), [50.0, 60.0])
+
+    @patch("services.price_service.load_reference_series")
+    def test_build_currency_close_series_passes_source_to_reference_loader(
+        self, mock_load_reference_series
+    ):
+        idx = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        raw_df = pd.DataFrame({"Close": [100.0, 120.0]}, index=idx)
+        mock_load_reference_series.return_value = (
+            pd.Series([2.0, 2.0], index=idx),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+            pd.Series(dtype=float),
+        )
+
+        price_service.build_currency_close_series(raw_df, "EUR", source="snapshot")
+
+        mock_load_reference_series.assert_called_once_with("2024-01-01", source="snapshot")
 
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_interpolates_reference_dates_before_reindexing(

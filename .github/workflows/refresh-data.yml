@@ -1,0 +1,78 @@
+name: Refresh PowerLaw data
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub cron is UTC. Running at both 23:00 and 00:00 UTC lets the
+    # job keep a 01:00 Europe/Vienna local-time guard across DST changes.
+    - cron: "0 23,0 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh_powerlaw_data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve schedule guard
+        id: schedule_guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" != "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$(TZ=Europe/Vienna date +%H)" = "01" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not 01:00 Europe/Vienna; skipping."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out repository
+        if: steps.schedule_guard.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: steps.schedule_guard.outputs.should_run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: config/requirements.txt
+
+      - name: Configure git author
+        if: steps.schedule_guard.outputs.should_run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        if: steps.schedule_guard.outputs.should_run == 'true'
+        run: make install
+
+      - name: Refresh snapshots and defaults
+        if: steps.schedule_guard.outputs.should_run == 'true'
+        run: make update-all-data
+
+      - name: Stop if there are no data changes
+        if: steps.schedule_guard.outputs.should_run == 'true'
+        id: changes
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No snapshot/default changes to commit."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push data refresh
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          python3 scripts/bump_version.py patch
+          git add core/constants.py package.json package-lock.json data/snapshots
+          git commit -m "Update daily data snapshots"
+          git push
