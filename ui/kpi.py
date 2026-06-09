@@ -26,26 +26,38 @@ def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
     return f"{currency_prefix}{value:,.{currency_decimals}f}{currency_suffix}"
 
 
-def _resolve_sigma_band_history_max_years(df_display):
-    if df_display.empty:
-        return 1
-
-    date_index = pd.to_datetime(df_display.index, errors="coerce")
+def resolve_sigma_band_history_max_years(date_values):
+    date_index = pd.to_datetime(date_values, errors="coerce")
     valid_dates = date_index[~pd.isna(date_index)]
-    if valid_dates.empty:
+    if len(valid_dates) == 0:
         return 15
 
     history_days = max((valid_dates.max() - valid_dates.min()).days, 0)
     return max(1, int(np.ceil(history_days / 365.25)))
 
 
-def _format_sigma_band_history_option(years):
+def resolve_sigma_band_history_selection(history_years, max_history_years):
+    selected_years = int(history_years or SIGMA_BAND_HISTORY_ALL)
+    max_history_years = max(1, int(max_history_years))
+    if selected_years < SIGMA_BAND_HISTORY_ALL or selected_years > max_history_years:
+        return max_history_years
+    return selected_years
+
+
+def format_sigma_band_history_option(years):
     years = int(years)
     if years == SIGMA_BAND_HISTORY_ALL:
         return "All history"
     if years == 1:
         return "Last 1 year"
     return f"Last {years} years"
+
+
+def _resolve_sigma_band_history_max_years(df_display):
+    if df_display.empty:
+        return 1
+
+    return resolve_sigma_band_history_max_years(df_display.index)
 
 
 def filter_sigma_band_history(df_display, history_years):
@@ -294,31 +306,15 @@ def render_model_kpis(
 
         render_logperiodic_regression_stats_table(logperiodic_stats_rows, perrenod_stats_rows)
 
-    max_history_years = _resolve_sigma_band_history_max_years(df_display)
-    selected_history_years = int(
-        st.session_state.get(KEY_SIGMA_BAND_HISTORY_YEARS, SIGMA_BAND_HISTORY_ALL)
+    max_history_years = resolve_sigma_band_history_max_years(df_display.index)
+    selected_history_years = resolve_sigma_band_history_selection(
+        st.session_state.get(KEY_SIGMA_BAND_HISTORY_YEARS, SIGMA_BAND_HISTORY_ALL),
+        max_history_years,
     )
-    if (
-        selected_history_years < SIGMA_BAND_HISTORY_ALL
-        or selected_history_years > max_history_years
-    ):
-        selected_history_years = max_history_years
-        st.session_state[KEY_SIGMA_BAND_HISTORY_YEARS] = selected_history_years
-    history_control_col, _ = st.columns([1, 3])
-    with history_control_col:
-        selected_history_years = st.slider(
-            "Sigma band history (years)",
-            min_value=SIGMA_BAND_HISTORY_ALL,
-            max_value=max_history_years,
-            value=selected_history_years,
-            step=1,
-            key=KEY_SIGMA_BAND_HISTORY_YEARS,
-        )
-        st.caption(_format_sigma_band_history_option(selected_history_years))
     band_df = filter_sigma_band_history(df_display, selected_history_years)
     band_shares = calculate_powerlaw_band_shares(band_df, p2_5, p16_5, p83_5, p97_5)
     current_sigma_level = calculate_current_powerlaw_sigma_level(
         df_display, p2_5, p16_5, p83_5, p97_5
     )
-    history_label = _format_sigma_band_history_option(selected_history_years)
+    history_label = format_sigma_band_history_option(selected_history_years)
     _render_sigma_band_chart(band_shares, current_sigma_level, history_label)

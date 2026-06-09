@@ -285,6 +285,7 @@ def render_sidebar(
     all_log_close,
     text_color,
     render_extra_controls=None,
+    render_after_actions=None,
     a_key=KEY_A,
     b_key=KEY_B,
     default_a=DEFAULT_A,
@@ -419,5 +420,7 @@ def render_sidebar(
 
     st.button("Auto-fit model", use_container_width=True, on_click=auto_fit_model)
     st.button("Reset parameters", use_container_width=True, on_click=reset_powerlaw_params)
+    if callable(render_after_actions):
+        render_after_actions()
 
     return display_r2

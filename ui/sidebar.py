@@ -27,6 +27,7 @@ from core.constants import (
     KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
     KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_PORTFOLIO_STRATEGY_VIEW,
+    KEY_SIGMA_BAND_HISTORY_YEARS,
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -48,6 +49,12 @@ from core.constants import (
     TIME_LOG,
     TIME_LIN,
 )
+from ui.kpi import (
+    SIGMA_BAND_HISTORY_ALL,
+    format_sigma_band_history_option,
+    resolve_sigma_band_history_max_years,
+    resolve_sigma_band_history_selection,
+)
 from core.series_registry import (
     get_active_model_config,
     get_logperiodic_series_options,
@@ -60,6 +67,23 @@ from core.series_registry import (
 
 KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
 KEY_LAST_PORTFOLIO_VIEW = "last_portfolio_strategy_view"
+
+
+def _render_sigma_band_history_sidebar_control(date_index):
+    max_history_years = resolve_sigma_band_history_max_years(date_index)
+    selected_history_years = resolve_sigma_band_history_selection(
+        st.session_state.get(KEY_SIGMA_BAND_HISTORY_YEARS, SIGMA_BAND_HISTORY_ALL),
+        max_history_years,
+    )
+    st.session_state[KEY_SIGMA_BAND_HISTORY_YEARS] = selected_history_years
+
+    st.select_slider(
+        "Sigma band history",
+        options=list(range(SIGMA_BAND_HISTORY_ALL, max_history_years + 1)),
+        format_func=format_sigma_band_history_option,
+        key=KEY_SIGMA_BAND_HISTORY_YEARS,
+        help="Controls the history window used by the sigma band distribution chart.",
+    )
 
 
 def _sync_portfolio_forecast_unit_default(selected_portfolio_view):
@@ -518,6 +542,9 @@ def render_sidebar_panel(
                         )
                     )
                 ),
+                render_after_actions=lambda: _render_sigma_band_history_sidebar_control(
+                    active_series_data["date_index"]
+                ),
                 a_key=a_key,
                 b_key=b_key,
                 default_a=default_a,
@@ -554,6 +581,9 @@ def render_sidebar_panel(
                 defaults_override=active_osc_defaults,
                 min_abs_day_for_fit=active_model.oscillator_min_abs_day,
                 parameter_bounds_override=active_model.oscillator_parameter_bounds,
+                render_after_actions=lambda: _render_sigma_band_history_sidebar_control(
+                    active_series_data["date_index"]
+                ),
             )
     return (
         mode,

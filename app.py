@@ -476,11 +476,13 @@ class SidebarSeriesData:
             return {
                 "absolute_days": data_df.loc[price_close.index, "AbsDays"].values,
                 "log_close": np.log10(price_close.values),
+                "date_index": price_close.index,
             }
 
         return {
             "absolute_days": data_df["AbsDays"].values,
             "log_close": data_df["LogClose"].values,
+            "date_index": data_df.index,
         }
 
 

@@ -5,7 +5,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
-from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_log_offset
+from core.utils import evaluate_powerlaw_values
 
 HALVING_DATES = [
     pd.Timestamp("2012-11-28"),
@@ -15,6 +15,7 @@ HALVING_DATES = [
 ]
 TIME_AXIS_LEADING_PADDING_DAYS = 90
 MODEL_FORWARD_YEARS = 10
+MAX_RENDERED_MODEL_POINTS = 2500
 OPTIONAL_SIGMA_LEVELS = (-1.5, -0.5, 0.5, 1.5)
 LOGPERIODIC_SIGMA_DISPLAY_RANGE = (-3.0, 3.0)
 LOGPERIODIC_EXTREMA_HARMONICS = (
@@ -140,6 +141,32 @@ def _resolve_optional_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
     ]
 
 
+def _resolve_trace_sample_indices(values_length, max_points=MAX_RENDERED_MODEL_POINTS):
+    values_length = int(values_length)
+    max_points = max(2, int(max_points))
+    if values_length <= max_points:
+        return slice(None)
+
+    stride = int(np.ceil((values_length - 1) / (max_points - 1)))
+    sample_indices = np.arange(0, values_length, stride, dtype=int)
+    if sample_indices[-1] != values_length - 1:
+        sample_indices = np.append(sample_indices, values_length - 1)
+    return sample_indices
+
+
+def _sample_trace_values(values, sample_indices):
+    if isinstance(sample_indices, slice):
+        return values
+    if isinstance(values, pd.Series):
+        return values.iloc[sample_indices]
+
+    values_array = np.asarray(values)
+    sampled_values = values_array[sample_indices]
+    if isinstance(values, list):
+        return sampled_values.tolist()
+    return sampled_values
+
+
 def _convert_log_offsets_to_sigma_levels(values, percentile_offsets):
     values_arr = np.asarray(values, dtype=float)
     sigma_values = np.full(values_arr.shape, np.nan, dtype=float)
@@ -147,13 +174,49 @@ def _convert_log_offsets_to_sigma_levels(values, percentile_offsets):
     if not np.any(valid_mask):
         return sigma_values
 
-    offsets = tuple(float(offset) for offset in percentile_offsets)
+    offsets = np.array(
+        [
+            percentile_offsets[0],
+            percentile_offsets[1],
+            0.0,
+            percentile_offsets[2],
+            percentile_offsets[3],
+        ],
+        dtype=float,
+    )
+    levels = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=float)
     if not np.all(np.isfinite(offsets)):
         return values_arr
 
-    sigma_values[valid_mask] = [
-        interpolate_sigma_level_from_log_offset(value, offsets) for value in values_arr[valid_mask]
-    ]
+    sort_order = np.argsort(offsets)
+    offsets = offsets[sort_order]
+    levels = levels[sort_order]
+    offsets, unique_indices = np.unique(offsets, return_index=True)
+    levels = levels[unique_indices]
+    if offsets.size < 2:
+        sigma_values[valid_mask] = 0.0
+        return sigma_values
+
+    valid_values = values_arr[valid_mask]
+    converted_values = np.interp(valid_values, offsets, levels)
+
+    below_mask = valid_values <= offsets[0]
+    if np.any(below_mask):
+        converted_values[below_mask] = levels[0] + (
+            (valid_values[below_mask] - offsets[0])
+            / (offsets[1] - offsets[0])
+            * (levels[1] - levels[0])
+        )
+
+    above_mask = valid_values >= offsets[-1]
+    if np.any(above_mask):
+        converted_values[above_mask] = levels[-2] + (
+            (valid_values[above_mask] - offsets[-2])
+            / (offsets[-1] - offsets[-2])
+            * (levels[-1] - levels[-2])
+        )
+
+    sigma_values[valid_mask] = converted_values
     return sigma_values
 
 
@@ -410,6 +473,8 @@ def render_main_model_chart(
         bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
     )
     is_log_time = time_scale == TIME_LOG
+    model_sample_indices = _resolve_trace_sample_indices(len(plot_x_model))
+    plot_x_model_render = _sample_trace_values(plot_x_model, model_sample_indices)
 
     if mode == MODE_POWERLAW:
         p97_5_name = "+2σ (97.5th percentile)"
@@ -457,7 +522,6 @@ def render_main_model_chart(
                 name=main_series_label,
                 line=dict(color=pl_btc_color, width=1.5),
                 legendrank=10,
-                customdata=df_display.index.strftime("%d.%m.%Y"),
                 hovertemplate=btc_hover,
             )
         )
@@ -486,15 +550,14 @@ def render_main_model_chart(
         def add_model_line(y_values, name, line, legendgroup, visible=True):
             fig.add_trace(
                 go.Scatter(
-                    x=plot_x_model,
-                    y=y_values,
+                    x=plot_x_model_render,
+                    y=_sample_trace_values(y_values, model_sample_indices),
                     mode="lines",
                     line=line,
                     name=name,
                     legendgroup=legendgroup,
                     showlegend=False,
                     visible=visible,
-                    customdata=m_dates_str,
                     hovertemplate=(
                         f"<b>{name}</b>: "
                         f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
@@ -834,9 +897,12 @@ def render_main_model_chart(
                 continue
             fig.add_trace(
                 go.Scatter(
-                    x=plot_x_model,
+                    x=plot_x_model_render,
                     y=_convert_log_offsets_to_sigma_levels(
-                        harmonic_curves[harmonic_count],
+                        _sample_trace_values(
+                            harmonic_curves[harmonic_count],
+                            model_sample_indices,
+                        ),
                         logperiodic_sigma_offsets,
                     ),
                     mode="lines",
@@ -855,9 +921,9 @@ def render_main_model_chart(
             )
             fig.add_trace(
                 go.Scatter(
-                    x=plot_x_model,
+                    x=plot_x_model_render,
                     y=_convert_log_offsets_to_sigma_levels(
-                        perrenod_curve["values"],
+                        _sample_trace_values(perrenod_curve["values"], model_sample_indices),
                         logperiodic_sigma_offsets,
                     ),
                     mode="lines",

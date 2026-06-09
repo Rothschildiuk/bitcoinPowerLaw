@@ -919,6 +919,7 @@ def render_sidebar(
     defaults_override=None,
     min_abs_day_for_fit=None,
     parameter_bounds_override=None,
+    render_after_actions=None,
 ):
     defaults = dict(defaults_override or OSC_DEFAULTS)
     harmonic_options = [1, 2, 3]
@@ -1074,3 +1075,5 @@ def render_sidebar(
     )
     st.button("Auto-fit model", use_container_width=True, on_click=auto_fit_visible_parameters)
     st.button("Reset parameters", use_container_width=True, on_click=reset_oscillator_params)
+    if callable(render_after_actions):
+        render_after_actions()

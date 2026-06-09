@@ -14,6 +14,8 @@ from ui.charts import (
     _resolve_log_time_axis,
     _resolve_model_view_max,
     _resolve_powerlaw_y_range,
+    _resolve_trace_sample_indices,
+    _sample_trace_values,
     _resolve_time_axis_start_date,
     render_main_model_chart,
 )
@@ -204,6 +206,24 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual([level for level, _ in offsets], [-1.5, -0.5, 0.5, 1.5])
         self.assertTrue(np.allclose([offset for _, offset in offsets], [-0.7, -0.2, 0.3, 0.9]))
 
+    def test_resolve_trace_sample_indices_keeps_short_traces_full_resolution(self):
+        sample_indices = _resolve_trace_sample_indices(5, max_points=5)
+
+        self.assertIsInstance(sample_indices, slice)
+
+    def test_resolve_trace_sample_indices_downsamples_and_keeps_endpoints(self):
+        sample_indices = _resolve_trace_sample_indices(10, max_points=4)
+
+        self.assertEqual(sample_indices.tolist(), [0, 3, 6, 9])
+        np.testing.assert_array_equal(
+            _sample_trace_values(np.arange(10), sample_indices),
+            np.array([0, 3, 6, 9]),
+        )
+        self.assertEqual(
+            _sample_trace_values(list("abcdefghij"), sample_indices),
+            ["a", "d", "g", "j"],
+        )
+
     def test_powerlaw_chart_defaults_hide_fit_points_and_show_major_sigma_lines(self):
         dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
         days = np.array([4000.0, 4001.0, 4002.0])
@@ -339,6 +359,81 @@ class TestUIChartsHelpers(unittest.TestCase):
                 "±0.5σ",
             ],
         )
+
+    def test_powerlaw_chart_downsamples_rendered_model_lines_but_keeps_date_hover_trace(self):
+        dates = pd.date_range("2020-01-01", periods=3, freq="D")
+        display_days = np.array([4000.0, 4001.0, 4002.0])
+        model_days = np.arange(1.0, 3002.0)
+        model_dates = pd.date_range("2010-01-04", periods=len(model_days), freq="D")
+        captured = {}
+
+        def capture_plotly_chart(fig, **kwargs):
+            captured["fig"] = fig
+
+        with patch("ui.charts.st.plotly_chart", side_effect=capture_plotly_chart):
+            render_main_model_chart(
+                mode=MODE_POWERLAW,
+                time_scale=TIME_LOG,
+                price_scale=TIME_LOG,
+                df_display=pd.DataFrame(
+                    {
+                        "Days": display_days,
+                        "CloseDisplay": [100.0, 101.0, 102.0],
+                    },
+                    index=dates,
+                ),
+                current_gen_date=pd.Timestamp("2009-01-03"),
+                view_max=float(model_days[-1]),
+                plot_x_model=model_days,
+                plot_x_main=display_days,
+                plot_x_osc=display_days,
+                m_log_d=np.log10(model_days),
+                m_dates=model_dates,
+                m_dates_str=model_dates.strftime("%d.%m.%Y").to_numpy(),
+                m_fair_display=np.linspace(100.0, 200.0, len(model_days)),
+                historical_powerlaw_slopes=np.array([5.5, 5.6, 5.7]),
+                show_historical_powerlaw_slope=False,
+                m_osc_y=np.array([], dtype=float),
+                m_osc_y_by_harmonic=None,
+                perrenod_curve=None,
+                residual_sigma_log=1.0,
+                p2_5=-0.2,
+                p16_5=-0.1,
+                p83_5=0.1,
+                p97_5=0.2,
+                peak_powerlaw_overlay=None,
+                osc_t1_age=1.0,
+                osc_lambda=2.0,
+                selected_harmonic_count=1,
+                pl_template="plotly_dark",
+                pl_bg_color="#000",
+                pl_grid_color="#333",
+                pl_btc_color="#fff",
+                pl_legend_color="#fff",
+                pl_text_color="#fff",
+                c_hover_bg="#111",
+                c_hover_text="#fff",
+                c_border="#333",
+                currency_prefix="$",
+                currency_suffix="",
+                currency_decimals=0,
+                target_series_name="Bitcoin",
+                target_series_unit="USD",
+                show_halving_lines=False,
+                chart_key="test-powerlaw-model-line-sampling",
+            )
+
+        power_regression_trace = next(
+            trace
+            for trace in captured["fig"].data
+            if trace.name == "Power regression" and not trace.showlegend
+        )
+        self.assertLess(len(power_regression_trace.x), len(model_days))
+        self.assertEqual(power_regression_trace.x[0], model_days[0])
+        self.assertEqual(power_regression_trace.x[-1], model_days[-1])
+
+        date_hover_trace = next(trace for trace in captured["fig"].data if str(trace.name) == "")
+        self.assertEqual(len(date_hover_trace.x), len(model_days))
 
     def test_powerlaw_halving_lines_are_toggleable_from_legend(self):
         dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"])
