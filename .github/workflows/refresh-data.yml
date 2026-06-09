@@ -3,10 +3,11 @@ name: Refresh PowerLaw data
 on:
   workflow_dispatch:
   schedule:
-    # GitHub cron is UTC. These UTC hours cover 00:00, 06:00, 12:00, and
-    # 18:00 Europe/Vienna local time across CET/CEST; the guard below keeps
-    # only the intended local-time runs.
-    - cron: "0 22,23,4,5,10,11,16,17 * * *"
+    # GitHub cron is UTC, so cover both Europe/Vienna offsets.
+    # CEST (UTC+2): 00:00, 06:00, 12:00, 18:00 local.
+    - cron: "0 22,4,10,16 * * *"
+    # CET (UTC+1): 00:00, 06:00, 12:00, 18:00 local.
+    - cron: "0 23,5,11,17 * * *"
 
 permissions:
   contents: write
@@ -58,7 +59,7 @@ jobs:
         if: steps.schedule_guard.outputs.should_run == 'true'
         run: make install
 
-      - name: Refresh snapshots and defaults
+      - name: Refresh snapshots and constants
         if: steps.schedule_guard.outputs.should_run == 'true'
         run: make update-all-data
 
