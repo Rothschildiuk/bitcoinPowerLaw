@@ -397,6 +397,14 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assert_default_params_are_within_powerlaw_bounds(lightning_btc_config)
         self.assert_default_params_are_within_powerlaw_bounds(liquid_btc_config)
 
+    def test_lightning_group_lists_btc_before_nodes(self):
+        group_map = get_powerlaw_series_group_map()
+
+        self.assertLess(
+            group_map["Lightning Network"].index(POWERLAW_SERIES_LIGHTNING_CAPACITY),
+            group_map["Lightning Network"].index(POWERLAW_SERIES_LIGHTNING_NODES),
+        )
+
     def test_us_m2_config_uses_fred_billions_units(self):
         m2_config = get_active_model_config(
             MODE_POWERLAW,

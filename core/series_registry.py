@@ -612,8 +612,8 @@ _POWERLAW_SERIES_GROUPS = [
     (
         "Lightning Network",
         [
-            POWERLAW_SERIES_LIGHTNING_NODES,
             POWERLAW_SERIES_LIGHTNING_CAPACITY,
+            POWERLAW_SERIES_LIGHTNING_NODES,
         ],
     ),
     (
