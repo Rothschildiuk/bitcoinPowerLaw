@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from core.constants import (
-    KEY_SIGMA_BAND_HISTORY_YEARS,
+    KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_PORTFOLIO_FORECAST_UNIT,
     PORTFOLIO_VIEW_ACCUMULATION,
     PORTFOLIO_VIEW_PENSION,
@@ -38,23 +38,26 @@ class TestUISidebarHelpers(unittest.TestCase):
 
         self.assertEqual(session_state[KEY_PORTFOLIO_FORECAST_UNIT], "Year")
 
-    def test_sigma_band_history_control_uses_native_select_slider_without_default_value(self):
-        session_state = {KEY_SIGMA_BAND_HISTORY_YEARS: 99}
+    def test_sigma_band_history_control_uses_percent_range_slider_without_default_value(self):
+        session_state = {KEY_SIGMA_BAND_HISTORY_RANGE_PCT: (120, -20)}
         captured = {}
 
-        def capture_select_slider(*args, **kwargs):
+        def capture_slider(*args, **kwargs):
             captured["args"] = args
             captured["kwargs"] = kwargs
 
         with (
             patch.object(sidebar.st, "session_state", session_state),
-            patch.object(sidebar.st, "select_slider", side_effect=capture_select_slider),
+            patch.object(sidebar.st, "slider", side_effect=capture_slider),
         ):
             sidebar._render_sigma_band_history_sidebar_control(["2020-01-01", "2022-01-01"])
 
-        self.assertEqual(session_state[KEY_SIGMA_BAND_HISTORY_YEARS], 3)
+        self.assertEqual(session_state[KEY_SIGMA_BAND_HISTORY_RANGE_PCT], (0, 100))
         self.assertEqual(captured["args"][0], "Sigma band history")
-        self.assertEqual(captured["kwargs"]["key"], KEY_SIGMA_BAND_HISTORY_YEARS)
+        self.assertEqual(captured["kwargs"]["key"], KEY_SIGMA_BAND_HISTORY_RANGE_PCT)
+        self.assertEqual(captured["kwargs"]["min_value"], 0)
+        self.assertEqual(captured["kwargs"]["max_value"], 100)
+        self.assertEqual(captured["kwargs"]["format"], "%d%%")
         self.assertNotIn("value", captured["kwargs"])
 
 

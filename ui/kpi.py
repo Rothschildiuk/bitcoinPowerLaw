@@ -2,12 +2,18 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from core.constants import KEY_SIGMA_BAND_HISTORY_YEARS
+from core.constants import KEY_SIGMA_BAND_HISTORY_RANGE_PCT
 from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_log_offset
 
 SIGMA_STEP = 0.125
 SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.0, 2.0 + SIGMA_STEP, SIGMA_STEP))
 SIGMA_BAND_HISTORY_ALL = 0
+SIGMA_BAND_HISTORY_PERCENT_MIN = 0
+SIGMA_BAND_HISTORY_PERCENT_MAX = 100
+SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT = (
+    SIGMA_BAND_HISTORY_PERCENT_MIN,
+    SIGMA_BAND_HISTORY_PERCENT_MAX,
+)
 
 
 def _kpi_card(col, label, value, delta=None, d_color=None):
@@ -53,6 +59,38 @@ def format_sigma_band_history_option(years):
     return f"Last {years} years"
 
 
+def resolve_sigma_band_history_percent_range(history_percent_range):
+    try:
+        start_pct, end_pct = history_percent_range
+    except (TypeError, ValueError):
+        return SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT
+
+    def coerce_percent(value, fallback):
+        try:
+            percent = float(value)
+        except (TypeError, ValueError):
+            return fallback
+        if not np.isfinite(percent):
+            return fallback
+        return int(
+            min(
+                max(round(percent), SIGMA_BAND_HISTORY_PERCENT_MIN),
+                SIGMA_BAND_HISTORY_PERCENT_MAX,
+            )
+        )
+
+    start_pct = coerce_percent(start_pct, SIGMA_BAND_HISTORY_PERCENT_MIN)
+    end_pct = coerce_percent(end_pct, SIGMA_BAND_HISTORY_PERCENT_MAX)
+    if start_pct > end_pct:
+        start_pct, end_pct = end_pct, start_pct
+    return (start_pct, end_pct)
+
+
+def format_sigma_band_history_percent_range(history_percent_range):
+    start_pct, end_pct = resolve_sigma_band_history_percent_range(history_percent_range)
+    return f"{start_pct}-{end_pct}% history"
+
+
 def _resolve_sigma_band_history_max_years(df_display):
     if df_display.empty:
         return 1
@@ -73,6 +111,40 @@ def filter_sigma_band_history(df_display, history_years):
     latest_date = date_index[valid_mask].max()
     start_date = latest_date - pd.DateOffset(years=history_years)
     return df_display.loc[np.asarray(date_index >= start_date)]
+
+
+def filter_sigma_band_history_percent_range(df_display, history_percent_range):
+    if df_display.empty:
+        return df_display
+
+    start_pct, end_pct = resolve_sigma_band_history_percent_range(history_percent_range)
+    if start_pct == SIGMA_BAND_HISTORY_PERCENT_MIN and end_pct == SIGMA_BAND_HISTORY_PERCENT_MAX:
+        return df_display
+
+    date_index = pd.to_datetime(df_display.index, errors="coerce")
+    valid_mask = ~pd.isna(date_index)
+    if not np.any(valid_mask):
+        return df_display
+
+    valid_dates = date_index[valid_mask]
+    earliest_date = valid_dates.min()
+    latest_date = valid_dates.max()
+    history_span = latest_date - earliest_date
+    if history_span <= pd.Timedelta(0):
+        return df_display.loc[np.asarray(valid_mask)]
+
+    start_date = earliest_date + history_span * (start_pct / 100.0)
+    end_date = earliest_date + history_span * (end_pct / 100.0)
+    selected_mask = np.asarray(valid_mask & (date_index >= start_date) & (date_index <= end_date))
+    if np.any(selected_mask):
+        return df_display.loc[selected_mask]
+
+    midpoint_date = earliest_date + history_span * ((start_pct + end_pct) / 200.0)
+    valid_positions = np.flatnonzero(np.asarray(valid_mask))
+    nearest_valid_position = valid_positions[int(np.argmin(np.abs(valid_dates - midpoint_date)))]
+    fallback_mask = np.zeros(len(df_display), dtype=bool)
+    fallback_mask[nearest_valid_position] = True
+    return df_display.loc[fallback_mask]
 
 
 def _empty_band_shares():
@@ -306,15 +378,16 @@ def render_model_kpis(
 
         render_logperiodic_regression_stats_table(logperiodic_stats_rows, perrenod_stats_rows)
 
-    max_history_years = resolve_sigma_band_history_max_years(df_display.index)
-    selected_history_years = resolve_sigma_band_history_selection(
-        st.session_state.get(KEY_SIGMA_BAND_HISTORY_YEARS, SIGMA_BAND_HISTORY_ALL),
-        max_history_years,
+    selected_history_range = resolve_sigma_band_history_percent_range(
+        st.session_state.get(
+            KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
+            SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT,
+        )
     )
-    band_df = filter_sigma_band_history(df_display, selected_history_years)
+    band_df = filter_sigma_band_history_percent_range(df_display, selected_history_range)
     band_shares = calculate_powerlaw_band_shares(band_df, p2_5, p16_5, p83_5, p97_5)
     current_sigma_level = calculate_current_powerlaw_sigma_level(
         df_display, p2_5, p16_5, p83_5, p97_5
     )
-    history_label = format_sigma_band_history_option(selected_history_years)
+    history_label = format_sigma_band_history_percent_range(selected_history_range)
     _render_sigma_band_chart(band_shares, current_sigma_level, history_label)

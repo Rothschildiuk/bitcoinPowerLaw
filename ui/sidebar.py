@@ -27,7 +27,7 @@ from core.constants import (
     KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
     KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_PORTFOLIO_STRATEGY_VIEW,
-    KEY_SIGMA_BAND_HISTORY_YEARS,
+    KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_TIME_SCALE,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -50,10 +50,10 @@ from core.constants import (
     TIME_LIN,
 )
 from ui.kpi import (
-    SIGMA_BAND_HISTORY_ALL,
-    format_sigma_band_history_option,
-    resolve_sigma_band_history_max_years,
-    resolve_sigma_band_history_selection,
+    SIGMA_BAND_HISTORY_PERCENT_MAX,
+    SIGMA_BAND_HISTORY_PERCENT_MIN,
+    SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT,
+    resolve_sigma_band_history_percent_range,
 )
 from core.series_registry import (
     get_active_model_config,
@@ -69,20 +69,27 @@ KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
 KEY_LAST_PORTFOLIO_VIEW = "last_portfolio_strategy_view"
 
 
-def _render_sigma_band_history_sidebar_control(date_index):
-    max_history_years = resolve_sigma_band_history_max_years(date_index)
-    selected_history_years = resolve_sigma_band_history_selection(
-        st.session_state.get(KEY_SIGMA_BAND_HISTORY_YEARS, SIGMA_BAND_HISTORY_ALL),
-        max_history_years,
+def _render_sigma_band_history_sidebar_control(_date_index):
+    selected_history_range = resolve_sigma_band_history_percent_range(
+        st.session_state.get(
+            KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
+            SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT,
+        )
     )
-    st.session_state[KEY_SIGMA_BAND_HISTORY_YEARS] = selected_history_years
+    st.session_state[KEY_SIGMA_BAND_HISTORY_RANGE_PCT] = selected_history_range
 
-    st.select_slider(
+    st.slider(
         "Sigma band history",
-        options=list(range(SIGMA_BAND_HISTORY_ALL, max_history_years + 1)),
-        format_func=format_sigma_band_history_option,
-        key=KEY_SIGMA_BAND_HISTORY_YEARS,
-        help="Controls the history window used by the sigma band distribution chart.",
+        min_value=SIGMA_BAND_HISTORY_PERCENT_MIN,
+        max_value=SIGMA_BAND_HISTORY_PERCENT_MAX,
+        step=1,
+        format="%d%%",
+        key=KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
+        help=(
+            "Selects the percentage range of available history used by the sigma band "
+            "distribution chart. 0% is the first available value; 100% is the latest "
+            "available value."
+        ),
     )
 
 

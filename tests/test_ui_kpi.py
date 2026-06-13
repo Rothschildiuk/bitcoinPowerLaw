@@ -7,6 +7,9 @@ from ui.kpi import (
     calculate_current_powerlaw_sigma_level,
     calculate_powerlaw_band_shares,
     filter_sigma_band_history,
+    filter_sigma_band_history_percent_range,
+    format_sigma_band_history_percent_range,
+    resolve_sigma_band_history_percent_range,
     _render_sigma_band_chart,
 )
 
@@ -138,6 +141,56 @@ class TestUIKpi(unittest.TestCase):
         filtered = filter_sigma_band_history(df_display, history_years=0)
 
         pd.testing.assert_frame_equal(filtered, df_display)
+
+    def test_resolve_sigma_band_history_percent_range_clamps_and_sorts(self):
+        self.assertEqual(
+            resolve_sigma_band_history_percent_range((120.2, -5.7)),
+            (0, 100),
+        )
+        self.assertEqual(
+            resolve_sigma_band_history_percent_range((70, 50)),
+            (50, 70),
+        )
+        self.assertEqual(
+            resolve_sigma_band_history_percent_range(3),
+            (0, 100),
+        )
+
+    def test_filter_sigma_band_history_percent_range_filters_by_time_position(self):
+        df_display = pd.DataFrame(
+            {"Res": [-1.0, 0.0, 1.0]},
+            index=pd.to_datetime(["2020-01-01", "2022-01-01", "2024-01-01"]),
+        )
+
+        filtered = filter_sigma_band_history_percent_range(df_display, (50, 100))
+
+        self.assertEqual(filtered["Res"].tolist(), [0.0, 1.0])
+
+    def test_filter_sigma_band_history_percent_range_supports_initial_slice(self):
+        df_display = pd.DataFrame(
+            {"Res": [-1.0, 0.0, 1.0]},
+            index=pd.to_datetime(["2020-01-01", "2022-01-01", "2024-01-01"]),
+        )
+
+        filtered = filter_sigma_band_history_percent_range(df_display, (0, 70))
+
+        self.assertEqual(filtered["Res"].tolist(), [-1.0, 0.0])
+
+    def test_filter_sigma_band_history_percent_range_keeps_nearest_for_empty_range(self):
+        df_display = pd.DataFrame(
+            {"Res": [-1.0, 0.0, 1.0]},
+            index=pd.to_datetime(["2020-01-01", "2022-01-01", "2024-01-01"]),
+        )
+
+        filtered = filter_sigma_band_history_percent_range(df_display, (25, 25))
+
+        self.assertEqual(filtered["Res"].tolist(), [-1.0])
+
+    def test_format_sigma_band_history_percent_range(self):
+        self.assertEqual(
+            format_sigma_band_history_percent_range((0, 70)),
+            "0-70% history",
+        )
 
     def test_calculate_current_powerlaw_sigma_level_uses_latest_valid_residual(self):
         df_display = pd.DataFrame({"Res": [-0.5, np.nan, 0.25]})

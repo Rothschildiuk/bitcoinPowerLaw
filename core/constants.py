@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.31"
+APP_VERSION = "1.1.32"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
@@ -227,6 +227,7 @@ KEY_LOGPERIODIC_HARMONICS = "logperiodic_harmonics"
 KEY_LOGPERIODIC_SHOW_DECAYED_DSI = "logperiodic_show_decayed_dsi"
 KEY_OSC_AUTOFIT_SIGNATURE = "osc_autofit_signature"
 KEY_OSC_AUTOFIT_BEST_PARAMS = "osc_autofit_best_params"
+KEY_SIGMA_BAND_HISTORY_RANGE_PCT = "sigma_band_history_range_pct"
 KEY_SIGMA_BAND_HISTORY_YEARS = "sigma_band_history_years"
 KEY_PORTFOLIO_BTC_AMOUNT = "portfolio_btc_amount"
 KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT = "portfolio_monthly_buy_amount"
