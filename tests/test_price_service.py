@@ -186,6 +186,30 @@ class TestPriceService(unittest.TestCase):
             ["2024-01-01", "2024-01-02"],
         )
 
+    def test_get_snapshot_data_date_returns_snapshot_file_timestamp(self):
+        price_service.get_snapshot_data_date.clear()
+        snapshot_df = pd.DataFrame(
+            {"Close": [100.0, 120.0]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-03"]),
+        )
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+        snapshot_path = price_service._get_snapshot_frame_path("prepared_price_data")
+        snapshot_timestamp = pd.Timestamp("2024-01-03 14:25")
+        price_service.os.utime(
+            snapshot_path,
+            (snapshot_timestamp.timestamp(), snapshot_timestamp.timestamp()),
+        )
+        expected_timestamp = pd.Timestamp.fromtimestamp(snapshot_path.stat().st_mtime).strftime(
+            "%Y-%m-%d %H:%M"
+        )
+
+        self.assertEqual(price_service.get_snapshot_data_date(), expected_timestamp)
+
+    def test_get_snapshot_data_date_returns_none_without_snapshot(self):
+        price_service.get_snapshot_data_date.clear()
+
+        self.assertIsNone(price_service.get_snapshot_data_date())
+
     def test_get_runtime_data_source_defaults_to_snapshot(self):
         with patch.dict(price_service.os.environ, {}, clear=True):
             self.assertEqual(price_service.get_runtime_data_source(), "snapshot")

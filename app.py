@@ -107,6 +107,7 @@ from services.price_service import (
     build_prepared_bitcoin_market_cap_data,
     build_prepared_bitcoin_volatility_data,
     get_runtime_data_source,
+    get_snapshot_data_date,
     load_prepared_dogecoin_btc_data,
     load_prepared_difficulty_data,
     load_prepared_filecoin_btc_data,
@@ -1280,6 +1281,7 @@ sidebar_series_data = SidebarSeriesData(series_store)
     sidebar_series_data,
     c_text_main,
     APP_VERSION,
+    get_snapshot_data_date(),
     FORECAST_HORIZON_MIN,
     FORECAST_HORIZON_MAX,
 )

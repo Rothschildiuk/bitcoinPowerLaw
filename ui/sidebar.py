@@ -357,12 +357,16 @@ def render_sidebar_panel(
     sidebar_series_data,
     c_text_main,
     app_version,
+    snapshot_data_date,
     forecast_horizon_min,
     forecast_horizon_max,
 ):
     with st.sidebar:
         st.markdown("<div class='app-title'>Bitcoin PowerLaw</div>", unsafe_allow_html=True)
-        st.caption(f"Version {app_version}")
+        version_caption = f"Version {app_version}"
+        if snapshot_data_date:
+            version_caption = f"{version_caption} · Last update {snapshot_data_date}"
+        st.caption(version_caption)
 
         mode_options = [MODE_POWERLAW, MODE_LOGPERIODIC, MODE_PORTFOLIO]
         if st.session_state.get(KEY_MODE_SELECTOR) not in mode_options:

@@ -222,6 +222,24 @@ def write_snapshot_dataframe(snapshot_key, data_df):
         data_to_store.to_csv(frame_path, index=False)
 
 
+@st.cache_data(ttl=3600)
+def get_snapshot_data_date(snapshot_key="prepared_price_data"):
+    frame_path = _get_snapshot_frame_path(snapshot_key)
+    if not frame_path.exists():
+        return None
+
+    snapshot_df = _read_snapshot_dataframe(snapshot_key)
+    if snapshot_df is None or snapshot_df.empty:
+        return None
+    if not isinstance(snapshot_df.index, pd.DatetimeIndex):
+        return None
+
+    latest_snapshot_timestamp = pd.Timestamp.fromtimestamp(frame_path.stat().st_mtime)
+    if pd.isna(latest_snapshot_timestamp):
+        return None
+    return latest_snapshot_timestamp.strftime("%Y-%m-%d %H:%M")
+
+
 def _is_cache_refresh_due(cache_key, min_check_interval_seconds):
     cache_meta = _read_cache_meta(cache_key)
     if int(cache_meta.get("version", 0)) != LOCAL_CACHE_SCHEMA_VERSION:
