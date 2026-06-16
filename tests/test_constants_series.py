@@ -7,6 +7,7 @@ from core.constants import (
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_IRON,
+    CURRENCY_OIL,
     CURRENCY_OPTIONS,
     CURRENCY_RUB,
     CURRENCY_SILVER,
@@ -41,8 +42,9 @@ class TestConstantsSeries(unittest.TestCase):
                 CURRENCY_GOLD,
                 CURRENCY_SILVER,
                 CURRENCY_COPPER,
-                CURRENCY_IRON,
                 CURRENCY_ALUMINUM,
+                CURRENCY_IRON,
+                CURRENCY_OIL,
                 CURRENCY_US_HOUSING,
             ],
         )

@@ -6,6 +6,7 @@ from core.constants import (
     CURRENCY_ALUMINUM,
     CURRENCY_COPPER,
     CURRENCY_IRON,
+    CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
@@ -80,6 +81,12 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             DEFAULT_CASES,
         )
 
+    def test_default_cases_include_oil_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_OIL, "DEFAULT_OIL_A", "DEFAULT_OIL_B"),
+            DEFAULT_CASES,
+        )
+
     def test_default_cases_include_us_housing_price_model(self):
         self.assertIn(
             (
@@ -98,6 +105,17 @@ class TestUpdateDefaultsScript(unittest.TestCase):
                 CURRENCY_US_HOUSING,
                 "OSC_DEFAULTS_US_HOUSING",
                 update_powerlaw_defaults.OSC_DEFAULTS_US_HOUSING,
+            ),
+            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
+        )
+
+    def test_oscillator_default_cases_include_oil_price_model(self):
+        self.assertIn(
+            (
+                POWERLAW_SERIES_PRICE,
+                CURRENCY_OIL,
+                "OSC_DEFAULTS_OIL",
+                update_powerlaw_defaults.OSC_DEFAULTS_OIL,
             ),
             update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
         )

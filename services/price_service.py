@@ -21,6 +21,7 @@ from core.constants import (
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_IRON,
+    CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
@@ -70,6 +71,7 @@ REFERENCE_SERIES_COLUMNS = (
     "COPPERUSD",
     "IRONOREUSD",
     "ALUMINUMUSD",
+    "OILUSD",
     "USHOUSING",
 )
 COINLORE_CRYPTO_META = {
@@ -998,6 +1000,7 @@ def fetch_reference_series_frame(start_date):
     copper_usd = _safe_download_close_series("HG=F", start_date)
     iron_ore_usd = _safe_download_close_series("TIO=F", start_date)
     aluminum_usd = _safe_download_close_series("ALI=F", start_date)
+    oil_usd = _safe_download_close_series("CL=F", start_date)
     us_housing = _fetch_fred_series(FRED_US_HOUSING_CSV_URL, "CSUSHPISA")
     us_housing = us_housing[us_housing.index >= pd.Timestamp(start_date)]
 
@@ -1011,6 +1014,7 @@ def fetch_reference_series_frame(start_date):
             copper_usd.rename("COPPERUSD"),
             iron_ore_usd.rename("IRONOREUSD"),
             aluminum_usd.rename("ALUMINUMUSD"),
+            oil_usd.rename("OILUSD"),
             us_housing.rename("USHOUSING"),
         ],
         axis=1,
@@ -1102,6 +1106,11 @@ def load_reference_series(start_date, source="auto"):
         if "ALUMINUMUSD" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    oil_usd = (
+        pd.to_numeric(reference_df["OILUSD"], errors="coerce").dropna()
+        if "OILUSD" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     us_housing = (
         pd.to_numeric(reference_df["USHOUSING"], errors="coerce").dropna()
         if "USHOUSING" in reference_df.columns
@@ -1125,6 +1134,7 @@ def load_reference_series(start_date, source="auto"):
     copper_usd.index = pd.to_datetime(copper_usd.index)
     iron_ore_usd.index = pd.to_datetime(iron_ore_usd.index)
     aluminum_usd.index = pd.to_datetime(aluminum_usd.index)
+    oil_usd.index = pd.to_datetime(oil_usd.index)
     us_housing.index = pd.to_datetime(us_housing.index)
     return (
         eur_usd,
@@ -1135,6 +1145,7 @@ def load_reference_series(start_date, source="auto"):
         copper_usd,
         iron_ore_usd,
         aluminum_usd,
+        oil_usd,
         us_housing,
     )
 
@@ -1154,6 +1165,7 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
         copper_usd,
         iron_ore_usd,
         aluminum_usd,
+        oil_usd,
         us_housing,
     ) = load_reference_series(start_date, source=source)
 
@@ -1201,6 +1213,10 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     if selected_currency == CURRENCY_ALUMINUM and not aluminum_usd.empty:
         aluminum_usd_aligned = align_reference_to_close(aluminum_usd)
         return close_usd / aluminum_usd_aligned
+
+    if selected_currency == CURRENCY_OIL and not oil_usd.empty:
+        oil_usd_aligned = align_reference_to_close(oil_usd)
+        return close_usd / oil_usd_aligned
 
     if selected_currency == CURRENCY_US_HOUSING and not us_housing.empty:
         us_housing_aligned = align_reference_to_close(us_housing)

@@ -522,6 +522,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -532,6 +533,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 
@@ -546,6 +548,7 @@ class TestPriceService(unittest.TestCase):
         raw_df = pd.DataFrame({"Close": [100.0, 120.0]}, index=idx)
         mock_load_reference_series.return_value = (
             pd.Series([2.0, 2.0], index=idx),
+            pd.Series(dtype=float),
             pd.Series(dtype=float),
             pd.Series(dtype=float),
             pd.Series(dtype=float),
@@ -580,6 +583,7 @@ class TestPriceService(unittest.TestCase):
             pd.Series(dtype=float),
             pd.Series(dtype=float),
             pd.Series(dtype=float),
+            pd.Series(dtype=float),
         )
 
         result = price_service.build_currency_close_series(raw_df, "EUR")
@@ -598,6 +602,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -608,6 +613,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 
@@ -626,6 +632,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -636,6 +643,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 
@@ -654,6 +662,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -664,6 +673,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 
@@ -682,6 +692,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series([4.0, 5.0], index=idx)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -692,6 +703,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 
@@ -710,6 +722,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series([100.0, 80.0], index=idx)
         aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -720,6 +733,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 
@@ -738,6 +752,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series([2500.0, 3000.0], index=idx)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series(dtype=float)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -748,11 +763,42 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 
         result = price_service.build_currency_close_series(raw_df, "ALUMINUM")
         self.assertListEqual(result.round(6).tolist(), [0.04, 0.04])
+
+    @patch("services.price_service.load_reference_series")
+    def test_build_currency_close_series_for_oil(self, mock_load_reference_series):
+        idx = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        raw_df = pd.DataFrame({"Close": [100.0, 120.0]}, index=idx)
+        eur_usd = pd.Series(dtype=float)
+        usd_uah = pd.Series(dtype=float)
+        usd_rub = pd.Series(dtype=float)
+        xau_usd = pd.Series(dtype=float)
+        xag_usd = pd.Series(dtype=float)
+        copper_usd = pd.Series(dtype=float)
+        iron_ore_usd = pd.Series(dtype=float)
+        aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series([50.0, 40.0], index=idx)
+        us_housing = pd.Series(dtype=float)
+        mock_load_reference_series.return_value = (
+            eur_usd,
+            usd_uah,
+            usd_rub,
+            xau_usd,
+            xag_usd,
+            copper_usd,
+            iron_ore_usd,
+            aluminum_usd,
+            oil_usd,
+            us_housing,
+        )
+
+        result = price_service.build_currency_close_series(raw_df, "OIL")
+        self.assertListEqual(result.round(6).tolist(), [2.0, 3.0])
 
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_us_housing(self, mock_load_reference_series):
@@ -766,6 +812,7 @@ class TestPriceService(unittest.TestCase):
         copper_usd = pd.Series(dtype=float)
         iron_ore_usd = pd.Series(dtype=float)
         aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
         us_housing = pd.Series([250.0, 300.0], index=idx)
         mock_load_reference_series.return_value = (
             eur_usd,
@@ -776,6 +823,7 @@ class TestPriceService(unittest.TestCase):
             copper_usd,
             iron_ore_usd,
             aluminum_usd,
+            oil_usd,
             us_housing,
         )
 

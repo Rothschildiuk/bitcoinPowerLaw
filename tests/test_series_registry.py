@@ -6,6 +6,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_IRON,
+    CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_UAH,
@@ -259,6 +260,19 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(aluminum_config.currency_unit, "Aluminum tonne")
         self.assertEqual(aluminum_config.target_series_unit, CURRENCY_ALUMINUM)
         self.assertTrue(aluminum_config.supports_currency_selector)
+
+        oil_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_OIL,
+        )
+
+        self.assertEqual(oil_config.currency_suffix, " bbl")
+        self.assertEqual(oil_config.currency_decimals, 2)
+        self.assertEqual(oil_config.currency_unit, "Oil barrel")
+        self.assertEqual(oil_config.target_series_unit, CURRENCY_OIL)
+        self.assertTrue(oil_config.supports_currency_selector)
 
         us_housing_config = get_active_model_config(
             MODE_POWERLAW,
