@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.50"
+APP_VERSION = "1.1.51"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
@@ -224,6 +224,7 @@ KEY_A_US_M2 = "A_us_m2"
 KEY_B_US_M2 = "B_us_m2"
 KEY_A_USDT_SUPPLY = "A_usdt_supply"
 KEY_B_USDT_SUPPLY = "B_usdt_supply"
+KEY_COFER_CURRENCIES = "cofer_currencies"
 KEY_A_BITCOIN_NETWORK_SIMULATION = "A_bitcoin_network_simulation"
 KEY_B_BITCOIN_NETWORK_SIMULATION = "B_bitcoin_network_simulation"
 KEY_BITCOIN_NETWORK_SIMULATION_SEED = "bitcoin_network_simulation_seed"
@@ -264,6 +265,7 @@ KEY_PORTFOLIO_BACKTEST_HAS_RUN = "portfolio_backtest_has_run"
 MODE_POWERLAW = "PowerLaw"
 MODE_LOGPERIODIC = "LogPeriodic"
 MODE_PORTFOLIO = "Portfolio"
+MODE_COFER = "COFER"
 POWERLAW_SERIES_PRICE = "Bitcoin"
 POWERLAW_SERIES_REVENUE = "Miner revenue"
 POWERLAW_SERIES_BITCOIN_MARKET_CAP = "Bitcoin market cap"
@@ -329,6 +331,20 @@ CURRENCY_OPTIONS = [
     CURRENCY_OIL,
     CURRENCY_US_HOUSING,
 ]
+COFER_CURRENCY_LABELS = {
+    "BTC": "BTC market cap / FX reserves",
+    "USD": "U.S. dollar",
+    "EUR": "Euro",
+    "JPY": "Japanese yen",
+    "GBP": "Pound sterling",
+    "CNY": "Chinese renminbi",
+    "AUD": "Australian dollar",
+    "CAD": "Canadian dollar",
+    "CHF": "Swiss franc",
+    "Other": "Other currencies",
+}
+COFER_CURRENCY_OPTIONS = list(COFER_CURRENCY_LABELS.keys())
+COFER_DEFAULT_CURRENCIES = ["BTC", "USD", "EUR", "JPY", "CNY"]
 TIME_LOG = "Log"
 TIME_LIN = "Lin"
 THEME_OPTIONS = ["Dark 🌑"]

@@ -474,6 +474,82 @@ class TestPriceService(unittest.TestCase):
         )
         self.assertListEqual(result["Close"].round(6).tolist(), [0.00011, 1.25, 3.0])
 
+    @patch("services.price_service.load_prepared_bitcoin_supply_data")
+    @patch("services.price_service.load_prepared_price_data")
+    @patch("services.price_service.build_prepared_bitcoin_market_cap_data")
+    @patch("services.price_service._fetch_csv_with_retry")
+    def test_load_imf_cofer_currency_share_data_parses_quarterly_currency_shares(
+        self,
+        mock_fetch_csv,
+        mock_build_market_cap,
+        mock_load_price,
+        mock_load_supply,
+    ):
+        price_service.load_imf_cofer_currency_share_data.clear()
+        periods = pd.period_range("1999Q1", periods=80, freq="Q")
+        quarter_dates = periods.to_timestamp(how="end").normalize()
+        currency_rows = [
+            ("CI_USD", 70.0),
+            ("CI_EUR", 18.0),
+            ("CI_JPY", 6.0),
+            ("CI_GBP", 3.0),
+            ("CI_CNY", 2.0),
+            ("CI_AUD", 1.5),
+            ("CI_CAD", 1.4),
+            ("CI_CHF", 0.3),
+            ("CI_OTHC", 1.8),
+        ]
+        mock_fetch_csv.return_value = pd.DataFrame(
+            [
+                {
+                    "INDICATOR": "AFXRA",
+                    "FXR_CURRENCY": fxr_currency,
+                    "TYPE_OF_TRANSFORMATION": "SHRO_PT",
+                    "FREQUENCY": "Q",
+                    "TIME_PERIOD": f"{period.year}-Q{period.quarter}",
+                    "OBS_VALUE": share + index * 0.01,
+                }
+                for index, period in enumerate(periods)
+                for fxr_currency, share in currency_rows
+            ]
+            + [
+                {
+                    "INDICATOR": "TFXRA",
+                    "FXR_CURRENCY": "CI_T",
+                    "TYPE_OF_TRANSFORMATION": "NV_USD",
+                    "FREQUENCY": "Q",
+                    "TIME_PERIOD": f"{period.year}-Q{period.quarter}",
+                    "OBS_VALUE": 10_000_000_000_000 + index * 1_000_000_000,
+                }
+                for index, period in enumerate(periods)
+            ]
+        )
+        mock_build_market_cap.return_value = pd.DataFrame(
+            {
+                "Close": [
+                    (10_000_000_000_000 + index * 1_000_000_000) * 0.05
+                    for index in range(len(periods))
+                ]
+            },
+            index=quarter_dates,
+        )
+        mock_load_price.return_value = pd.DataFrame()
+        mock_load_supply.return_value = pd.DataFrame()
+
+        result = price_service.load_imf_cofer_currency_share_data(
+            cofer_url="https://api.imf.org/cofer.csv",
+            source="live",
+        )
+
+        self.assertEqual(result.index[0], pd.Timestamp("1999-03-31"))
+        self.assertEqual(result.index[-1], pd.Timestamp("2018-12-31"))
+        self.assertAlmostEqual(float(result.loc[pd.Timestamp("1999-03-31"), "USD"]), 70.0)
+        self.assertAlmostEqual(float(result.loc[pd.Timestamp("1999-03-31"), "JPY"]), 6.0)
+        self.assertAlmostEqual(float(result.loc[pd.Timestamp("1999-03-31"), "BTC"]), 5.0)
+        self.assertIn("Other", result.columns)
+        _, kwargs = mock_fetch_csv.call_args
+        self.assertEqual(kwargs["extra_headers"], {"Accept": "text/csv"})
+
     @patch("services.price_service._fetch_json_with_retry")
     def test_safe_download_cryptocompare_histoday_parses_daily_close_series(self, mock_fetch_json):
         mock_fetch_json.return_value = {

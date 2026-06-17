@@ -17,6 +17,8 @@ from core.constants import (
     CURRENCY_SILVER,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
+    COFER_CURRENCY_LABELS,
+    COFER_DEFAULT_CURRENCIES,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_THEME,
     FORECAST_HORIZON_MAX,
@@ -29,6 +31,7 @@ from core.constants import (
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
     KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
+    KEY_COFER_CURRENCIES,
     KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
     KEY_LAST_MODE,
@@ -52,6 +55,7 @@ from core.constants import (
     KEY_PORTFOLIO_STRATEGY_VIEW,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_THEME_MODE,
+    MODE_COFER,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
@@ -112,6 +116,7 @@ from services.price_service import (
     load_prepared_difficulty_data,
     load_prepared_filecoin_btc_data,
     load_prepared_hashrate_data,
+    load_imf_cofer_currency_share_data,
     load_prepared_litecoin_btc_data,
     load_prepared_lightning_capacity_data,
     load_prepared_lightning_nodes_data,
@@ -141,6 +146,7 @@ def initialize_app_session_state():
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
         KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
+        KEY_COFER_CURRENCIES: list(COFER_DEFAULT_CURRENCIES),
         KEY_LOGPERIODIC_HARMONICS: int(OSC_DEFAULTS.get("harmonic_count", 1)),
         KEY_LOGPERIODIC_SHOW_DECAYED_DSI: True,
         KEY_POWERLAW_ENVELOPE_SIGMA: 1.0,
@@ -1240,6 +1246,114 @@ def render_portfolio_view(
         )
 
 
+def render_cofer_currency_share_view(
+    cofer_df,
+    selected_currencies,
+    *,
+    pl_template,
+    pl_bg_color,
+    pl_grid_color,
+    pl_text_color,
+    c_hover_bg,
+    c_hover_text,
+    c_border,
+):
+    selected_currencies = [
+        currency for currency in selected_currencies if currency in cofer_df.columns
+    ]
+    if not selected_currencies:
+        st.error("No COFER currencies selected.")
+        return
+
+    chart_df = cofer_df[selected_currencies].copy()
+    latest_date = pd.Timestamp(chart_df.dropna(how="all").index.max())
+    latest_values = chart_df.loc[latest_date].dropna().sort_values(ascending=False)
+
+    st.markdown("### COFER reserve currency dominance")
+    metric_columns = st.columns(min(len(latest_values), 4))
+    for metric_col, (currency, value) in zip(metric_columns, latest_values.items()):
+        metric_col.metric(
+            COFER_CURRENCY_LABELS.get(currency, currency),
+            f"{float(value):.2f}%",
+        )
+
+    line_colors = {
+        "BTC": "#f7931a",
+        "USD": "#f0b90b",
+        "EUR": "#3b82f6",
+        "JPY": "#ef4444",
+        "GBP": "#a855f7",
+        "CNY": "#22c55e",
+        "AUD": "#06b6d4",
+        "CAD": "#f97316",
+        "CHF": "#e5e7eb",
+        "Other": "#94a3b8",
+    }
+    fig = go.Figure()
+    for currency in selected_currencies:
+        series = pd.to_numeric(chart_df[currency], errors="coerce")
+        fig.add_trace(
+            go.Scatter(
+                x=series.index,
+                y=series,
+                mode="lines",
+                name=COFER_CURRENCY_LABELS.get(currency, currency),
+                line=dict(color=line_colors.get(currency), width=2.3),
+                connectgaps=False,
+                hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:.2f}%<extra></extra>",
+            )
+        )
+
+    y_values = chart_df.to_numpy(dtype=float)
+    y_values = y_values[np.isfinite(y_values)]
+    y_max = max(5.0, float(np.nanmax(y_values)) if y_values.size else 100.0)
+    fig.update_layout(
+        template=pl_template,
+        paper_bgcolor=pl_bg_color,
+        plot_bgcolor=pl_bg_color,
+        font=dict(color=pl_text_color),
+        height=620,
+        margin=dict(l=20, r=20, t=32, b=20),
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        xaxis=dict(
+            title="",
+            showgrid=True,
+            gridcolor=pl_grid_color,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Percent of world FX reserves",
+            ticksuffix="%",
+            range=[0, min(100.0, y_max * 1.08)],
+            showgrid=True,
+            gridcolor=pl_grid_color,
+            zeroline=False,
+        ),
+        hoverlabel=dict(bgcolor=c_hover_bg, font_color=c_hover_text, bordercolor=c_border),
+    )
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={
+            "displayModeBar": True,
+            "modeBarButtons": [
+                ["toImage"],
+                ["zoom2d", "pan2d", "toggleSpikelines"],
+                ["zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"],
+            ],
+        },
+    )
+    st.caption(f"Latest COFER quarter: {latest_date.year}-Q{latest_date.quarter}")
+
+
 # --- Page Configuration ---
 st.set_page_config(
     layout="wide",
@@ -1277,6 +1391,7 @@ sidebar_series_data = SidebarSeriesData(series_store)
     current_r2,
     powerlaw_series,
     logperiodic_series,
+    cofer_currencies,
 ) = render_sidebar_panel(
     sidebar_series_data,
     c_text_main,
@@ -1285,6 +1400,22 @@ sidebar_series_data = SidebarSeriesData(series_store)
     FORECAST_HORIZON_MIN,
     FORECAST_HORIZON_MAX,
 )
+
+if mode == MODE_COFER:
+    cofer_df = load_imf_cofer_currency_share_data(source=series_store.data_source)
+    render_cofer_currency_share_view(
+        cofer_df,
+        cofer_currencies,
+        pl_template=pl_template,
+        pl_bg_color=pl_bg_color,
+        pl_grid_color=pl_grid_color,
+        pl_text_color=pl_text_color,
+        c_hover_bg=c_hover_bg,
+        c_hover_text=c_hover_text,
+        c_border=c_border,
+    )
+    st.stop()
+
 active_model = get_active_model_config(mode, powerlaw_series, logperiodic_series, currency)
 st.session_state[KEY_A] = float(st.session_state.get(active_model.a_key, active_model.default_a))
 st.session_state[KEY_B] = float(st.session_state.get(active_model.b_key, active_model.default_b))

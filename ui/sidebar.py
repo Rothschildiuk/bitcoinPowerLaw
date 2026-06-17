@@ -4,12 +4,16 @@ from core import oscillator, power_law
 from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_OPTIONS,
+    COFER_CURRENCY_LABELS,
+    COFER_CURRENCY_OPTIONS,
+    COFER_DEFAULT_CURRENCIES,
     DEFAULT_FORECAST_HORIZON,
     KEY_A,
     KEY_B,
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
     KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
+    KEY_COFER_CURRENCIES,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
     KEY_LOGPERIODIC_HARMONICS,
@@ -29,6 +33,7 @@ from core.constants import (
     KEY_PORTFOLIO_STRATEGY_VIEW,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_TIME_SCALE,
+    MODE_COFER,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     PORTFOLIO_RESET_A,
@@ -67,6 +72,55 @@ from core.series_registry import (
 
 KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
 KEY_LAST_PORTFOLIO_VIEW = "last_portfolio_strategy_view"
+COFER_CURRENCY_GROUPS = [
+    ("Bitcoin", ["BTC"]),
+    ("Major reserves", ["USD", "EUR", "JPY", "GBP"]),
+    ("Newer tracked currencies", ["CNY", "CHF"]),
+    ("Commodity bloc + residual", ["AUD", "CAD", "Other"]),
+]
+
+
+def _render_cofer_currency_selector():
+    selected_cofer_currencies = st.session_state.get(
+        KEY_COFER_CURRENCIES,
+        list(COFER_DEFAULT_CURRENCIES),
+    )
+    selected_cofer_currencies = [
+        currency for currency in selected_cofer_currencies if currency in COFER_CURRENCY_OPTIONS
+    ]
+    if not selected_cofer_currencies:
+        selected_cofer_currencies = list(COFER_DEFAULT_CURRENCIES)
+        st.session_state[KEY_COFER_CURRENCIES] = selected_cofer_currencies
+
+    st.markdown("**Reserve currencies**")
+    selected_set = set(selected_cofer_currencies)
+    for group_name, group_currencies in COFER_CURRENCY_GROUPS:
+        st.markdown(f"<div class='cofer-group-title'>{group_name}</div>", unsafe_allow_html=True)
+        columns = st.columns(2)
+        for index, currency in enumerate(group_currencies):
+            widget_key = f"{KEY_COFER_CURRENCIES}_{currency}"
+            if widget_key not in st.session_state:
+                st.session_state[widget_key] = currency in selected_set
+            with columns[index % 2]:
+                st.checkbox(
+                    currency,
+                    key=widget_key,
+                    help=COFER_CURRENCY_LABELS.get(currency, currency),
+                )
+
+    selected_currencies = [
+        currency
+        for currency in COFER_CURRENCY_OPTIONS
+        if bool(st.session_state.get(f"{KEY_COFER_CURRENCIES}_{currency}", False))
+    ]
+    if not selected_currencies:
+        for currency in COFER_DEFAULT_CURRENCIES:
+            st.session_state[f"{KEY_COFER_CURRENCIES}_{currency}"] = True
+        st.session_state[KEY_COFER_CURRENCIES] = list(COFER_DEFAULT_CURRENCIES)
+        st.rerun()
+
+    st.session_state[KEY_COFER_CURRENCIES] = selected_currencies
+    return selected_currencies
 
 
 def _render_sigma_band_history_sidebar_control(_date_index):
@@ -368,7 +422,7 @@ def render_sidebar_panel(
             version_caption = f"{version_caption} · Last update {snapshot_data_date}"
         st.caption(version_caption)
 
-        mode_options = [MODE_POWERLAW, MODE_LOGPERIODIC, MODE_PORTFOLIO]
+        mode_options = [MODE_POWERLAW, MODE_LOGPERIODIC, MODE_PORTFOLIO, MODE_COFER]
         if st.session_state.get(KEY_MODE_SELECTOR) not in mode_options:
             st.session_state[KEY_MODE_SELECTOR] = st.session_state.get(KEY_LAST_MODE, MODE_POWERLAW)
         mode = st.segmented_control(
@@ -393,6 +447,19 @@ def render_sidebar_panel(
         if mode != st.session_state[KEY_LAST_MODE]:
             st.session_state[KEY_CHART_REVISION] += 1
             st.session_state[KEY_LAST_MODE] = mode
+
+        if mode == MODE_COFER:
+            selected_cofer_currencies = _render_cofer_currency_selector()
+            return (
+                mode,
+                CURRENCY_DOLLAR,
+                TIME_LOG,
+                "Lin",
+                0.0,
+                st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE),
+                st.session_state.get(KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE),
+                selected_cofer_currencies,
+            )
 
         selected_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
         if selected_currency not in CURRENCY_OPTIONS:
@@ -604,4 +671,5 @@ def render_sidebar_panel(
         current_r2,
         powerlaw_series,
         logperiodic_series,
+        st.session_state.get(KEY_COFER_CURRENCIES, list(COFER_DEFAULT_CURRENCIES)),
     )

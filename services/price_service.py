@@ -26,6 +26,7 @@ from core.constants import (
     CURRENCY_SILVER,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
+    COFER_CURRENCY_OPTIONS,
     GENESIS_DATE,
 )
 
@@ -53,6 +54,21 @@ LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
 FRED_M2SL_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL"
 FRED_US_HOUSING_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CSUSHPISA"
 DEFILLAMA_USDT_STABLECOIN_URL = "https://stablecoins.llama.fi/stablecoin/1"
+IMF_COFER_CURRENCY_SHARES_CSV_URL = (
+    "https://api.imf.org/external/sdmx/3.0/data/dataflow/"
+    "IMF.STA/COFER/7.0.1/*?startPeriod=1999-Q1"
+)
+IMF_COFER_CURRENCY_CODE_MAP = {
+    "CI_USD": "USD",
+    "CI_EUR": "EUR",
+    "CI_JPY": "JPY",
+    "CI_GBP": "GBP",
+    "CI_CNY": "CNY",
+    "CI_AUD": "AUD",
+    "CI_CAD": "CAD",
+    "CI_CHF": "CHF",
+    "CI_OTHC": "Other",
+}
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
 SNAPSHOT_DATA_DIR = Path("data/snapshots")
 DATA_SOURCE_ENV_VAR = "POWERLAW_DATA_SOURCE"
@@ -442,6 +458,15 @@ def _validate_prepared_usdt_supply_data(data_df):
     )
 
 
+def _validate_imf_cofer_currency_share_data(data_df):
+    return (
+        isinstance(data_df, pd.DataFrame)
+        and len(data_df) >= 80
+        and set(COFER_CURRENCY_OPTIONS).issubset(set(data_df.columns))
+        and data_df.index.min() <= pd.Timestamp("1999-03-31")
+    )
+
+
 def _append_btc_live_tail(base_df, *, stale_after_days):
     if base_df is None or base_df.empty:
         return base_df
@@ -645,6 +670,116 @@ def _fetch_defillama_stablecoin_supply_billion_units(stablecoin_url):
     return prepared_df
 
 
+def _fetch_imf_cofer_currency_share_data(source_url):
+    cofer_df = _fetch_csv_with_retry(
+        source_url,
+        retries=3,
+        timeout=30,
+        extra_headers={"Accept": "text/csv"},
+    )
+    required_columns = {
+        "INDICATOR",
+        "FXR_CURRENCY",
+        "TYPE_OF_TRANSFORMATION",
+        "FREQUENCY",
+        "TIME_PERIOD",
+        "OBS_VALUE",
+    }
+    if cofer_df.empty or not required_columns.issubset(set(cofer_df.columns)):
+        raise ValueError("IMF COFER payload is missing required columns.")
+
+    total_reserves_df = cofer_df[
+        (cofer_df["INDICATOR"].astype(str) == "TFXRA")
+        & (cofer_df["TYPE_OF_TRANSFORMATION"].astype(str) == "NV_USD")
+        & (cofer_df["FREQUENCY"].astype(str) == "Q")
+        & (cofer_df["FXR_CURRENCY"].astype(str) == "CI_T")
+    ].copy()
+    cofer_share_df = cofer_df[
+        (cofer_df["INDICATOR"].astype(str) == "AFXRA")
+        & (cofer_df["TYPE_OF_TRANSFORMATION"].astype(str) == "SHRO_PT")
+        & (cofer_df["FREQUENCY"].astype(str) == "Q")
+        & (cofer_df["FXR_CURRENCY"].astype(str).isin(IMF_COFER_CURRENCY_CODE_MAP))
+    ].copy()
+    if cofer_share_df.empty:
+        raise ValueError("IMF COFER returned no currency-share rows.")
+
+    periods = cofer_share_df["TIME_PERIOD"].astype(str).str.strip()
+    quarter_mask = periods.str.fullmatch(r"\d{4}-Q[1-4]")
+    cofer_share_df = cofer_share_df[quarter_mask].copy()
+    cofer_share_df["Currency"] = cofer_share_df["FXR_CURRENCY"].map(IMF_COFER_CURRENCY_CODE_MAP)
+    cofer_share_df["Share"] = pd.to_numeric(cofer_share_df["OBS_VALUE"], errors="coerce")
+    cofer_share_df = cofer_share_df.dropna(subset=["TIME_PERIOD", "Currency", "Share"])
+    cofer_share_df = cofer_share_df[cofer_share_df["Share"] >= 0.0]
+    if cofer_share_df.empty:
+        raise ValueError("IMF COFER returned no usable quarterly share rows.")
+
+    quarter_index = pd.PeriodIndex(cofer_share_df["TIME_PERIOD"].astype(str), freq="Q")
+    cofer_share_df["Date"] = quarter_index.to_timestamp(how="end").normalize()
+    share_df = cofer_share_df.pivot_table(
+        index="Date",
+        columns="Currency",
+        values="Share",
+        aggfunc="last",
+    ).sort_index()
+    share_df = _append_bitcoin_market_cap_share_to_cofer_frame(share_df, total_reserves_df)
+    share_df = share_df.reindex(columns=COFER_CURRENCY_OPTIONS)
+    share_df.index = pd.to_datetime(share_df.index)
+    return share_df
+
+
+def _append_bitcoin_market_cap_share_to_cofer_frame(share_df, total_reserves_df):
+    if total_reserves_df.empty:
+        return share_df
+
+    total_periods = total_reserves_df["TIME_PERIOD"].astype(str).str.strip()
+    total_quarter_mask = total_periods.str.fullmatch(r"\d{4}-Q[1-4]")
+    total_reserves_df = total_reserves_df[total_quarter_mask].copy()
+    total_reserves_df["TotalReservesUSD"] = pd.to_numeric(
+        total_reserves_df["OBS_VALUE"],
+        errors="coerce",
+    )
+    total_reserves_df = total_reserves_df.dropna(subset=["TIME_PERIOD", "TotalReservesUSD"])
+    total_reserves_df = total_reserves_df[total_reserves_df["TotalReservesUSD"] > 0.0]
+    if total_reserves_df.empty:
+        return share_df
+
+    total_quarter_index = pd.PeriodIndex(total_reserves_df["TIME_PERIOD"].astype(str), freq="Q")
+    total_reserves = pd.Series(
+        total_reserves_df["TotalReservesUSD"].to_numpy(dtype=float),
+        index=total_quarter_index.to_timestamp(how="end").normalize(),
+        name="TotalReservesUSD",
+    ).sort_index()
+    total_reserves = total_reserves[~total_reserves.index.duplicated(keep="last")]
+
+    try:
+        btc_market_cap_df = build_prepared_bitcoin_market_cap_data(
+            load_prepared_price_data(source="auto"),
+            load_prepared_bitcoin_supply_data(source="auto"),
+        )
+    except Exception:
+        return share_df
+
+    btc_market_cap = pd.to_numeric(btc_market_cap_df["Close"], errors="coerce").dropna()
+    btc_market_cap = btc_market_cap[btc_market_cap > 0.0].sort_index()
+    btc_market_cap = btc_market_cap[~btc_market_cap.index.duplicated(keep="last")]
+    if btc_market_cap.empty:
+        return share_df
+
+    quarter_dates = share_df.index.union(total_reserves.index).sort_values()
+    aligned_btc_market_cap = (
+        btc_market_cap.reindex(btc_market_cap.index.union(quarter_dates).sort_values())
+        .interpolate("time")
+        .ffill()
+        .reindex(quarter_dates)
+    )
+    aligned_total_reserves = total_reserves.reindex(quarter_dates)
+    btc_share = (aligned_btc_market_cap / aligned_total_reserves) * 100.0
+    btc_share = btc_share.replace([np.inf, -np.inf], np.nan)
+    share_df = share_df.copy()
+    share_df["BTC"] = btc_share.reindex(share_df.index)
+    return share_df
+
+
 def _fetch_fred_series(source_url, value_column_name):
     fred_df = pd.read_csv(source_url)
     if "observation_date" not in fred_df.columns or value_column_name not in fred_df.columns:
@@ -703,8 +838,11 @@ def _fetch_csv_with_retry(
     timeout=20,
     initial_backoff_seconds=0.4,
     backoff_multiplier=2.0,
+    extra_headers=None,
 ):
     headers = {"User-Agent": "PowerLaw/1.0"}
+    if extra_headers:
+        headers.update(extra_headers)
     for attempt in range(max(1, int(retries))):
         try:
             request = urllib.request.Request(url, headers=headers)
@@ -1393,6 +1531,28 @@ def load_prepared_usdt_supply_data(
                 refresh_seconds=REFERENCE_REFRESH_SECONDS,
                 fetch_fn=lambda: _fetch_defillama_stablecoin_supply_billion_units(stablecoin_url),
                 validator_fn=_validate_prepared_usdt_supply_data,
+            )
+        ),
+        source=source,
+    )
+
+
+@st.cache_data(ttl=3600)
+def load_imf_cofer_currency_share_data(
+    cofer_url=IMF_COFER_CURRENCY_SHARES_CSV_URL,
+    source="auto",
+    schema_version=2,
+):
+    _ = schema_version
+    return _load_snapshot_or_live(
+        "imf_cofer_currency_share_data",
+        _validate_imf_cofer_currency_share_data,
+        lambda: _load_source_adapter(
+            DataFrameSourceAdapter(
+                cache_key="imf_cofer_currency_share_data",
+                refresh_seconds=REFERENCE_REFRESH_SECONDS,
+                fetch_fn=lambda: _fetch_imf_cofer_currency_share_data(cofer_url),
+                validator_fn=_validate_imf_cofer_currency_share_data,
             )
         ),
         source=source,
