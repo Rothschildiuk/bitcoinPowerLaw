@@ -13,7 +13,7 @@ Each series config owns its session keys, defaults, display label/unit, currency
 - BTC pairs: Filecoin/BTC, Monero/BTC, Litecoin/BTC, Dogecoin/BTC.
 
 ## Special Behavior
-- Bitcoin is the only series with currency switching (`EUR`, `USD`, `UAH`, `RUB`, `GOLD`, `SILVER`, `COPPER`, `ALUMINUM`, `IRON`, `OIL`, `US_HOUSING`, `SP500`) and supports both PowerLaw and LogPeriodic.
+- Bitcoin is the only series with currency switching (`EUR`, `USD`, `UAH`, `RUB`, `GOLD`, `SILVER`, `COPPER`, `ALUMINUM`, `IRON`, `OIL`, `US_HOUSING`, `SP500`, `NDAQ`) and supports both PowerLaw and LogPeriodic.
 - LogPeriodic fits residuals in log time after removing the PowerLaw trend; DSI comparisons use `omega`, `omega,2omega`, and `omega,2omega,4omega`.
 - Difficulty and Hashrate support both modes, force log scale, start analysis at `2010-01-01`, and use wider LogPeriodic `Lambda` bounds.
 - Bitcoin volatility is PowerLaw-only, log scale, and derived from 30-day daily BTC/USD log-return volatility.

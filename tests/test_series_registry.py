@@ -6,6 +6,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_IRON,
+    CURRENCY_NDAQ,
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
@@ -302,6 +303,20 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(sp500_config.target_series_unit, CURRENCY_SP500)
         self.assertIsNotNone(sp500_config.oscillator_defaults)
         self.assertTrue(sp500_config.supports_currency_selector)
+
+        ndaq_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_NDAQ,
+        )
+
+        self.assertEqual(ndaq_config.currency_suffix, " index")
+        self.assertEqual(ndaq_config.currency_decimals, 2)
+        self.assertEqual(ndaq_config.currency_unit, "Nasdaq Composite index")
+        self.assertEqual(ndaq_config.target_series_unit, CURRENCY_NDAQ)
+        self.assertIsNotNone(ndaq_config.oscillator_defaults)
+        self.assertTrue(ndaq_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(

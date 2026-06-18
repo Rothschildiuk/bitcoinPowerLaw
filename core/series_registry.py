@@ -7,6 +7,7 @@ from core.constants import (
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_IRON,
+    CURRENCY_NDAQ,
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
@@ -37,6 +38,8 @@ from core.constants import (
     DEFAULT_HASHRATE_B,
     DEFAULT_IRON_A,
     DEFAULT_IRON_B,
+    DEFAULT_NDAQ_A,
+    DEFAULT_NDAQ_B,
     DEFAULT_OIL_A,
     DEFAULT_OIL_B,
     DEFAULT_SP500_A,
@@ -78,6 +81,7 @@ from core.constants import (
     KEY_A_GOLD,
     KEY_A_HASHRATE,
     KEY_A_IRON,
+    KEY_A_NDAQ,
     KEY_A_OIL,
     KEY_A_SP500,
     KEY_A_US_HOUSING,
@@ -106,6 +110,7 @@ from core.constants import (
     KEY_B_GOLD,
     KEY_B_HASHRATE,
     KEY_B_IRON,
+    KEY_B_NDAQ,
     KEY_B_OIL,
     KEY_B_SP500,
     KEY_B_US_HOUSING,
@@ -136,6 +141,7 @@ from core.constants import (
     OSC_DEFAULTS_GOLD,
     OSC_DEFAULTS_HASHRATE,
     OSC_DEFAULTS_IRON,
+    OSC_DEFAULTS_NDAQ,
     OSC_DEFAULTS_OIL,
     OSC_DEFAULTS_RUB,
     OSC_DEFAULTS_SILVER,
@@ -630,6 +636,18 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_unit": "S&P 500 index",
         "oscillator_defaults": OSC_DEFAULTS_SP500,
     },
+    CURRENCY_NDAQ: {
+        "a_key": KEY_A_NDAQ,
+        "b_key": KEY_B_NDAQ,
+        "default_a": DEFAULT_NDAQ_A,
+        "default_b": DEFAULT_NDAQ_B,
+        "target_series_unit": CURRENCY_NDAQ,
+        "currency_prefix": "",
+        "currency_suffix": " index",
+        "currency_decimals": 2,
+        "currency_unit": "Nasdaq Composite index",
+        "oscillator_defaults": OSC_DEFAULTS_NDAQ,
+    },
 }
 
 _POWERLAW_SERIES_GROUPS = [
@@ -752,6 +770,7 @@ def iter_session_model_defaults():
         CURRENCY_OIL,
         CURRENCY_US_HOUSING,
         CURRENCY_SP500,
+        CURRENCY_NDAQ,
     ):
         price_config = get_series_config(POWERLAW_SERIES_PRICE, selected_currency=currency)
         for key, value in (

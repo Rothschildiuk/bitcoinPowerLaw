@@ -962,6 +962,40 @@ class TestPriceService(unittest.TestCase):
         result = price_service.build_currency_close_series(raw_df, "SP500")
         self.assertListEqual(result.round(6).tolist(), [20.0, 20.0])
 
+    @patch("services.price_service.load_reference_series")
+    def test_build_currency_close_series_for_ndaq(self, mock_load_reference_series):
+        idx = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        raw_df = pd.DataFrame({"Close": [100000.0, 120000.0]}, index=idx)
+        eur_usd = pd.Series(dtype=float)
+        usd_uah = pd.Series(dtype=float)
+        usd_rub = pd.Series(dtype=float)
+        xau_usd = pd.Series(dtype=float)
+        xag_usd = pd.Series(dtype=float)
+        copper_usd = pd.Series(dtype=float)
+        iron_ore_usd = pd.Series(dtype=float)
+        aluminum_usd = pd.Series(dtype=float)
+        oil_usd = pd.Series(dtype=float)
+        us_housing = pd.Series(dtype=float)
+        sp500 = pd.Series(dtype=float)
+        ndaq = pd.Series([20000.0, 24000.0], index=idx)
+        mock_load_reference_series.return_value = (
+            eur_usd,
+            usd_uah,
+            usd_rub,
+            xau_usd,
+            xag_usd,
+            copper_usd,
+            iron_ore_usd,
+            aluminum_usd,
+            oil_usd,
+            us_housing,
+            sp500,
+            ndaq,
+        )
+
+        result = price_service.build_currency_close_series(raw_df, "NDAQ")
+        self.assertListEqual(result.round(6).tolist(), [5.0, 5.0])
+
     @patch("services.price_service._safe_download_cryptocompare_histoday")
     @patch("services.price_service._safe_download_crypto_btc_via_usd")
     @patch("services.price_service._safe_download_crypto_btc_via_coinlore")

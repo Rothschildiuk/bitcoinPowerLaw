@@ -6,6 +6,7 @@ from core.constants import (
     CURRENCY_ALUMINUM,
     CURRENCY_COPPER,
     CURRENCY_IRON,
+    CURRENCY_NDAQ,
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
@@ -105,6 +106,12 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             DEFAULT_CASES,
         )
 
+    def test_default_cases_include_ndaq_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_NDAQ, "DEFAULT_NDAQ_A", "DEFAULT_NDAQ_B"),
+            DEFAULT_CASES,
+        )
+
     def test_oscillator_default_cases_include_us_housing_price_model(self):
         self.assertIn(
             (
@@ -123,6 +130,17 @@ class TestUpdateDefaultsScript(unittest.TestCase):
                 CURRENCY_SP500,
                 "OSC_DEFAULTS_SP500",
                 update_powerlaw_defaults.OSC_DEFAULTS_SP500,
+            ),
+            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
+        )
+
+    def test_oscillator_default_cases_include_ndaq_price_model(self):
+        self.assertIn(
+            (
+                POWERLAW_SERIES_PRICE,
+                CURRENCY_NDAQ,
+                "OSC_DEFAULTS_NDAQ",
+                update_powerlaw_defaults.OSC_DEFAULTS_NDAQ,
             ),
             update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
         )

@@ -21,6 +21,7 @@ from core.constants import (
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_IRON,
+    CURRENCY_NDAQ,
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
@@ -91,6 +92,7 @@ REFERENCE_SERIES_COLUMNS = (
     "OILUSD",
     "USHOUSING",
     "SP500",
+    "NDAQ",
 )
 COINLORE_CRYPTO_META = {
     "FIL": {"slug": "filecoin", "start_date": "2017-12-13"},
@@ -1162,6 +1164,7 @@ def fetch_reference_series_frame(start_date):
     us_housing = _fetch_fred_series(FRED_US_HOUSING_CSV_URL, "CSUSHPISA")
     us_housing = us_housing[us_housing.index >= pd.Timestamp(start_date)]
     sp500 = _safe_download_close_series("^GSPC", start_date)
+    ndaq = _safe_download_close_series("^IXIC", start_date)
 
     return pd.concat(
         [
@@ -1176,6 +1179,7 @@ def fetch_reference_series_frame(start_date):
             oil_usd.rename("OILUSD"),
             us_housing.rename("USHOUSING"),
             sp500.rename("SP500"),
+            ndaq.rename("NDAQ"),
         ],
         axis=1,
     ).sort_index()
@@ -1281,6 +1285,11 @@ def load_reference_series(start_date, source="auto"):
         if "SP500" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    ndaq = (
+        pd.to_numeric(reference_df["NDAQ"], errors="coerce").dropna()
+        if "NDAQ" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     usd_uah = (
         pd.to_numeric(reference_df["USDUAH"], errors="coerce").dropna()
         if "USDUAH" in reference_df.columns
@@ -1302,6 +1311,7 @@ def load_reference_series(start_date, source="auto"):
     oil_usd.index = pd.to_datetime(oil_usd.index)
     us_housing.index = pd.to_datetime(us_housing.index)
     sp500.index = pd.to_datetime(sp500.index)
+    ndaq.index = pd.to_datetime(ndaq.index)
     return (
         eur_usd,
         usd_uah,
@@ -1314,6 +1324,7 @@ def load_reference_series(start_date, source="auto"):
         oil_usd,
         us_housing,
         sp500,
+        ndaq,
     )
 
 
@@ -1337,6 +1348,7 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
         us_housing,
     ) = reference_series[:10]
     sp500 = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
+    ndaq = reference_series[11] if len(reference_series) > 11 else pd.Series(dtype=float)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
@@ -1394,6 +1406,10 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     if selected_currency == CURRENCY_SP500 and not sp500.empty:
         sp500_aligned = align_reference_to_close(sp500)
         return close_usd / sp500_aligned
+
+    if selected_currency == CURRENCY_NDAQ and not ndaq.empty:
+        ndaq_aligned = align_reference_to_close(ndaq)
+        return close_usd / ndaq_aligned
 
     return close_usd
 
