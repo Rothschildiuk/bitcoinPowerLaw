@@ -24,6 +24,7 @@ from core.constants import (
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
+    CURRENCY_SP500,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
     COFER_CURRENCY_OPTIONS,
@@ -89,6 +90,7 @@ REFERENCE_SERIES_COLUMNS = (
     "ALUMINUMUSD",
     "OILUSD",
     "USHOUSING",
+    "SP500",
 )
 COINLORE_CRYPTO_META = {
     "FIL": {"slug": "filecoin", "start_date": "2017-12-13"},
@@ -1159,6 +1161,7 @@ def fetch_reference_series_frame(start_date):
     oil_usd = _safe_download_close_series("CL=F", start_date)
     us_housing = _fetch_fred_series(FRED_US_HOUSING_CSV_URL, "CSUSHPISA")
     us_housing = us_housing[us_housing.index >= pd.Timestamp(start_date)]
+    sp500 = _safe_download_close_series("^GSPC", start_date)
 
     return pd.concat(
         [
@@ -1172,6 +1175,7 @@ def fetch_reference_series_frame(start_date):
             aluminum_usd.rename("ALUMINUMUSD"),
             oil_usd.rename("OILUSD"),
             us_housing.rename("USHOUSING"),
+            sp500.rename("SP500"),
         ],
         axis=1,
     ).sort_index()
@@ -1272,6 +1276,11 @@ def load_reference_series(start_date, source="auto"):
         if "USHOUSING" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    sp500 = (
+        pd.to_numeric(reference_df["SP500"], errors="coerce").dropna()
+        if "SP500" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     usd_uah = (
         pd.to_numeric(reference_df["USDUAH"], errors="coerce").dropna()
         if "USDUAH" in reference_df.columns
@@ -1292,6 +1301,7 @@ def load_reference_series(start_date, source="auto"):
     aluminum_usd.index = pd.to_datetime(aluminum_usd.index)
     oil_usd.index = pd.to_datetime(oil_usd.index)
     us_housing.index = pd.to_datetime(us_housing.index)
+    sp500.index = pd.to_datetime(sp500.index)
     return (
         eur_usd,
         usd_uah,
@@ -1303,6 +1313,7 @@ def load_reference_series(start_date, source="auto"):
         aluminum_usd,
         oil_usd,
         us_housing,
+        sp500,
     )
 
 
@@ -1312,6 +1323,7 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
         return close_usd
 
     start_date = str(raw_df.index.min().date())
+    reference_series = load_reference_series(start_date, source=source)
     (
         eur_usd,
         usd_uah,
@@ -1323,7 +1335,8 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
         aluminum_usd,
         oil_usd,
         us_housing,
-    ) = load_reference_series(start_date, source=source)
+    ) = reference_series[:10]
+    sp500 = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
@@ -1377,6 +1390,10 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     if selected_currency == CURRENCY_US_HOUSING and not us_housing.empty:
         us_housing_aligned = align_reference_to_close(us_housing)
         return close_usd / us_housing_aligned
+
+    if selected_currency == CURRENCY_SP500 and not sp500.empty:
+        sp500_aligned = align_reference_to_close(sp500)
+        return close_usd / sp500_aligned
 
     return close_usd
 

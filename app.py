@@ -1060,7 +1060,7 @@ def render_portfolio_view(
                 key=KEY_PORTFOLIO_BACKTEST_YEARS,
             )
         with s4:
-            st.markdown("**Currency**")
+            st.markdown("**Quote unit**")
             st.markdown(f"`{currency_unit}`")
         submitted = st.form_submit_button("Test strategy", type="primary", width="stretch")
         if submitted:

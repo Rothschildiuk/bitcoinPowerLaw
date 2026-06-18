@@ -11,6 +11,7 @@ from core.constants import (
     CURRENCY_OPTIONS,
     CURRENCY_RUB,
     CURRENCY_SILVER,
+    CURRENCY_SP500,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
     COFER_CURRENCY_OPTIONS,
@@ -48,6 +49,7 @@ class TestConstantsSeries(unittest.TestCase):
                 CURRENCY_IRON,
                 CURRENCY_OIL,
                 CURRENCY_US_HOUSING,
+                CURRENCY_SP500,
             ],
         )
 

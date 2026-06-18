@@ -9,6 +9,7 @@ from core.constants import (
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
+    CURRENCY_SP500,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
@@ -287,6 +288,20 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(us_housing_config.target_series_unit, CURRENCY_US_HOUSING)
         self.assertIsNotNone(us_housing_config.oscillator_defaults)
         self.assertTrue(us_housing_config.supports_currency_selector)
+
+        sp500_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_SP500,
+        )
+
+        self.assertEqual(sp500_config.currency_suffix, " index")
+        self.assertEqual(sp500_config.currency_decimals, 2)
+        self.assertEqual(sp500_config.currency_unit, "S&P 500 index")
+        self.assertEqual(sp500_config.target_series_unit, CURRENCY_SP500)
+        self.assertIsNotNone(sp500_config.oscillator_defaults)
+        self.assertTrue(sp500_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(

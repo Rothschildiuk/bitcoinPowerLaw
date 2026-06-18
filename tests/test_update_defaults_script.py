@@ -9,6 +9,7 @@ from core.constants import (
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
+    CURRENCY_SP500,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
@@ -98,6 +99,12 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             DEFAULT_CASES,
         )
 
+    def test_default_cases_include_sp500_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_SP500, "DEFAULT_SP500_A", "DEFAULT_SP500_B"),
+            DEFAULT_CASES,
+        )
+
     def test_oscillator_default_cases_include_us_housing_price_model(self):
         self.assertIn(
             (
@@ -105,6 +112,17 @@ class TestUpdateDefaultsScript(unittest.TestCase):
                 CURRENCY_US_HOUSING,
                 "OSC_DEFAULTS_US_HOUSING",
                 update_powerlaw_defaults.OSC_DEFAULTS_US_HOUSING,
+            ),
+            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
+        )
+
+    def test_oscillator_default_cases_include_sp500_price_model(self):
+        self.assertIn(
+            (
+                POWERLAW_SERIES_PRICE,
+                CURRENCY_SP500,
+                "OSC_DEFAULTS_SP500",
+                update_powerlaw_defaults.OSC_DEFAULTS_SP500,
             ),
             update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
         )

@@ -10,6 +10,7 @@ from core.constants import (
     CURRENCY_OIL,
     CURRENCY_RUB,
     CURRENCY_SILVER,
+    CURRENCY_SP500,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
     DEFAULT_A,
@@ -38,6 +39,8 @@ from core.constants import (
     DEFAULT_IRON_B,
     DEFAULT_OIL_A,
     DEFAULT_OIL_B,
+    DEFAULT_SP500_A,
+    DEFAULT_SP500_B,
     DEFAULT_US_HOUSING_A,
     DEFAULT_US_HOUSING_B,
     DEFAULT_LITECOIN_BTC_A,
@@ -76,6 +79,7 @@ from core.constants import (
     KEY_A_HASHRATE,
     KEY_A_IRON,
     KEY_A_OIL,
+    KEY_A_SP500,
     KEY_A_US_HOUSING,
     KEY_A_LITECOIN_BTC,
     KEY_A_LIGHTNING_CAPACITY,
@@ -103,6 +107,7 @@ from core.constants import (
     KEY_B_HASHRATE,
     KEY_B_IRON,
     KEY_B_OIL,
+    KEY_B_SP500,
     KEY_B_US_HOUSING,
     KEY_B_LITECOIN_BTC,
     KEY_B_LIGHTNING_CAPACITY,
@@ -134,6 +139,7 @@ from core.constants import (
     OSC_DEFAULTS_OIL,
     OSC_DEFAULTS_RUB,
     OSC_DEFAULTS_SILVER,
+    OSC_DEFAULTS_SP500,
     OSC_DEFAULTS_UAH,
     OSC_DEFAULTS_US_HOUSING,
     LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
@@ -612,6 +618,18 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_unit": "Case-Shiller index",
         "oscillator_defaults": OSC_DEFAULTS_US_HOUSING,
     },
+    CURRENCY_SP500: {
+        "a_key": KEY_A_SP500,
+        "b_key": KEY_B_SP500,
+        "default_a": DEFAULT_SP500_A,
+        "default_b": DEFAULT_SP500_B,
+        "target_series_unit": CURRENCY_SP500,
+        "currency_prefix": "",
+        "currency_suffix": " index",
+        "currency_decimals": 2,
+        "currency_unit": "S&P 500 index",
+        "oscillator_defaults": OSC_DEFAULTS_SP500,
+    },
 }
 
 _POWERLAW_SERIES_GROUPS = [
@@ -733,6 +751,7 @@ def iter_session_model_defaults():
         CURRENCY_IRON,
         CURRENCY_OIL,
         CURRENCY_US_HOUSING,
+        CURRENCY_SP500,
     ):
         price_config = get_series_config(POWERLAW_SERIES_PRICE, selected_currency=currency)
         for key, value in (

@@ -560,11 +560,11 @@ def render_sidebar_panel(
 
         if is_non_price_series:
             currency = CURRENCY_DOLLAR
-            st.markdown("**Currency**")
-            st.caption("This series does not use currency conversion.")
+            st.markdown("**Quote unit**")
+            st.caption("This series does not use quote-unit conversion.")
         else:
             currency = st.radio(
-                "Currency",
+                "Quote unit",
                 CURRENCY_OPTIONS,
                 horizontal=True,
                 key=KEY_CURRENCY_SELECTOR,
