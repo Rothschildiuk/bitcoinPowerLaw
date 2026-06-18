@@ -238,7 +238,7 @@ def write_snapshot_dataframe(snapshot_key, data_df):
         data_to_store.to_csv(frame_path, index=False)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_snapshot_data_date(snapshot_key="prepared_price_data"):
     frame_path = _get_snapshot_frame_path(snapshot_key)
     if not frame_path.exists():
@@ -1206,7 +1206,7 @@ def build_incremental_reference_series_snapshot(start_date="2010-01-01"):
     return snapshot_df
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_reference_series(start_date, source="auto"):
     def fetch_reference_frame():
         return fetch_reference_series_frame(start_date)
@@ -1381,7 +1381,7 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     return close_usd
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_prepared_bitcoin_volatility_data(raw_df, rolling_window_days=30):
     close_series = pd.to_numeric(raw_df["Close"], errors="coerce").dropna()
     close_series = close_series[close_series > 0].sort_index()
@@ -1390,7 +1390,7 @@ def build_prepared_bitcoin_volatility_data(raw_df, rolling_window_days=30):
     return _normalize_prepared_close_frame(volatility.index, volatility.values)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_prepared_bitcoin_market_cap_data(price_df, supply_df):
     price_values = pd.to_numeric(price_df["Close"], errors="coerce").dropna()
     price_values = price_values[price_values > 0].sort_index()
@@ -1404,7 +1404,7 @@ def build_prepared_bitcoin_market_cap_data(price_df, supply_df):
     return _normalize_prepared_close_frame(market_cap_values.index, market_cap_values.values)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_price_data(
     price_history_url=BTC_HISTORY_CSV_URL, stale_after_days=0, source="auto"
 ):
@@ -1448,7 +1448,7 @@ def load_prepared_price_data(
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL, source="auto"):
     return _load_snapshot_or_live(
         "prepared_miner_revenue_data",
@@ -1460,7 +1460,7 @@ def load_prepared_miner_revenue_data(revenue_history_url=MINER_REVENUE_CSV_URL, 
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_bitcoin_supply_data(supply_history_url=BITCOIN_SUPPLY_CSV_URL, source="auto"):
     return _load_snapshot_or_live(
         "prepared_bitcoin_supply_data",
@@ -1476,7 +1476,7 @@ def load_prepared_bitcoin_supply_data(supply_history_url=BITCOIN_SUPPLY_CSV_URL,
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_difficulty_data(difficulty_history_url=DIFFICULTY_CSV_URL, source="auto"):
     return _load_snapshot_or_live(
         "prepared_difficulty_data",
@@ -1488,7 +1488,7 @@ def load_prepared_difficulty_data(difficulty_history_url=DIFFICULTY_CSV_URL, sou
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL, source="auto"):
     return _load_snapshot_or_live(
         "prepared_hashrate_data",
@@ -1500,7 +1500,7 @@ def load_prepared_hashrate_data(hashrate_history_url=HASHRATE_CSV_URL, source="a
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_us_m2_data(m2_history_url=FRED_M2SL_CSV_URL, source="auto"):
     return _load_snapshot_or_live(
         "prepared_us_m2_data",
@@ -1517,7 +1517,7 @@ def load_prepared_us_m2_data(m2_history_url=FRED_M2SL_CSV_URL, source="auto"):
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_usdt_supply_data(
     stablecoin_url=DEFILLAMA_USDT_STABLECOIN_URL,
     source="auto",
@@ -1537,7 +1537,7 @@ def load_prepared_usdt_supply_data(
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_imf_cofer_currency_share_data(
     cofer_url=IMF_COFER_CURRENCY_SHARES_CSV_URL,
     source="auto",
@@ -1559,7 +1559,7 @@ def load_imf_cofer_currency_share_data(
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_bitcoin_visuals_daily_data(data_url=BITCOIN_VISUALS_DAILY_CSV_URL, source="auto"):
     def fetch_daily_data():
         data_df = _fetch_csv_with_retry(data_url)
@@ -1594,7 +1594,7 @@ def _load_prepared_lightning_series(
     return _normalize_chart_csv(series_df, "Close")
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_lightning_nodes_data(
     lightning_data_url=BITCOIN_VISUALS_DAILY_CSV_URL, source="auto"
 ):
@@ -1608,7 +1608,7 @@ def load_prepared_lightning_nodes_data(
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_lightning_capacity_data(
     lightning_data_url=BITCOIN_VISUALS_DAILY_CSV_URL, source="auto"
 ):
@@ -1622,7 +1622,7 @@ def load_prepared_lightning_capacity_data(
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_filecoin_btc_data(start_date="2020-01-01", source="auto"):
     def fetch_filecoin_btc_data():
         return _fetch_prepared_crypto_btc_data("FIL", start_date, "Filecoin/BTC")
@@ -1658,7 +1658,7 @@ def _fetch_prepared_crypto_btc_data(fsym, start_date, label):
     return _normalize_chart_csv(points_df, "Close")
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_monero_btc_data(start_date="2014-01-01", source="auto"):
     def fetch_monero_btc_data():
         try:
@@ -1699,7 +1699,7 @@ def load_prepared_monero_btc_data(start_date="2014-01-01", source="auto"):
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_litecoin_btc_data(start_date="2013-01-01", source="auto"):
     def fetch_litecoin_btc_data():
         try:
@@ -1728,7 +1728,7 @@ def load_prepared_litecoin_btc_data(start_date="2013-01-01", source="auto"):
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_dogecoin_btc_data(start_date="2014-01-01", source="auto"):
     def fetch_dogecoin_btc_data():
         try:
@@ -1761,7 +1761,7 @@ def load_prepared_dogecoin_btc_data(start_date="2014-01-01", source="auto"):
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_liquid_btc_data(
     liquid_reserves_month_url=LIQUID_RESERVES_MONTH_URL,
     liquid_reserves_url=LIQUID_RESERVES_URL,
@@ -1838,7 +1838,7 @@ def load_prepared_liquid_btc_data(
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prepared_liquid_transactions_data(
     liquid_charts_data_url=LIQUID_CHARTS_DATA_URL, source="auto"
 ):

@@ -39,10 +39,10 @@ def _build_snapshot_jobs():
         "prepared_bitcoin_supply_data": lambda: load_prepared_bitcoin_supply_data(source="live"),
         "prepared_difficulty_data": lambda: load_prepared_difficulty_data(source="live"),
         "prepared_hashrate_data": lambda: load_prepared_hashrate_data(source="live"),
-        "bitcoin_visuals_daily_data": lambda: load_bitcoin_visuals_daily_data(source="live"),
-        "prepared_lightning_nodes_data": lambda: load_prepared_lightning_nodes_data(source="live"),
+        "bitcoin_visuals_daily_data": lambda: load_bitcoin_visuals_daily_data(source="auto"),
+        "prepared_lightning_nodes_data": lambda: load_prepared_lightning_nodes_data(source="auto"),
         "prepared_lightning_capacity_data": lambda: load_prepared_lightning_capacity_data(
-            source="live"
+            source="auto"
         ),
         "prepared_liquid_btc_data": lambda: load_prepared_liquid_btc_data(source="live"),
         "prepared_liquid_transactions_data": lambda: load_prepared_liquid_transactions_data(
