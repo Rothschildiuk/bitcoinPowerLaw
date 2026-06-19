@@ -243,9 +243,7 @@ def _format_sigma_line_name(level):
 
 
 def _optional_sigma_line_style(level):
-    if level > 0.0:
-        return dict(color="rgba(234, 61, 47, 0.72)", width=1.0, dash="dash")
-    return dict(color="rgba(17, 153, 214, 0.72)", width=1.0, dash="dash")
+    return dict(color="rgba(168, 85, 247, 0.76)", width=1.0, dash="dash")
 
 
 def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendrank=35):
@@ -634,7 +632,7 @@ def render_main_model_chart(
                 peak_values,
                 "Peak PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
-                "peak_powerlaw",
+                "powerlaw_envelope",
                 visible="legendonly",
             )
             peak_days = np.asarray(peak_overlay["peak_days"], dtype=float)
@@ -677,7 +675,7 @@ def render_main_model_chart(
                 trough_values,
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
-                "trough_powerlaw",
+                "powerlaw_envelope",
                 visible="legendonly",
             )
             trough_days = np.asarray(trough_overlay["trough_days"], dtype=float)
@@ -771,19 +769,31 @@ def render_main_model_chart(
             "power_regression",
             legendrank=20,
         )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
+        if (
+            peak_powerlaw_overlay is not None
+            and peak_powerlaw_overlay.get("peak") is not None
+            and peak_powerlaw_overlay.get("trough") is not None
+        ):
             add_legend_item(
-                "Peak PowerLaw",
+                "Peak/Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
-                "peak_powerlaw",
+                "powerlaw_envelope",
                 visible="legendonly",
                 legendrank=30,
             )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
+        elif peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
+            add_legend_item(
+                "Peak PowerLaw",
+                dict(color="#22c55e", width=1.6, dash="longdash"),
+                "powerlaw_envelope",
+                visible="legendonly",
+                legendrank=30,
+            )
+        elif peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
             add_legend_item(
                 "Trough PowerLaw",
                 dict(color="#22c55e", width=1.6, dash="longdash"),
-                "trough_powerlaw",
+                "powerlaw_envelope",
                 visible="legendonly",
                 legendrank=40,
             )

@@ -80,6 +80,20 @@ COFER_CURRENCY_GROUPS = [
 ]
 
 
+def _render_envelope_sigma_slider():
+    st.markdown("**Envelope sigma**")
+    st.slider(
+        "Envelope sigma",
+        min_value=0.0,
+        max_value=2.0,
+        step=0.25,
+        format="%g",
+        key=KEY_POWERLAW_ENVELOPE_SIGMA,
+        label_visibility="collapsed",
+    )
+    st.markdown("<div class='sidebar-slider-spacer'></div>", unsafe_allow_html=True)
+
+
 def _render_cofer_currency_selector():
     selected_cofer_currencies = st.session_state.get(
         KEY_COFER_CURRENCIES,
@@ -286,15 +300,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             label_visibility="collapsed",
         )
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
-        st.markdown("**Envelope sigma**")
-        st.slider(
-            "Envelope sigma",
-            min_value=0.0,
-            max_value=2.0,
-            step=0.25,
-            key=KEY_POWERLAW_ENVELOPE_SIGMA,
-            label_visibility="collapsed",
-        )
+        _render_envelope_sigma_slider()
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
         st.markdown("**Forecast unit**")
         forecast_unit = st.radio(
@@ -545,15 +551,7 @@ def render_sidebar_panel(
                         label_visibility="collapsed",
                         width="stretch",
                     )
-            st.markdown("**Envelope sigma**")
-            st.slider(
-                "Envelope sigma",
-                min_value=0.0,
-                max_value=2.0,
-                step=0.25,
-                key=KEY_POWERLAW_ENVELOPE_SIGMA,
-                label_visibility="collapsed",
-            )
+            _render_envelope_sigma_slider()
         is_non_price_series = not series_supports_currency_selector(
             mode, powerlaw_series, logperiodic_series
         )

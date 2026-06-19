@@ -309,21 +309,20 @@ class TestUIChartsHelpers(unittest.TestCase):
 
         self.assertEqual(traces_by_name["Peak PowerLaw"].visible, "legendonly")
         self.assertEqual(traces_by_name["Trough PowerLaw"].visible, "legendonly")
+        self.assertEqual(traces_by_name["Peak PowerLaw"].legendgroup, "powerlaw_envelope")
+        self.assertEqual(traces_by_name["Trough PowerLaw"].legendgroup, "powerlaw_envelope")
+        self.assertEqual(traces_by_name["Peak/Trough PowerLaw"].visible, "legendonly")
+        self.assertEqual(
+            traces_by_name["Peak/Trough PowerLaw"].legendgroup,
+            "powerlaw_envelope",
+        )
         self.assertEqual(traces_by_name["Peak fit points"].visible, "legendonly")
         self.assertEqual(traces_by_name["Peak fit points"].legendgroup, "peak_fit_points")
         self.assertEqual(traces_by_name["Trough fit points"].visible, "legendonly")
         self.assertEqual(traces_by_name["Trough fit points"].legendgroup, "trough_fit_points")
         self.assertLess(
-            traces_by_name["Peak PowerLaw"].legendrank,
+            traces_by_name["Peak/Trough PowerLaw"].legendrank,
             traces_by_name["Peak fit points"].legendrank,
-        )
-        self.assertLess(
-            traces_by_name["Peak fit points"].legendrank,
-            traces_by_name["Trough PowerLaw"].legendrank,
-        )
-        self.assertLess(
-            traces_by_name["Trough PowerLaw"].legendrank,
-            traces_by_name["Trough fit points"].legendrank,
         )
         self.assertLess(captured["fig"].layout.legend.y, 0.0)
         self.assertEqual(captured["fig"].layout.legend.yanchor, "top")
