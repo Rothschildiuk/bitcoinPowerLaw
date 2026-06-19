@@ -289,7 +289,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         st.markdown("**Envelope sigma**")
         st.slider(
             "Envelope sigma",
-            min_value=0.25,
+            min_value=0.0,
             max_value=2.0,
             step=0.25,
             key=KEY_POWERLAW_ENVELOPE_SIGMA,
@@ -548,7 +548,7 @@ def render_sidebar_panel(
             st.markdown("**Envelope sigma**")
             st.slider(
                 "Envelope sigma",
-                min_value=0.25,
+                min_value=0.0,
                 max_value=2.0,
                 step=0.25,
                 key=KEY_POWERLAW_ENVELOPE_SIGMA,
