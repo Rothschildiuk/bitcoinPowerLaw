@@ -1,6 +1,6 @@
 {
   "name": "powerlaw",
-  "version": "1.1.59",
+  "version": "1.1.77",
   "description": "PowerLaw app helper package",
   "scripts": {
     "test": "echo \"No JS tests configured\" && exit 0"
