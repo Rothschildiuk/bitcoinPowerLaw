@@ -5,12 +5,14 @@ import pandas as pd
 
 from ui.kpi import (
     calculate_current_powerlaw_sigma_level,
+    calculate_negative_two_sigma_monthly_growth,
     calculate_powerlaw_band_shares,
     filter_sigma_band_history,
     filter_sigma_band_history_percent_range,
     format_sigma_band_history_percent_range,
     resolve_sigma_band_history_percent_range,
     _render_sigma_band_chart,
+    _resolve_display_conversion_rate,
 )
 
 
@@ -192,6 +194,28 @@ class TestUIKpi(unittest.TestCase):
         )
 
         self.assertAlmostEqual(sigma_level, 0.25)
+
+    def test_calculate_negative_two_sigma_monthly_growth_uses_centered_today_window(self):
+        df_display = pd.DataFrame(
+            {"AbsDays": [1000.0]},
+            index=pd.to_datetime(["2024-01-16"]),
+        )
+
+        growth = calculate_negative_two_sigma_monthly_growth(
+            df_display,
+            a_active=2.0,
+            b_active=0.5,
+            p2_5=-0.4,
+            today="2024-01-16",
+        )
+
+        expected_growth = (10**1.6) * ((1015.0**0.5) - (985.0**0.5))
+        self.assertTrue(np.isclose(growth, expected_growth))
+
+    def test_resolve_display_conversion_rate_uses_fair_display_ratio(self):
+        df_display = pd.DataFrame({"Fair": [100.0], "FairDisplay": [90.0]})
+
+        self.assertAlmostEqual(_resolve_display_conversion_rate(df_display), 0.9)
 
     def test_render_sigma_band_chart_marks_current_band(self):
         shares = calculate_powerlaw_band_shares(

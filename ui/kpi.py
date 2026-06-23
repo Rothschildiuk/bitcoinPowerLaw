@@ -293,6 +293,73 @@ def calculate_current_powerlaw_sigma_level(df_display, p2_5, p16_5, p83_5, p97_5
     return interpolate_sigma_level_from_log_offset(valid_residuals[-1], percentile_offsets)
 
 
+def calculate_negative_two_sigma_monthly_growth(
+    df_display,
+    a_active,
+    b_active,
+    p2_5,
+    today=None,
+):
+    if df_display.empty or "AbsDays" not in df_display:
+        return 0.0
+
+    date_index = pd.to_datetime(df_display.index, errors="coerce")
+    valid_dates = date_index[~pd.isna(date_index)]
+    valid_abs_days = np.asarray(df_display["AbsDays"], dtype=float)
+    valid_abs_days = valid_abs_days[np.isfinite(valid_abs_days)]
+    if len(valid_dates) == 0 or valid_abs_days.size == 0:
+        return 0.0
+
+    if today is None:
+        today_date = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    else:
+        today_date = pd.Timestamp(today)
+        if today_date.tzinfo is not None:
+            today_date = today_date.tz_localize(None)
+        today_date = today_date.normalize()
+
+    first_date = pd.Timestamp(valid_dates.min()).normalize()
+    first_abs_day = float(valid_abs_days[0])
+    start_date = today_date - pd.Timedelta(days=15)
+    end_date = today_date + pd.Timedelta(days=15)
+    start_days = first_abs_day + float((start_date - first_date).days)
+    end_days = first_abs_day + float((end_date - first_date).days)
+    if not np.isfinite(start_days) or not np.isfinite(end_days) or start_days <= 0.0:
+        return 0.0
+    end_days = max(end_days, start_days + 1.0)
+
+    current_band_value, _, _ = evaluate_powerlaw_values(
+        np.array([np.log10(start_days)]),
+        float(a_active) + float(p2_5),
+        float(b_active),
+    )
+    next_month_band_value, _, _ = evaluate_powerlaw_values(
+        np.array([np.log10(end_days)]),
+        float(a_active) + float(p2_5),
+        float(b_active),
+    )
+    current_band_value = float(current_band_value[0])
+    next_month_band_value = float(next_month_band_value[0])
+    if not np.isfinite(current_band_value) or current_band_value <= 0.0:
+        return 0.0
+
+    monthly_growth = next_month_band_value - current_band_value
+    if not np.isfinite(monthly_growth):
+        return 0.0
+    return max(0.0, float(monthly_growth))
+
+
+def _resolve_display_conversion_rate(df_display):
+    if "Fair" not in df_display or "FairDisplay" not in df_display:
+        return 1.0
+
+    fair = float(df_display["Fair"].iloc[-1])
+    fair_display = float(df_display["FairDisplay"].iloc[-1])
+    if not np.isfinite(fair) or fair <= 0.0 or not np.isfinite(fair_display) or fair_display <= 0.0:
+        return 1.0
+    return fair_display / fair
+
+
 def _sigma_band_contains_level(band, sigma_level):
     if sigma_level is None or not np.isfinite(float(sigma_level)):
         return False
@@ -369,13 +436,13 @@ def render_model_kpis(
         df_display["FairDisplay"].iloc[-1],
     )
     diff = ((l_p - l_f) / l_f) * 100
-    pot_target, _, _ = evaluate_powerlaw_values(
-        np.array([np.log10(df_display["Days"].max())]),
-        a_active + p97_5,
+    monthly_growth = calculate_negative_two_sigma_monthly_growth(
+        df_display,
+        a_active,
         b_active,
+        p2_5,
     )
-    pot_target = float(pot_target[0])
-    pot = ((pot_target - l_p) / l_p) * 100
+    monthly_growth_display = monthly_growth * _resolve_display_conversion_rate(df_display)
 
     k1, k2, k3 = st.columns(3)
     _kpi_card(
@@ -392,7 +459,18 @@ def render_model_kpis(
         f"{diff:+.1f}% from model",
         "#0ecb81" if diff < 0 else "#ea3d2f",
     )
-    _kpi_card(k3, "GROWTH POTENTIAL", f"+{pot:,.0f}%", "to top band", "#f0b90b")
+    _kpi_card(
+        k3,
+        "-2σ MONTHLY GROWTH",
+        _format_money(
+            monthly_growth_display,
+            currency_prefix,
+            currency_suffix,
+            currency_decimals,
+        ),
+        "per 1 BTC",
+        "#f0b90b",
+    )
 
     if logperiodic_stats_rows or perrenod_stats_rows:
         from core.oscillator import render_logperiodic_regression_stats_table
