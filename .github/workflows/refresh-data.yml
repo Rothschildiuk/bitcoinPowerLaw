@@ -42,6 +42,8 @@ jobs:
       - name: Check out repository
         if: steps.schedule_guard.outputs.should_run == 'true'
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         if: steps.schedule_guard.outputs.should_run == 'true'
@@ -79,7 +81,7 @@ jobs:
       - name: Commit and push data refresh
         if: steps.changes.outputs.has_changes == 'true'
         run: |
-          python3 scripts/bump_version.py patch
-          git add core/constants.py package.json package-lock.json data/snapshots
-          git commit -m "Update daily data snapshots"
-          git push
+          git add core/constants.py data/snapshots
+          POWERLAW_SKIP_VERSION_BUMP=1 git commit -m "Update daily data snapshots"
+          python3 scripts/squash_snapshot_commits.py
+          git push --force-with-lease origin HEAD:${GITHUB_REF_NAME}
