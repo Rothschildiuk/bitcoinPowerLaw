@@ -27,6 +27,7 @@ from services.price_service import (  # noqa: E402
     load_prepared_price_data,
     load_prepared_usdt_supply_data,
     load_prepared_us_m2_data,
+    write_snapshot_refresh_metadata,
     write_snapshot_dataframe,
 )
 
@@ -77,6 +78,9 @@ def update_snapshots(selected_jobs: list[str] | None = None, *, dry_run: bool = 
         if not dry_run:
             write_snapshot_dataframe(snapshot_key, frame)
         print(f"{snapshot_key}: rows={len(frame)}")
+
+    if not dry_run:
+        write_snapshot_refresh_metadata()
 
 
 def main():

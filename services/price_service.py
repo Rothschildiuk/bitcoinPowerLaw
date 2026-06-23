@@ -73,6 +73,7 @@ IMF_COFER_CURRENCY_CODE_MAP = {
 }
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
 SNAPSHOT_DATA_DIR = Path("data/snapshots")
+SNAPSHOT_REFRESH_METADATA_FILENAME = "refresh_metadata.json"
 DATA_SOURCE_ENV_VAR = "POWERLAW_DATA_SOURCE"
 DATA_SOURCE_MODES = {"auto", "snapshot", "live"}
 LOCAL_CACHE_SCHEMA_VERSION = 5
@@ -154,6 +155,10 @@ def _get_cache_meta_path(cache_key):
 
 def _get_snapshot_frame_path(snapshot_key):
     return SNAPSHOT_DATA_DIR / f"{snapshot_key}.csv"
+
+
+def _get_snapshot_refresh_metadata_path():
+    return SNAPSHOT_DATA_DIR / SNAPSHOT_REFRESH_METADATA_FILENAME
 
 
 def _read_cache_meta(cache_key):
@@ -242,6 +247,55 @@ def write_snapshot_dataframe(snapshot_key, data_df):
         data_to_store.to_csv(frame_path, index=False)
 
 
+def _coerce_utc_timestamp(value):
+    timestamp = pd.Timestamp(value)
+    if pd.isna(timestamp):
+        return None
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("UTC")
+    else:
+        timestamp = timestamp.tz_convert("UTC")
+    return timestamp
+
+
+def write_snapshot_refresh_metadata(refreshed_at=None):
+    _ensure_snapshot_data_dir()
+    refreshed_timestamp = _coerce_utc_timestamp(refreshed_at or pd.Timestamp.utcnow())
+    if refreshed_timestamp is None:
+        return
+
+    metadata = {
+        "refreshed_at_utc": refreshed_timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    _get_snapshot_refresh_metadata_path().write_text(
+        json.dumps(metadata, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _read_snapshot_refresh_timestamp():
+    metadata_path = _get_snapshot_refresh_metadata_path()
+    if not metadata_path.exists():
+        return None
+
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    refreshed_at = metadata.get("refreshed_at_utc")
+    if not refreshed_at:
+        return None
+    return _coerce_utc_timestamp(refreshed_at)
+
+
+def _format_snapshot_refresh_timestamp(timestamp):
+    timestamp = _coerce_utc_timestamp(timestamp)
+    if timestamp is None:
+        return None
+    return timestamp.strftime("%Y-%m-%d %H:%M UTC")
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_snapshot_data_date(snapshot_key="prepared_price_data"):
     frame_path = _get_snapshot_frame_path(snapshot_key)
@@ -254,10 +308,14 @@ def get_snapshot_data_date(snapshot_key="prepared_price_data"):
     if not isinstance(snapshot_df.index, pd.DatetimeIndex):
         return None
 
-    latest_snapshot_timestamp = pd.Timestamp.fromtimestamp(frame_path.stat().st_mtime)
+    metadata_timestamp = _read_snapshot_refresh_timestamp()
+    if metadata_timestamp is not None:
+        return _format_snapshot_refresh_timestamp(metadata_timestamp)
+
+    latest_snapshot_timestamp = pd.Timestamp.fromtimestamp(frame_path.stat().st_mtime, tz="UTC")
     if pd.isna(latest_snapshot_timestamp):
         return None
-    return latest_snapshot_timestamp.strftime("%Y-%m-%d %H:%M")
+    return _format_snapshot_refresh_timestamp(latest_snapshot_timestamp)
 
 
 def _is_cache_refresh_due(cache_key, min_check_interval_seconds):

@@ -81,6 +81,50 @@ class TestUpdateDataSnapshotsScript(unittest.TestCase):
         mock_build_incremental_reference_series_snapshot.assert_called_once_with()
         self.assertEqual(float(result.iloc[0]["EURUSD"]), 1.0)
 
+    @patch("scripts.update_data_snapshots.write_snapshot_refresh_metadata")
+    @patch("scripts.update_data_snapshots.write_snapshot_dataframe")
+    def test_update_snapshots_writes_refresh_metadata(
+        self,
+        mock_write_snapshot_dataframe,
+        mock_write_snapshot_refresh_metadata,
+    ):
+        with patch.object(
+            update_data_snapshots,
+            "_build_snapshot_jobs",
+            return_value={
+                "prepared_price_data": lambda: pd.DataFrame(
+                    {"Close": [1.0]},
+                    index=pd.to_datetime(["2024-01-01"]),
+                )
+            },
+        ):
+            update_data_snapshots.update_snapshots(["prepared_price_data"])
+
+        mock_write_snapshot_dataframe.assert_called_once()
+        mock_write_snapshot_refresh_metadata.assert_called_once_with()
+
+    @patch("scripts.update_data_snapshots.write_snapshot_refresh_metadata")
+    @patch("scripts.update_data_snapshots.write_snapshot_dataframe")
+    def test_update_snapshots_dry_run_skips_refresh_metadata(
+        self,
+        mock_write_snapshot_dataframe,
+        mock_write_snapshot_refresh_metadata,
+    ):
+        with patch.object(
+            update_data_snapshots,
+            "_build_snapshot_jobs",
+            return_value={
+                "prepared_price_data": lambda: pd.DataFrame(
+                    {"Close": [1.0]},
+                    index=pd.to_datetime(["2024-01-01"]),
+                )
+            },
+        ):
+            update_data_snapshots.update_snapshots(["prepared_price_data"], dry_run=True)
+
+        mock_write_snapshot_dataframe.assert_not_called()
+        mock_write_snapshot_refresh_metadata.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

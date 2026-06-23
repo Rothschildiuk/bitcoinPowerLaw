@@ -186,7 +186,18 @@ class TestPriceService(unittest.TestCase):
             ["2024-01-01", "2024-01-02"],
         )
 
-    def test_get_snapshot_data_date_returns_snapshot_file_timestamp(self):
+    def test_get_snapshot_data_date_returns_refresh_metadata_timestamp(self):
+        price_service.get_snapshot_data_date.clear()
+        snapshot_df = pd.DataFrame(
+            {"Close": [100.0, 120.0]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-03"]),
+        )
+        price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df)
+        price_service.write_snapshot_refresh_metadata("2024-01-03T14:25:30Z")
+
+        self.assertEqual(price_service.get_snapshot_data_date(), "2024-01-03 14:25 UTC")
+
+    def test_get_snapshot_data_date_falls_back_to_snapshot_file_timestamp(self):
         price_service.get_snapshot_data_date.clear()
         snapshot_df = pd.DataFrame(
             {"Close": [100.0, 120.0]},
@@ -199,9 +210,10 @@ class TestPriceService(unittest.TestCase):
             snapshot_path,
             (snapshot_timestamp.timestamp(), snapshot_timestamp.timestamp()),
         )
-        expected_timestamp = pd.Timestamp.fromtimestamp(snapshot_path.stat().st_mtime).strftime(
-            "%Y-%m-%d %H:%M"
-        )
+        expected_timestamp = pd.Timestamp.fromtimestamp(
+            snapshot_path.stat().st_mtime,
+            tz="UTC",
+        ).strftime("%Y-%m-%d %H:%M UTC")
 
         self.assertEqual(price_service.get_snapshot_data_date(), expected_timestamp)
 

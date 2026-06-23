@@ -38,6 +38,7 @@ node_modules/
 !data/
 !data/snapshots/
 !data/snapshots/*.csv
+!data/snapshots/refresh_metadata.json
 !data/snapshots/README.md
 output/data_cache/
 output/playwright/.npm-cache/
