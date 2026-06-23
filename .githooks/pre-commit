@@ -6,5 +6,24 @@ if [ "${POWERLAW_SKIP_VERSION_BUMP:-}" = "1" ]; then
   exit 0
 fi
 
+staged_files=$(git diff --cached --name-only --diff-filter=ACDMRTUXB)
+if [ -n "$staged_files" ]; then
+  data_snapshot_only=1
+  for path in $staged_files; do
+    case "$path" in
+      data/snapshots/*) ;;
+      *)
+        data_snapshot_only=0
+        break
+        ;;
+    esac
+  done
+
+  if [ "$data_snapshot_only" = "1" ]; then
+    echo "Skipping PowerLaw version bump for data snapshot-only commit"
+    exit 0
+  fi
+fi
+
 python3 scripts/bump_version.py patch
 git add core/constants.py package.json package-lock.json
