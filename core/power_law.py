@@ -211,6 +211,40 @@ def calculate_r2_for_manual_params(
     return calculate_r2_score(valid_log_prices, predicted_log_prices)
 
 
+def calculate_r2_for_manual_params_on_rolling_mean(
+    absolute_days,
+    values,
+    genesis_offset_days,
+    intercept_a,
+    slope_b,
+    window_days=90,
+):
+    """Calculates R2 for manual A/B against a rolling mean of raw positive values."""
+    absolute_days = np.asarray(absolute_days, dtype=float)
+    values = np.asarray(values, dtype=float)
+    days_since_offset = absolute_days - genesis_offset_days
+    positive_mask = (days_since_offset > 0) & np.isfinite(values) & (values > 0)
+
+    if np.sum(positive_mask) < int(window_days):
+        return 0.0
+
+    valid_days = days_since_offset[positive_mask]
+    valid_values = values[positive_mask]
+    rolling_kernel = np.ones(int(window_days), dtype=float) / float(window_days)
+    rolling_values = np.convolve(valid_values, rolling_kernel, mode="valid")
+    rolling_days = valid_days[int(window_days) - 1 :]
+    rolling_mask = np.isfinite(rolling_values) & (rolling_values > 0)
+
+    if np.sum(rolling_mask) < 100:
+        return 0.0
+
+    valid_log_values = np.log10(rolling_values[rolling_mask])
+    log_days = np.log10(rolling_days[rolling_mask])
+    predicted_log_values = intercept_a + slope_b * log_days
+
+    return calculate_r2_score(valid_log_values, predicted_log_values)
+
+
 def find_best_fit_params(absolute_days, log_prices):
     slope_b, intercept_a, r2_score = fit_powerlaw_regression(absolute_days, log_prices, 0)
     return 0, intercept_a, slope_b, r2_score
@@ -284,6 +318,9 @@ def render_sidebar(
     all_abs_days,
     all_log_close,
     text_color,
+    r2_values=None,
+    r2_rolling_window_days=None,
+    r2_label="PowerLaw R²",
     render_extra_controls=None,
     render_after_actions=None,
     a_key=KEY_A,
@@ -387,13 +424,23 @@ def render_sidebar(
         auto_fit_label="AF",
     )
 
-    display_r2 = calculate_r2_for_manual_params(
-        all_abs_days,
-        all_log_close,
-        current_offset(),
-        float(st.session_state.get(a_key, opt_a)),
-        float(st.session_state.get(b_key, opt_b)),
-    )
+    if r2_values is not None and r2_rolling_window_days is not None:
+        display_r2 = calculate_r2_for_manual_params_on_rolling_mean(
+            all_abs_days,
+            r2_values,
+            current_offset(),
+            float(st.session_state.get(a_key, opt_a)),
+            float(st.session_state.get(b_key, opt_b)),
+            window_days=int(r2_rolling_window_days),
+        )
+    else:
+        display_r2 = calculate_r2_for_manual_params(
+            all_abs_days,
+            all_log_close,
+            current_offset(),
+            float(st.session_state.get(a_key, opt_a)),
+            float(st.session_state.get(b_key, opt_b)),
+        )
     _, _, params_were_clipped = evaluate_powerlaw_values(
         np.log10(
             np.maximum(
@@ -410,7 +457,7 @@ def render_sidebar(
 
     st.markdown(
         f"<p style='color:{text_color}; margin-top: 2px;'>"
-        f"PowerLaw R² = {display_r2 * 100:.4f}%</p>",
+        f"{r2_label} = {display_r2 * 100:.4f}%</p>",
         unsafe_allow_html=True,
     )
     if display_r2 < 0 or params_were_clipped:

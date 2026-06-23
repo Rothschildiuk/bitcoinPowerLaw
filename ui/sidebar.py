@@ -42,6 +42,7 @@ from core.constants import (
     POWERLAW_INTERCEPT_MAX,
     POWERLAW_INTERCEPT_MIN,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
+    POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SLOPE_MAX,
     POWERLAW_SLOPE_MIN,
@@ -587,15 +588,25 @@ def render_sidebar_panel(
         active_series_data = sidebar_series_data[active_model.series_name]
         model_abs_days = active_series_data["absolute_days"]
         model_log_close = active_series_data["log_close"]
+        model_close = active_series_data.get("close")
         if active_model.analysis_min_abs_day is not None:
             analysis_mask = model_abs_days >= float(active_model.analysis_min_abs_day)
             model_abs_days = model_abs_days[analysis_mask]
             model_log_close = model_log_close[analysis_mask]
+            if model_close is not None:
+                model_close = model_close[analysis_mask]
         a_key = active_model.a_key
         b_key = active_model.b_key
         default_a = active_model.default_a
         default_b = active_model.default_b
         model_origin_abs_day = active_model.model_origin_abs_day
+        r2_values = None
+        r2_label = "PowerLaw R²"
+        r2_rolling_window_days = None
+        if active_model.series_name == POWERLAW_SERIES_BITCOIN_VOLATILITY:
+            r2_values = model_close
+            r2_label = "PowerLaw R² (90D MA)"
+            r2_rolling_window_days = 90
 
         if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
             reset_a = default_a if mode == MODE_POWERLAW else PORTFOLIO_RESET_A
@@ -604,6 +615,9 @@ def render_sidebar_panel(
                 model_abs_days,
                 model_log_close,
                 c_text_main,
+                r2_values=r2_values,
+                r2_rolling_window_days=r2_rolling_window_days,
+                r2_label=r2_label,
                 render_extra_controls=(
                     lambda: (
                         _render_portfolio_sidebar_controls(

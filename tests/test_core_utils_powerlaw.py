@@ -6,6 +6,7 @@ import pandas as pd
 
 from core.power_law import (
     calculate_r2_for_manual_params,
+    calculate_r2_for_manual_params_on_rolling_mean,
     find_best_fit_params_for_offset,
     fit_peak_powerlaw_envelope,
     fit_powerlaw_regression,
@@ -153,6 +154,30 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         log_prices = intercept + slope * np.log10(days)
 
         r2 = calculate_r2_for_manual_params(days, log_prices, 0, intercept, slope)
+        self.assertTrue(np.isclose(r2, 1.0, atol=1e-12))
+
+    def test_calculate_r2_for_manual_params_on_rolling_mean_uses_smoothed_values(self):
+        days = np.arange(1, 220, dtype=float)
+        slope = -0.1
+        intercept = 2.0
+        window_days = 3
+        rolling_days = days[window_days - 1 :]
+        target_rolling_values = 10 ** (intercept + slope * np.log10(rolling_days))
+        values = np.empty_like(days)
+        values[0] = target_rolling_values[0]
+        values[1] = target_rolling_values[0]
+        for idx, target in enumerate(target_rolling_values, start=window_days - 1):
+            values[idx] = (target * window_days) - values[idx - 1] - values[idx - 2]
+
+        r2 = calculate_r2_for_manual_params_on_rolling_mean(
+            days,
+            values,
+            0,
+            intercept,
+            slope,
+            window_days=window_days,
+        )
+
         self.assertTrue(np.isclose(r2, 1.0, atol=1e-12))
 
     @patch("core.power_law.fit_powerlaw_regression")
