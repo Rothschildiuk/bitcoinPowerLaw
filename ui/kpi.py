@@ -9,7 +9,9 @@ from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_lo
 
 SIGMA_STEP = 0.25
 SIGMA_HALF_STEP = SIGMA_STEP / 2.0
-SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.0, 2.0 + SIGMA_STEP, SIGMA_STEP))
+SIGMA_LEVELS = tuple(
+    float(value) for value in np.arange(-2.25, 2.25 + SIGMA_STEP, SIGMA_STEP)
+)
 SIGMA_BAND_HISTORY_ALL = 0
 SIGMA_BAND_HISTORY_PERCENT_MIN = 0
 SIGMA_BAND_HISTORY_PERCENT_MAX = 100
@@ -443,8 +445,14 @@ def render_model_kpis(
         p2_5,
     )
     monthly_growth_display = monthly_growth * _resolve_display_conversion_rate(df_display)
+    current_sigma_level = calculate_current_powerlaw_sigma_level(
+        df_display, p2_5, p16_5, p83_5, p97_5
+    )
+    current_sigma_display = (
+        f"{current_sigma_level:+.2f}σ" if current_sigma_level is not None else "N/A"
+    )
 
-    k1, k2, k3 = st.columns(3)
+    k1, k2, k3, k4 = st.columns(4)
     _kpi_card(
         k1,
         f"{target_series_name.upper()}",
@@ -471,6 +479,13 @@ def render_model_kpis(
         "per 1 BTC",
         "#f0b90b",
     )
+    _kpi_card(
+        k4,
+        "CURRENT SIGMA",
+        current_sigma_display,
+        "from PowerLaw",
+        "#9ba3af",
+    )
 
     if logperiodic_stats_rows or perrenod_stats_rows:
         from core.oscillator import render_logperiodic_regression_stats_table
@@ -485,8 +500,5 @@ def render_model_kpis(
     )
     band_df = filter_sigma_band_history_percent_range(df_display, selected_history_range)
     band_shares = calculate_powerlaw_band_shares(band_df, p2_5, p16_5, p83_5, p97_5)
-    current_sigma_level = calculate_current_powerlaw_sigma_level(
-        df_display, p2_5, p16_5, p83_5, p97_5
-    )
     history_label = format_sigma_band_history_percent_range(selected_history_range)
     _render_sigma_band_chart(band_shares, current_sigma_level, history_label)

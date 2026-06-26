@@ -21,6 +21,7 @@ class TestUIKpi(unittest.TestCase):
         df_display = pd.DataFrame(
             {
                 "Res": [
+                    -2.25,
                     -2.0,
                     -1.75,
                     -1.5,
@@ -38,6 +39,7 @@ class TestUIKpi(unittest.TestCase):
                     1.5,
                     1.75,
                     2.0,
+                    2.25,
                     np.nan,
                 ]
             }
@@ -54,7 +56,8 @@ class TestUIKpi(unittest.TestCase):
         self.assertEqual(
             [band["label"] for band in shares],
             [
-                "< -1.875σ",
+                "< -2.125σ",
+                "-2.125σ to -1.875σ",
                 "-1.875σ to -1.625σ",
                 "-1.625σ to -1.375σ",
                 "-1.375σ to -1.125σ",
@@ -70,12 +73,14 @@ class TestUIKpi(unittest.TestCase):
                 "+1.125σ to +1.375σ",
                 "+1.375σ to +1.625σ",
                 "+1.625σ to +1.875σ",
-                "> +1.875σ",
+                "+1.875σ to +2.125σ",
+                "> +2.125σ",
             ],
         )
         self.assertEqual(
             [band["compact_label"] for band in shares],
             [
+                "-2.25",
                 "-2",
                 "-1.75",
                 "-1.5",
@@ -93,9 +98,10 @@ class TestUIKpi(unittest.TestCase):
                 "+1.5",
                 "+1.75",
                 "+2",
+                "+2.25",
             ],
         )
-        expected_share = 100.0 / 17.0
+        expected_share = 100.0 / 19.0
         for band in shares:
             self.assertAlmostEqual(band["share"], expected_share)
 
@@ -110,7 +116,7 @@ class TestUIKpi(unittest.TestCase):
             p97_5=1.0,
         )
 
-        self.assertEqual([band["share"] for band in shares], [0.0] * 17)
+        self.assertEqual([band["share"] for band in shares], [0.0] * 19)
 
     def test_filter_sigma_band_history_keeps_only_recent_years(self):
         df_display = pd.DataFrame(
@@ -241,7 +247,7 @@ class TestUIKpi(unittest.TestCase):
             ui.kpi.st.markdown = original_markdown
 
         self.assertTrue(rendered["unsafe_allow_html"])
-        self.assertEqual(rendered["html"].count("class='sigma-bar-item"), 17)
+        self.assertEqual(rendered["html"].count("class='sigma-bar-item"), 19)
         self.assertEqual(rendered["html"].count("sigma-bar-item-current"), 1)
         self.assertIn(
             "<div class='sigma-bar-item' title='-0.125σ to +0.125σ'>",
