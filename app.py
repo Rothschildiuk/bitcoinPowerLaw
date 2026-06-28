@@ -38,7 +38,7 @@ from core.constants import (
     KEY_LOGPERIODIC_HARMONICS,
     KEY_LOGPERIODIC_SERIES,
     KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
-    KEY_POWERLAW_ENVELOPE_SIGMA,
+    KEY_POWERLAW_SIGMA_DISPLAY_MODE,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BACKTEST_HAS_RUN,
     KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL,
@@ -60,6 +60,7 @@ from core.constants import (
     MODE_PORTFOLIO,
     MODE_POWERLAW,
     OSC_DEFAULTS,
+    POWERLAW_SIGMA_MODE_CLASSIC,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
@@ -149,7 +150,7 @@ def initialize_app_session_state():
         KEY_COFER_CURRENCIES: list(COFER_DEFAULT_CURRENCIES),
         KEY_LOGPERIODIC_HARMONICS: int(OSC_DEFAULTS.get("harmonic_count", 1)),
         KEY_LOGPERIODIC_SHOW_DECAYED_DSI: True,
-        KEY_POWERLAW_ENVELOPE_SIGMA: 1.0,
+        KEY_POWERLAW_SIGMA_DISPLAY_MODE: POWERLAW_SIGMA_MODE_CLASSIC,
         KEY_SIGMA_BAND_HISTORY_RANGE_PCT: (0, 100),
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
@@ -554,7 +555,7 @@ def render_portfolio_view(
             genesis_offset,
             df_display["Days"].to_numpy(dtype=float),
             percentile_offsets,
-            st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0),
+            1.0,
         )
         selected_envelope = envelope_overlay.get("peak" if use_peak_powerlaw_scenario else "trough")
         if selected_envelope is not None:
@@ -1740,7 +1741,7 @@ if mode == MODE_POWERLAW:
         genesis_offset,
         m_x,
         (p2_5, p16_5, p83_5, p97_5),
-        st.session_state.get(KEY_POWERLAW_ENVELOPE_SIGMA, 1.0),
+        1.0,
     )
 
 if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
@@ -1769,6 +1770,10 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         p83_5=p83_5,
         p97_5=p97_5,
         peak_powerlaw_overlay=peak_powerlaw_overlay,
+        powerlaw_sigma_display_mode=st.session_state.get(
+            KEY_POWERLAW_SIGMA_DISPLAY_MODE,
+            POWERLAW_SIGMA_MODE_CLASSIC,
+        ),
         osc_t1_age=osc_settings.t1_age,
         osc_lambda=osc_settings.lambda_val,
         selected_harmonic_count=selected_harmonic_count,

@@ -21,7 +21,7 @@ from core.constants import (
     KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     KEY_MODE_SELECTOR,
     KEY_LOGPERIODIC_SERIES,
-    KEY_POWERLAW_ENVELOPE_SIGMA,
+    KEY_POWERLAW_SIGMA_DISPLAY_MODE,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -39,6 +39,8 @@ from core.constants import (
     PORTFOLIO_RESET_A,
     PORTFOLIO_RESET_B,
     MODE_POWERLAW,
+    POWERLAW_SIGMA_MODE_CLASSIC,
+    POWERLAW_SIGMA_MODE_SEGMENTED,
     POWERLAW_INTERCEPT_MAX,
     POWERLAW_INTERCEPT_MIN,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
@@ -47,8 +49,6 @@ from core.constants import (
     POWERLAW_SLOPE_MAX,
     POWERLAW_SLOPE_MIN,
     PORTFOLIO_SIGMA_CURRENT,
-    PORTFOLIO_SIGMA_PEAK_POWERLAW,
-    PORTFOLIO_SIGMA_TROUGH_POWERLAW,
     PORTFOLIO_VIEW_ACCUMULATION,
     PORTFOLIO_VIEW_PENSION,
     PORTFOLIO_VIEW_STRATEGY_TESTER,
@@ -81,16 +81,24 @@ COFER_CURRENCY_GROUPS = [
 ]
 
 
-def _render_envelope_sigma_slider():
-    st.markdown("**Envelope sigma**")
-    st.slider(
-        "Envelope sigma",
-        min_value=0.0,
-        max_value=2.0,
-        step=0.25,
-        format="%g",
-        key=KEY_POWERLAW_ENVELOPE_SIGMA,
+def _render_sigma_display_mode_control():
+    sigma_mode_options = [POWERLAW_SIGMA_MODE_CLASSIC, POWERLAW_SIGMA_MODE_SEGMENTED]
+    selected_sigma_mode = st.session_state.get(
+        KEY_POWERLAW_SIGMA_DISPLAY_MODE,
+        POWERLAW_SIGMA_MODE_CLASSIC,
+    )
+    if selected_sigma_mode not in sigma_mode_options:
+        selected_sigma_mode = POWERLAW_SIGMA_MODE_CLASSIC
+        st.session_state[KEY_POWERLAW_SIGMA_DISPLAY_MODE] = selected_sigma_mode
+
+    st.markdown("**Sigma**")
+    st.segmented_control(
+        "Sigma",
+        sigma_mode_options,
+        selection_mode="single",
+        key=KEY_POWERLAW_SIGMA_DISPLAY_MODE,
         label_visibility="collapsed",
+        width="stretch",
     )
     st.markdown("<div class='sidebar-slider-spacer'></div>", unsafe_allow_html=True)
 
@@ -260,24 +268,9 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             1.5,
             2.0,
         ]
-        if selected_portfolio_view in [
-            PORTFOLIO_VIEW_ACCUMULATION,
-            PORTFOLIO_VIEW_PENSION,
-        ]:
-            sigma_options.extend(
-                [
-                    PORTFOLIO_SIGMA_PEAK_POWERLAW,
-                    PORTFOLIO_SIGMA_TROUGH_POWERLAW,
-                ]
-            )
-
         def format_sigma_option(value):
             if value == PORTFOLIO_SIGMA_CURRENT:
                 return "Current sigma"
-            if value == PORTFOLIO_SIGMA_PEAK_POWERLAW:
-                return "Peak PowerLaw"
-            if value == PORTFOLIO_SIGMA_TROUGH_POWERLAW:
-                return "Trough PowerLaw"
             if value == 0.0:
                 return "0 sigma"
             return f"{value:+g} sigma"
@@ -300,8 +293,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             key=KEY_PORTFOLIO_SIGMA_LEVEL,
             label_visibility="collapsed",
         )
-    if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
-        _render_envelope_sigma_slider()
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
         st.markdown("**Forecast unit**")
         forecast_unit = st.radio(
@@ -552,7 +543,7 @@ def render_sidebar_panel(
                         label_visibility="collapsed",
                         width="stretch",
                     )
-            _render_envelope_sigma_slider()
+            _render_sigma_display_mode_control()
         is_non_price_series = not series_supports_currency_selector(
             mode, powerlaw_series, logperiodic_series
         )

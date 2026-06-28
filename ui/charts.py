@@ -4,7 +4,13 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
+from core.constants import (
+    MODE_LOGPERIODIC,
+    MODE_POWERLAW,
+    POWERLAW_SIGMA_MODE_CLASSIC,
+    POWERLAW_SIGMA_MODE_SEGMENTED,
+    TIME_LOG,
+)
 from core.utils import evaluate_powerlaw_values
 
 HALVING_DATES = [
@@ -17,6 +23,28 @@ TIME_AXIS_LEADING_PADDING_DAYS = 90
 MODEL_FORWARD_YEARS = 10
 MAX_RENDERED_MODEL_POINTS = 2500
 OPTIONAL_SIGMA_LEVELS = (-1.5, -0.5, 0.5, 1.5)
+SEGMENTED_SIGMA_STEP = 0.5
+SEGMENTED_SIGMA_HALF_STEP = SEGMENTED_SIGMA_STEP / 2.0
+SEGMENTED_SIGMA_LEVELS = tuple(
+    float(value)
+    for value in np.arange(
+        -2.0 - SEGMENTED_SIGMA_HALF_STEP,
+        2.0 + SEGMENTED_SIGMA_HALF_STEP + SEGMENTED_SIGMA_STEP,
+        SEGMENTED_SIGMA_STEP,
+    )
+)
+SEGMENTED_SIGMA_PAIR_STYLES = (
+    (0.5, "#06b6d4", "solid"),
+    (1.0, "#22c55e", "solid"),
+    (1.5, "#f59e0b", "dash"),
+    (2.0, "#f97316", "dash"),
+    (np.inf, "#ef4444", "dash"),
+)
+SEGMENTED_SIGMA_DEFAULT_HIDDEN_LEGENDS = {
+    "Segmented sigma 0σ to ±0.5σ",
+    "Segmented sigma ±1σ to ±1.5σ",
+    "Segmented sigma > ±2σ",
+}
 LOGPERIODIC_SIGMA_DISPLAY_RANGE = (-3.0, 3.0)
 LOGPERIODIC_EXTREMA_HARMONICS = (
     (1, "ω", "solid", 1.5, 0.82),
@@ -246,6 +274,155 @@ def _optional_sigma_line_style(level):
     return dict(color="rgba(168, 85, 247, 0.76)", width=1.0, dash="dash")
 
 
+def _format_segmented_sigma_name(label):
+    return f"Segmented sigma {label}"
+
+
+def _format_segmented_sigma_level(value):
+    if np.isclose(float(value), 0.0):
+        return "0σ"
+    return f"{float(value):+g}σ"
+
+
+def _format_segmented_sigma_label(lower_level, upper_level):
+    if lower_level is None:
+        return f"< {_format_segmented_sigma_level(upper_level)}"
+    if upper_level is None:
+        return f"> {_format_segmented_sigma_level(lower_level)}"
+    return (
+        f"{_format_segmented_sigma_level(lower_level)} "
+        f"to {_format_segmented_sigma_level(upper_level)}"
+    )
+
+
+def _format_segmented_sigma_abs_label(lower_level, upper_level):
+    if lower_level is None or upper_level is None:
+        threshold = upper_level if lower_level is None else lower_level
+        return f"> ±{abs(float(threshold)):g}σ"
+
+    low_abs = min(abs(float(lower_level)), abs(float(upper_level)))
+    high_abs = max(abs(float(lower_level)), abs(float(upper_level)))
+    if np.isclose(low_abs, 0.0):
+        return f"0σ to ±{high_abs:g}σ"
+    return f"±{low_abs:g}σ to ±{high_abs:g}σ"
+
+
+def _resolve_segmented_sigma_style(lower_level, upper_level):
+    if lower_level is None or upper_level is None:
+        high_abs = np.inf
+    else:
+        high_abs = max(abs(float(lower_level)), abs(float(upper_level)))
+
+    for max_abs_level, color, dash in SEGMENTED_SIGMA_PAIR_STYLES:
+        if high_abs <= float(max_abs_level):
+            return color, dash
+    return SEGMENTED_SIGMA_PAIR_STYLES[-1][1], SEGMENTED_SIGMA_PAIR_STYLES[-1][2]
+
+
+def _resolve_segmented_sigma_legend(lower_level, upper_level):
+    label = _format_segmented_sigma_abs_label(lower_level, upper_level)
+    group_key = (
+        label.replace(" ", "_")
+        .replace("±", "abs_")
+        .replace(">", "gt_")
+        .replace(".", "_")
+        .replace("σ", "sigma")
+    )
+    return f"Segmented sigma {label}", f"segmented_sigma_{group_key}"
+
+
+def _resolve_segmented_sigma_band_edges(center_level):
+    lower_level = float(center_level) - SEGMENTED_SIGMA_HALF_STEP
+    upper_level = float(center_level) + SEGMENTED_SIGMA_HALF_STEP
+    if np.isclose(center_level, SEGMENTED_SIGMA_LEVELS[0]):
+        lower_level = None
+    if np.isclose(center_level, SEGMENTED_SIGMA_LEVELS[-1]):
+        upper_level = None
+    return lower_level, upper_level
+
+
+def _iter_segmented_sigma_bands():
+    for center_level in reversed(SEGMENTED_SIGMA_LEVELS):
+        lower_level, upper_level = _resolve_segmented_sigma_band_edges(center_level)
+        label = _format_segmented_sigma_label(lower_level, upper_level)
+        line_color, line_dash = _resolve_segmented_sigma_style(lower_level, upper_level)
+        yield lower_level, upper_level, label, line_color, line_dash
+
+
+def _resolve_segment_mask(sigma_levels, lower_level, upper_level):
+    if lower_level is None:
+        return sigma_levels < float(upper_level)
+    if upper_level is None:
+        return sigma_levels >= float(lower_level)
+    return (sigma_levels >= float(lower_level)) & (sigma_levels < float(upper_level))
+
+
+def _iter_segmented_powerlaw_sigma_lines(df_display, m_log_d, p2_5, p16_5, p83_5, p97_5):
+    if "Days" not in df_display:
+        return []
+    if "LogClose" in df_display:
+        log_prices = pd.to_numeric(df_display["LogClose"], errors="coerce").to_numpy(dtype=float)
+    elif "CloseDisplay" in df_display:
+        close_values = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        log_prices = np.full(close_values.shape, np.nan, dtype=float)
+        positive_mask = close_values > 0.0
+        log_prices[positive_mask] = np.log10(close_values[positive_mask])
+    else:
+        return []
+
+    if "Res" in df_display:
+        residuals = pd.to_numeric(df_display["Res"], errors="coerce").to_numpy(dtype=float)
+    elif "ModelLog" in df_display:
+        model_log = pd.to_numeric(df_display["ModelLog"], errors="coerce").to_numpy(dtype=float)
+        residuals = log_prices - model_log
+    else:
+        return []
+
+    days = pd.to_numeric(df_display["Days"], errors="coerce").to_numpy(dtype=float)
+    log_days = np.full(days.shape, np.nan, dtype=float)
+    positive_day_mask = days > 0.0
+    log_days[positive_day_mask] = np.log10(days[positive_day_mask])
+    sigma_levels = _convert_log_offsets_to_sigma_levels(residuals, (p2_5, p16_5, p83_5, p97_5))
+    valid_mask = np.isfinite(log_days) & np.isfinite(log_prices) & np.isfinite(sigma_levels)
+    if np.count_nonzero(valid_mask) < 2:
+        return []
+
+    model_log_days = np.asarray(m_log_d, dtype=float)
+    lines = []
+    for lower_level, upper_level, label, color, dash in _iter_segmented_sigma_bands():
+        segment_mask = valid_mask & _resolve_segment_mask(sigma_levels, lower_level, upper_level)
+        if np.count_nonzero(segment_mask) < 2:
+            continue
+        segment_log_days = log_days[segment_mask]
+        if np.unique(segment_log_days).size < 2:
+            continue
+        slope_b, intercept_a = np.polyfit(segment_log_days, log_prices[segment_mask], 1)
+        if not np.isfinite(intercept_a) or not np.isfinite(slope_b):
+            continue
+        model_values, _, was_clipped = evaluate_powerlaw_values(
+            model_log_days,
+            float(intercept_a),
+            float(slope_b),
+        )
+        if was_clipped:
+            continue
+        legend_name, legendgroup = _resolve_segmented_sigma_legend(lower_level, upper_level)
+        lines.append(
+            {
+                "name": _format_segmented_sigma_name(label),
+                "legend_name": legend_name,
+                "legendgroup": legendgroup,
+                "values": model_values,
+                "line": dict(color=color, width=1.25, dash=dash),
+                "point_count": int(np.count_nonzero(segment_mask)),
+            }
+        )
+
+    return lines
+
+
 def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendrank=35):
     if y_range is None or len(y_range) != 2:
         return
@@ -462,6 +639,7 @@ def render_main_model_chart(
     bitcoin_residual_overlay_df=None,
     osc_visible_start_abs_day=None,
     moving_average_windows=None,
+    powerlaw_sigma_display_mode=POWERLAW_SIGMA_MODE_CLASSIC,
 ):
     fig = (
         make_subplots(specs=[[{"secondary_y": True}]]) if mode == MODE_LOGPERIODIC else go.Figure()
@@ -579,224 +757,166 @@ def render_main_model_chart(
                 )
             )
 
-        optional_sigma_series = {}
-        for sigma_level, sigma_offset in _resolve_optional_sigma_offsets(
-            p2_5,
-            p16_5,
-            p83_5,
-            p97_5,
+        def add_segmented_model_line(
+            y_values,
+            name,
+            legend_name,
+            legendgroup,
+            line,
+            showlegend,
+            visible=True,
         ):
-            sigma_series, _, _ = evaluate_powerlaw_values(
-                np.log10(m_fair_display),
-                sigma_offset,
-                1.0,
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_x_model_render,
+                    y=_sample_trace_values(y_values, model_sample_indices),
+                    mode="lines",
+                    line=line,
+                    name=legend_name if showlegend else name,
+                    legendgroup=legendgroup,
+                    showlegend=showlegend,
+                    visible=visible,
+                    hovertemplate=(
+                        f"<b>{name}</b>: "
+                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
+                    ),
+                )
             )
-            optional_sigma_series[sigma_level] = sigma_series
 
-        add_model_line(
-            p97_5_series,
-            p97_5_name,
-            dict(color="#ea3d2f", width=1.2, dash="dot"),
-            "sigma_abs_2",
-        )
-        add_model_line(
-            optional_sigma_series[1.5],
-            _format_sigma_line_name(1.5),
-            _optional_sigma_line_style(1.5),
-            "sigma_abs_1_5",
-            visible="legendonly",
-        )
-        add_model_line(
-            p83_5_series,
-            p83_5_name,
-            dict(color="#1199d6", width=1.2, dash="dot"),
-            "sigma_abs_1",
-        )
-        add_model_line(
-            optional_sigma_series[0.5],
-            _format_sigma_line_name(0.5),
-            _optional_sigma_line_style(0.5),
-            "sigma_abs_0_5",
-            visible="legendonly",
-        )
+        use_segmented_sigma = powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_SEGMENTED
+        optional_sigma_series = {}
+        if not use_segmented_sigma:
+            for sigma_level, sigma_offset in _resolve_optional_sigma_offsets(
+                p2_5,
+                p16_5,
+                p83_5,
+                p97_5,
+            ):
+                sigma_series, _, _ = evaluate_powerlaw_values(
+                    np.log10(m_fair_display),
+                    sigma_offset,
+                    1.0,
+                )
+                optional_sigma_series[sigma_level] = sigma_series
+
+            add_model_line(
+                p97_5_series,
+                p97_5_name,
+                dict(color="#ea3d2f", width=1.2, dash="dot"),
+                "sigma_abs_2",
+            )
+            add_model_line(
+                optional_sigma_series[1.5],
+                _format_sigma_line_name(1.5),
+                _optional_sigma_line_style(1.5),
+                "sigma_abs_1_5",
+                visible="legendonly",
+            )
+            add_model_line(
+                p83_5_series,
+                p83_5_name,
+                dict(color="#1199d6", width=1.2, dash="dot"),
+                "sigma_abs_1",
+            )
+            add_model_line(
+                optional_sigma_series[0.5],
+                _format_sigma_line_name(0.5),
+                _optional_sigma_line_style(0.5),
+                "sigma_abs_0_5",
+                visible="legendonly",
+            )
         add_model_line(
             m_fair_display,
             "Power regression",
             dict(color="#f0b90b", width=1.8),
             "power_regression",
         )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
-            peak_overlay = peak_powerlaw_overlay["peak"]
-            peak_values = peak_overlay["model_values"]
+        if use_segmented_sigma:
+            segmented_sigma_lines = _iter_segmented_powerlaw_sigma_lines(
+                df_display,
+                m_log_d,
+                p2_5,
+                p16_5,
+                p83_5,
+                p97_5,
+            )
+            shown_segmented_legendgroups = set()
+            for sigma_line in segmented_sigma_lines:
+                show_segmented_legend = sigma_line["legendgroup"] not in shown_segmented_legendgroups
+                shown_segmented_legendgroups.add(sigma_line["legendgroup"])
+                segmented_visible = (
+                    "legendonly"
+                    if sigma_line["legend_name"] in SEGMENTED_SIGMA_DEFAULT_HIDDEN_LEGENDS
+                    else True
+                )
+                add_segmented_model_line(
+                    sigma_line["values"],
+                    sigma_line["name"],
+                    sigma_line["legend_name"],
+                    sigma_line["legendgroup"],
+                    sigma_line["line"],
+                    show_segmented_legend,
+                    segmented_visible,
+                )
+        if not use_segmented_sigma:
             add_model_line(
-                peak_values,
-                "Peak PowerLaw",
-                dict(color="#22c55e", width=1.6, dash="longdash"),
-                "powerlaw_envelope",
+                optional_sigma_series[-0.5],
+                _format_sigma_line_name(-0.5),
+                _optional_sigma_line_style(-0.5),
+                "sigma_abs_0_5",
                 visible="legendonly",
             )
-            peak_days = np.asarray(peak_overlay["peak_days"], dtype=float)
-            peak_x = (
-                peak_days
-                if is_log_time
-                else [current_gen_date + pd.Timedelta(days=float(day)) for day in peak_days]
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=peak_x,
-                    y=peak_overlay["peak_values"],
-                    mode="markers",
-                    marker=dict(
-                        color="#f97316",
-                        size=9,
-                        symbol="circle",
-                        line=dict(color="#fff7ed", width=1.4),
-                    ),
-                    name="Peak fit points",
-                    legendgroup="peak_fit_points",
-                    legendrank=31,
-                    visible="legendonly",
-                    showlegend=True,
-                    customdata=[
-                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
-                        for day in peak_days
-                    ],
-                    hovertemplate=(
-                        f"<b>Peak fit point</b>: "
-                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
-                        "<br>%{customdata}<extra></extra>"
-                    ),
-                )
-            )
-        if peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
-            trough_overlay = peak_powerlaw_overlay["trough"]
-            trough_values = trough_overlay["model_values"]
             add_model_line(
-                trough_values,
-                "Trough PowerLaw",
-                dict(color="#22c55e", width=1.6, dash="longdash"),
-                "powerlaw_envelope",
+                p16_5_series,
+                p16_5_name,
+                dict(color="#1199d6", width=1.2, dash="dot"),
+                "sigma_abs_1",
+            )
+            add_model_line(
+                optional_sigma_series[-1.5],
+                _format_sigma_line_name(-1.5),
+                _optional_sigma_line_style(-1.5),
+                "sigma_abs_1_5",
                 visible="legendonly",
             )
-            trough_days = np.asarray(trough_overlay["trough_days"], dtype=float)
-            trough_x = (
-                trough_days
-                if is_log_time
-                else [current_gen_date + pd.Timedelta(days=float(day)) for day in trough_days]
+            add_model_line(
+                p2_5_series,
+                p2_5_name,
+                dict(color="#ea3d2f", width=1.2, dash="dot"),
+                "sigma_abs_2",
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=trough_x,
-                    y=trough_overlay["trough_values"],
-                    mode="markers",
-                    marker=dict(
-                        color="#f97316",
-                        size=9,
-                        symbol="circle",
-                        line=dict(color="#fff7ed", width=1.4),
-                    ),
-                    name="Trough fit points",
-                    legendgroup="trough_fit_points",
-                    legendrank=41,
-                    visible="legendonly",
-                    showlegend=True,
-                    customdata=[
-                        (current_gen_date + pd.Timedelta(days=float(day))).strftime("%d.%m.%Y")
-                        for day in trough_days
-                    ],
-                    hovertemplate=(
-                        f"<b>Trough fit point</b>: "
-                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
-                        "<br>%{customdata}<extra></extra>"
-                    ),
-                )
+            add_legend_item(
+                "±2σ (2.5th/97.5th percentile)",
+                dict(color="#ea3d2f", width=1.2, dash="dot"),
+                "sigma_abs_2",
+                legendrank=100,
             )
-        add_model_line(
-            optional_sigma_series[-0.5],
-            _format_sigma_line_name(-0.5),
-            _optional_sigma_line_style(-0.5),
-            "sigma_abs_0_5",
-            visible="legendonly",
-        )
-        add_model_line(
-            p16_5_series,
-            p16_5_name,
-            dict(color="#1199d6", width=1.2, dash="dot"),
-            "sigma_abs_1",
-        )
-        add_model_line(
-            optional_sigma_series[-1.5],
-            _format_sigma_line_name(-1.5),
-            _optional_sigma_line_style(-1.5),
-            "sigma_abs_1_5",
-            visible="legendonly",
-        )
-        add_model_line(
-            p2_5_series,
-            p2_5_name,
-            dict(color="#ea3d2f", width=1.2, dash="dot"),
-            "sigma_abs_2",
-        )
-        add_legend_item(
-            "±2σ (2.5th/97.5th percentile)",
-            dict(color="#ea3d2f", width=1.2, dash="dot"),
-            "sigma_abs_2",
-            legendrank=100,
-        )
-        add_legend_item(
-            "±1.5σ",
-            _optional_sigma_line_style(-1.5),
-            "sigma_abs_1_5",
-            visible="legendonly",
-            legendrank=110,
-        )
-        add_legend_item(
-            "±1σ (16.5th/83.5th percentile)",
-            dict(color="#1199d6", width=1.2, dash="dot"),
-            "sigma_abs_1",
-            legendrank=120,
-        )
-        add_legend_item(
-            "±0.5σ",
-            _optional_sigma_line_style(-0.5),
-            "sigma_abs_0_5",
-            visible="legendonly",
-            legendrank=130,
-        )
+            add_legend_item(
+                "±1.5σ",
+                _optional_sigma_line_style(-1.5),
+                "sigma_abs_1_5",
+                visible="legendonly",
+                legendrank=110,
+            )
+            add_legend_item(
+                "±1σ (16.5th/83.5th percentile)",
+                dict(color="#1199d6", width=1.2, dash="dot"),
+                "sigma_abs_1",
+                legendrank=120,
+            )
+            add_legend_item(
+                "±0.5σ",
+                _optional_sigma_line_style(-0.5),
+                "sigma_abs_0_5",
+                visible="legendonly",
+                legendrank=130,
+            )
         add_legend_item(
             "Power regression",
             dict(color="#f0b90b", width=1.8),
             "power_regression",
             legendrank=20,
         )
-        if (
-            peak_powerlaw_overlay is not None
-            and peak_powerlaw_overlay.get("peak") is not None
-            and peak_powerlaw_overlay.get("trough") is not None
-        ):
-            add_legend_item(
-                "Peak/Trough PowerLaw",
-                dict(color="#22c55e", width=1.6, dash="longdash"),
-                "powerlaw_envelope",
-                visible="legendonly",
-                legendrank=30,
-            )
-        elif peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("peak") is not None:
-            add_legend_item(
-                "Peak PowerLaw",
-                dict(color="#22c55e", width=1.6, dash="longdash"),
-                "powerlaw_envelope",
-                visible="legendonly",
-                legendrank=30,
-            )
-        elif peak_powerlaw_overlay is not None and peak_powerlaw_overlay.get("trough") is not None:
-            add_legend_item(
-                "Trough PowerLaw",
-                dict(color="#22c55e", width=1.6, dash="longdash"),
-                "powerlaw_envelope",
-                visible="legendonly",
-                legendrank=40,
-            )
         y_range_model_x = plot_x_model if is_log_time else m_dates
         y_range_visible_start = (
             max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
@@ -1049,7 +1169,7 @@ def render_main_model_chart(
             yanchor="top",
             x=0,
             xanchor="left",
-            font=dict(size=11, color=pl_legend_color),
+            font=dict(size=13, color=pl_legend_color),
             bgcolor="rgba(0,0,0,0)",
             groupclick="togglegroup",
             traceorder="normal",

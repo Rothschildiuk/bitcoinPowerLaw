@@ -4,7 +4,12 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from core.constants import MODE_LOGPERIODIC, MODE_POWERLAW, TIME_LOG
+from core.constants import (
+    MODE_LOGPERIODIC,
+    MODE_POWERLAW,
+    POWERLAW_SIGMA_MODE_SEGMENTED,
+    TIME_LOG,
+)
 from ui.charts import (
     _convert_log_offsets_to_sigma_levels,
     _iter_logperiodic_extrema_lines,
@@ -307,25 +312,14 @@ class TestUIChartsHelpers(unittest.TestCase):
         }:
             self.assertIn(traces_by_name[name].visible, (None, True))
 
-        self.assertEqual(traces_by_name["Peak PowerLaw"].visible, "legendonly")
-        self.assertEqual(traces_by_name["Trough PowerLaw"].visible, "legendonly")
-        self.assertEqual(traces_by_name["Peak PowerLaw"].legendgroup, "powerlaw_envelope")
-        self.assertEqual(traces_by_name["Trough PowerLaw"].legendgroup, "powerlaw_envelope")
-        self.assertEqual(traces_by_name["Peak/Trough PowerLaw"].visible, "legendonly")
-        self.assertEqual(
-            traces_by_name["Peak/Trough PowerLaw"].legendgroup,
-            "powerlaw_envelope",
-        )
-        self.assertEqual(traces_by_name["Peak fit points"].visible, "legendonly")
-        self.assertEqual(traces_by_name["Peak fit points"].legendgroup, "peak_fit_points")
-        self.assertEqual(traces_by_name["Trough fit points"].visible, "legendonly")
-        self.assertEqual(traces_by_name["Trough fit points"].legendgroup, "trough_fit_points")
-        self.assertLess(
-            traces_by_name["Peak/Trough PowerLaw"].legendrank,
-            traces_by_name["Peak fit points"].legendrank,
-        )
+        self.assertNotIn("Peak PowerLaw", traces_by_name)
+        self.assertNotIn("Trough PowerLaw", traces_by_name)
+        self.assertNotIn("Peak fit points", traces_by_name)
+        self.assertNotIn("Trough fit points", traces_by_name)
+        self.assertNotIn("Peak/Trough PowerLaw", traces_by_name)
         self.assertLess(captured["fig"].layout.legend.y, 0.0)
         self.assertEqual(captured["fig"].layout.legend.yanchor, "top")
+        self.assertEqual(captured["fig"].layout.legend.font.size, 13)
         self.assertGreaterEqual(captured["fig"].layout.margin.b, 70)
         self.assertEqual(captured["fig"].layout.legend.groupclick, "togglegroup")
         self.assertEqual(
@@ -358,6 +352,149 @@ class TestUIChartsHelpers(unittest.TestCase):
                 "±0.5σ",
             ],
         )
+
+    def test_powerlaw_chart_segmented_sigma_replaces_classic_sigma_lines(self):
+        dates = pd.date_range("2020-01-01", periods=20, freq="D")
+        days = np.arange(4000.0, 4020.0)
+        log_days = np.log10(days)
+        model_log = 1.0 + 0.5 * log_days
+        residuals = np.array(
+            [
+                0.03,
+                0.04,
+                0.06,
+                0.07,
+                0.12,
+                0.13,
+                0.16,
+                0.17,
+                0.23,
+                0.24,
+                -0.03,
+                -0.04,
+                -0.06,
+                -0.07,
+                -0.12,
+                -0.13,
+                -0.16,
+                -0.17,
+                -0.23,
+                -0.24,
+            ]
+        )
+        log_close = model_log + residuals
+        df_display = pd.DataFrame(
+            {
+                "Days": days,
+                "LogClose": log_close,
+                "ModelLog": model_log,
+                "Res": residuals,
+                "CloseDisplay": np.power(10.0, log_close),
+            },
+            index=dates,
+        )
+        captured = {}
+
+        def capture_plotly_chart(fig, **kwargs):
+            captured["fig"] = fig
+
+        with patch("ui.charts.st.plotly_chart", side_effect=capture_plotly_chart):
+            render_main_model_chart(
+                mode=MODE_POWERLAW,
+                time_scale=TIME_LOG,
+                price_scale=TIME_LOG,
+                df_display=df_display,
+                current_gen_date=pd.Timestamp("2009-01-03"),
+                view_max=5000.0,
+                plot_x_model=days,
+                plot_x_main=days,
+                plot_x_osc=days,
+                m_log_d=log_days,
+                m_dates=dates,
+                m_dates_str=dates.strftime("%d.%m.%Y").to_numpy(),
+                m_fair_display=np.power(10.0, model_log),
+                historical_powerlaw_slopes=np.array([], dtype=float),
+                show_historical_powerlaw_slope=False,
+                m_osc_y=np.array([], dtype=float),
+                m_osc_y_by_harmonic=None,
+                perrenod_curve=None,
+                residual_sigma_log=1.0,
+                p2_5=-0.2,
+                p16_5=-0.1,
+                p83_5=0.1,
+                p97_5=0.2,
+                peak_powerlaw_overlay=None,
+                osc_t1_age=1.0,
+                osc_lambda=2.0,
+                selected_harmonic_count=1,
+                pl_template="plotly_dark",
+                pl_bg_color="#000",
+                pl_grid_color="#333",
+                pl_btc_color="#fff",
+                pl_legend_color="#fff",
+                pl_text_color="#fff",
+                c_hover_bg="#111",
+                c_hover_text="#fff",
+                c_border="#333",
+                currency_prefix="$",
+                currency_suffix="",
+                currency_decimals=0,
+                target_series_name="Bitcoin",
+                target_series_unit="USD",
+                show_halving_lines=False,
+                chart_key="test-powerlaw-segmented-sigma",
+                powerlaw_sigma_display_mode=POWERLAW_SIGMA_MODE_SEGMENTED,
+            )
+
+        trace_names = {str(trace.name) for trace in captured["fig"].data}
+        self.assertNotIn("+1σ (83.5th percentile)", trace_names)
+        self.assertNotIn("-1σ (16.5th percentile)", trace_names)
+        self.assertIn("Power regression", trace_names)
+        self.assertIn("Segmented sigma 0σ to ±0.5σ", trace_names)
+        self.assertIn("Segmented sigma -0.5σ to 0σ", trace_names)
+        self.assertIn("Segmented sigma ±0.5σ to ±1σ", trace_names)
+        self.assertIn("Segmented sigma -1σ to -0.5σ", trace_names)
+        segmented_legend_names = [
+            str(trace.name)
+            for trace in captured["fig"].data
+            if trace.showlegend and str(trace.legendgroup).startswith("segmented_sigma_")
+        ]
+        self.assertIn("Segmented sigma 0σ to ±0.5σ", segmented_legend_names)
+        self.assertIn("Segmented sigma ±0.5σ to ±1σ", segmented_legend_names)
+        self.assertGreaterEqual(len(segmented_legend_names), 2)
+        segmented_legend_groups = [
+            str(trace.legendgroup)
+            for trace in captured["fig"].data
+            if str(trace.legendgroup).startswith("segmented_sigma_")
+        ]
+        self.assertLess(len(set(segmented_legend_groups)), len(segmented_legend_groups))
+        self.assertEqual(segmented_legend_names.count("Segmented sigma 0σ to ±0.5σ"), 1)
+        self.assertEqual(segmented_legend_names.count("Segmented sigma ±0.5σ to ±1σ"), 1)
+        segmented_traces = [
+            trace
+            for trace in captured["fig"].data
+            if str(trace.legendgroup).startswith("segmented_sigma_")
+        ]
+        hidden_by_default = {
+            str(trace.name)
+            for trace in segmented_traces
+            if trace.showlegend and trace.visible == "legendonly"
+        }
+        visible_by_default = {
+            str(trace.name)
+            for trace in segmented_traces
+            if trace.showlegend and trace.visible is True
+        }
+        self.assertIn("Segmented sigma 0σ to ±0.5σ", hidden_by_default)
+        self.assertIn("Segmented sigma ±1σ to ±1.5σ", hidden_by_default)
+        self.assertIn("Segmented sigma > ±2σ", hidden_by_default)
+        self.assertNotIn("Segmented sigma ±0.5σ to ±1σ", hidden_by_default)
+        self.assertIn("Segmented sigma ±0.5σ to ±1σ", visible_by_default)
+        self.assertIn("Segmented sigma ±1.5σ to ±2σ", visible_by_default)
+        segmented_colors = {trace.line.color for trace in segmented_traces}
+        self.assertGreaterEqual(len(segmented_colors), 3)
+        self.assertIn("#06b6d4", segmented_colors)
+        self.assertIn("#22c55e", segmented_colors)
 
     def test_powerlaw_chart_downsamples_rendered_model_lines_but_keeps_date_hover_trace(self):
         dates = pd.date_range("2020-01-01", periods=3, freq="D")
