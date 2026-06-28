@@ -16,6 +16,7 @@ import yfinance as yf
 
 from core.constants import (
     CURRENCY_ALUMINUM,
+    CURRENCY_CHF,
     CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
@@ -83,6 +84,7 @@ REFERENCE_REFRESH_SECONDS = 12 * 3600
 COINLORE_MONERO_START_DATE = "2014-05-21"
 REFERENCE_SERIES_COLUMNS = (
     "EURUSD",
+    "USDCHF",
     "USDUAH",
     "USDRUB",
     "XAUUSD",
@@ -1206,6 +1208,9 @@ def _safe_download_btc_tail_from_coincap(start_date):
 
 def fetch_reference_series_frame(start_date):
     eur_usd = _safe_download_close_series("EURUSD=X", start_date)
+    usd_chf = _safe_download_close_series("CHF=X", start_date)
+    if usd_chf.empty:
+        usd_chf = _safe_download_close_series("USDCHF=X", start_date)
     usd_uah = _safe_download_close_series("UAH=X", start_date)
     usd_rub = _safe_download_close_series("RUB=X", start_date)
     if usd_rub.empty:
@@ -1227,6 +1232,7 @@ def fetch_reference_series_frame(start_date):
     return pd.concat(
         [
             eur_usd.rename("EURUSD"),
+            usd_chf.rename("USDCHF"),
             usd_uah.rename("USDUAH"),
             usd_rub.rename("USDRUB"),
             xau_usd.rename("XAUUSD"),
@@ -1303,6 +1309,11 @@ def load_reference_series(start_date, source="auto"):
         if "EURUSD" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    usd_chf = (
+        pd.to_numeric(reference_df["USDCHF"], errors="coerce").dropna()
+        if "USDCHF" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     xau_usd = (
         pd.to_numeric(reference_df["XAUUSD"], errors="coerce").dropna()
         if "XAUUSD" in reference_df.columns
@@ -1359,6 +1370,7 @@ def load_reference_series(start_date, source="auto"):
         else pd.Series(dtype=float)
     )
     eur_usd.index = pd.to_datetime(eur_usd.index)
+    usd_chf.index = pd.to_datetime(usd_chf.index)
     usd_uah.index = pd.to_datetime(usd_uah.index)
     usd_rub.index = pd.to_datetime(usd_rub.index)
     xau_usd.index = pd.to_datetime(xau_usd.index)
@@ -1372,6 +1384,7 @@ def load_reference_series(start_date, source="auto"):
     ndaq.index = pd.to_datetime(ndaq.index)
     return (
         eur_usd,
+        usd_chf,
         usd_uah,
         usd_rub,
         xau_usd,
@@ -1393,20 +1406,33 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
 
     start_date = str(raw_df.index.min().date())
     reference_series = load_reference_series(start_date, source=source)
-    (
-        eur_usd,
-        usd_uah,
-        usd_rub,
-        xau_usd,
-        xag_usd,
-        copper_usd,
-        iron_ore_usd,
-        aluminum_usd,
-        oil_usd,
-        us_housing,
-    ) = reference_series[:10]
-    sp500 = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
-    ndaq = reference_series[11] if len(reference_series) > 11 else pd.Series(dtype=float)
+    eur_usd = reference_series[0] if len(reference_series) > 0 else pd.Series(dtype=float)
+    if len(reference_series) >= 13:
+        usd_chf = reference_series[1]
+        usd_uah = reference_series[2]
+        usd_rub = reference_series[3]
+        xau_usd = reference_series[4]
+        xag_usd = reference_series[5]
+        copper_usd = reference_series[6]
+        iron_ore_usd = reference_series[7]
+        aluminum_usd = reference_series[8]
+        oil_usd = reference_series[9]
+        us_housing = reference_series[10]
+        sp500 = reference_series[11]
+        ndaq = reference_series[12]
+    else:
+        usd_chf = pd.Series(dtype=float)
+        usd_uah = reference_series[1] if len(reference_series) > 1 else pd.Series(dtype=float)
+        usd_rub = reference_series[2] if len(reference_series) > 2 else pd.Series(dtype=float)
+        xau_usd = reference_series[3] if len(reference_series) > 3 else pd.Series(dtype=float)
+        xag_usd = reference_series[4] if len(reference_series) > 4 else pd.Series(dtype=float)
+        copper_usd = reference_series[5] if len(reference_series) > 5 else pd.Series(dtype=float)
+        iron_ore_usd = reference_series[6] if len(reference_series) > 6 else pd.Series(dtype=float)
+        aluminum_usd = reference_series[7] if len(reference_series) > 7 else pd.Series(dtype=float)
+        oil_usd = reference_series[8] if len(reference_series) > 8 else pd.Series(dtype=float)
+        us_housing = reference_series[9] if len(reference_series) > 9 else pd.Series(dtype=float)
+        sp500 = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
+        ndaq = reference_series[11] if len(reference_series) > 11 else pd.Series(dtype=float)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
@@ -1424,6 +1450,10 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     if selected_currency == CURRENCY_EURO and not eur_usd.empty:
         eur_usd_aligned = align_reference_to_close(eur_usd)
         return close_usd / eur_usd_aligned
+
+    if selected_currency == CURRENCY_CHF and not usd_chf.empty:
+        usd_chf_aligned = align_reference_to_close(usd_chf)
+        return close_usd * usd_chf_aligned
 
     if selected_currency == CURRENCY_UAH and not usd_uah.empty:
         usd_uah_aligned = align_reference_to_close(usd_uah)

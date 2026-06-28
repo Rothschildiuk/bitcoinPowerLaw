@@ -2,6 +2,7 @@ import unittest
 
 from core.constants import (
     CURRENCY_ALUMINUM,
+    CURRENCY_CHF,
     CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
@@ -41,6 +42,7 @@ class TestConstantsSeries(unittest.TestCase):
             [
                 CURRENCY_EURO,
                 CURRENCY_DOLLAR,
+                CURRENCY_CHF,
                 CURRENCY_UAH,
                 CURRENCY_RUB,
                 CURRENCY_OIL,

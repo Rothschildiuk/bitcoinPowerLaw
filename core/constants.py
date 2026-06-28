@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.85"
+APP_VERSION = "1.1.86"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
@@ -33,6 +33,8 @@ DEFAULT_A = -16.433
 DEFAULT_B = 5.667
 DEFAULT_EURO_A = -16.897
 DEFAULT_EURO_B = 5.780
+DEFAULT_CHF_A = -16.369
+DEFAULT_CHF_B = 5.639
 DEFAULT_UAH_A = -18.276
 DEFAULT_UAH_B = 6.578
 DEFAULT_RUB_A = -16.700
@@ -95,6 +97,11 @@ OSC_DEFAULTS = {
     "harmonic_count": 3,
 }
 OSC_DEFAULTS_EURO = {
+    "lambda_val": 2.06,
+    "t1_age": 0.59,
+    "harmonic_count": 3,
+}
+OSC_DEFAULTS_CHF = {
     "lambda_val": 2.06,
     "t1_age": 0.59,
     "harmonic_count": 3,
@@ -190,6 +197,8 @@ KEY_A_PRICE = "A_price"
 KEY_B_PRICE = "B_price"
 KEY_A_EURO = "A_euro"
 KEY_B_EURO = "B_euro"
+KEY_A_CHF = "A_chf"
+KEY_B_CHF = "B_chf"
 KEY_A_UAH = "A_uah"
 KEY_B_UAH = "B_uah"
 KEY_A_RUB = "A_rub"
@@ -330,6 +339,7 @@ LOGPERIODIC_SERIES_OPTIONS = [
 ]
 CURRENCY_DOLLAR = "USD"
 CURRENCY_EURO = "EUR"
+CURRENCY_CHF = "CHF"
 CURRENCY_UAH = "UAH"
 CURRENCY_RUB = "RUB"
 CURRENCY_GOLD = "GOLD"
@@ -344,6 +354,7 @@ CURRENCY_NDAQ = "NDAQ"
 CURRENCY_OPTIONS = [
     CURRENCY_EURO,
     CURRENCY_DOLLAR,
+    CURRENCY_CHF,
     CURRENCY_UAH,
     CURRENCY_RUB,
     CURRENCY_OIL,

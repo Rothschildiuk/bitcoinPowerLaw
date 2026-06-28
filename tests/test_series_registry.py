@@ -2,6 +2,7 @@ import unittest
 
 from core.constants import (
     CURRENCY_ALUMINUM,
+    CURRENCY_CHF,
     CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
@@ -186,6 +187,18 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(euro_config.currency_decimals, 2)
         self.assertEqual(euro_config.target_series_unit, CURRENCY_EURO)
         self.assertTrue(euro_config.supports_currency_selector)
+
+        chf_config = get_active_model_config(
+            MODE_POWERLAW,
+            POWERLAW_SERIES_PRICE,
+            POWERLAW_SERIES_PRICE,
+            CURRENCY_CHF,
+        )
+
+        self.assertEqual(chf_config.currency_prefix, "CHF ")
+        self.assertEqual(chf_config.currency_decimals, 2)
+        self.assertEqual(chf_config.target_series_unit, CURRENCY_CHF)
+        self.assertTrue(chf_config.supports_currency_selector)
 
         uah_config = get_active_model_config(
             MODE_POWERLAW,
