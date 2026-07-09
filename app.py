@@ -17,10 +17,8 @@ from core.constants import (
     CURRENCY_SILVER,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
-    COFER_CURRENCY_LABELS,
     COFER_DEFAULT_CURRENCIES,
     DEFAULT_FORECAST_HORIZON,
-    DEFAULT_THEME,
     FORECAST_HORIZON_MAX,
     FORECAST_HORIZON_MIN,
     GENESIS_DATE,
@@ -54,7 +52,6 @@ from core.constants import (
     KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_PORTFOLIO_STRATEGY_VIEW,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
-    KEY_THEME_MODE,
     MODE_COFER,
     MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
@@ -92,7 +89,6 @@ from core.series_registry import (
     iter_session_model_defaults,
     series_supports_currency_selector,
 )
-from core.simulation import build_bitcoin_network_simulation
 from core.utils import (
     PortfolioSettings,
     build_portfolio_real_data_backtest,
@@ -109,39 +105,25 @@ from core.utils import (
 )
 from services.price_service import (
     build_currency_close_series,
-    build_prepared_bitcoin_market_cap_data,
-    build_prepared_bitcoin_volatility_data,
-    get_runtime_data_source,
     get_snapshot_data_date,
-    load_prepared_dogecoin_btc_data,
-    load_prepared_difficulty_data,
-    load_prepared_filecoin_btc_data,
-    load_prepared_hashrate_data,
     load_imf_cofer_currency_share_data,
-    load_prepared_litecoin_btc_data,
-    load_prepared_lightning_capacity_data,
-    load_prepared_lightning_nodes_data,
-    load_prepared_liquid_btc_data,
-    load_prepared_liquid_transactions_data,
-    load_prepared_miner_revenue_data,
-    load_prepared_bitcoin_supply_data,
-    load_prepared_monero_btc_data,
-    load_prepared_price_data,
-    load_prepared_usdt_supply_data,
-    load_prepared_us_m2_data,
 )
 from ui.charts import (
     _resolve_model_view_max,
     render_main_model_chart,
 )
+from ui.cofer import render_cofer_currency_share_view as render_cofer_view
 from ui.kpi import render_model_kpis
 from ui.sidebar import render_sidebar_panel
+from services.series_store import (
+    SeriesFrameStore as SharedSeriesFrameStore,
+    SidebarSeriesData as SharedSidebarSeriesData,
+)
 from ui.theme import apply_theme_css, get_theme
 
 
 def initialize_app_session_state():
     defaults = {
-        KEY_THEME_MODE: DEFAULT_THEME,
         KEY_LAST_MODE: MODE_POWERLAW,
         KEY_CURRENCY_SELECTOR: CURRENCY_EURO,
         KEY_CHART_REVISION: 0,
@@ -168,8 +150,6 @@ def initialize_app_session_state():
             st.session_state[key] = value
     if float(st.session_state.get(KEY_PORTFOLIO_BTC_AMOUNT, 2.0)) == 0.0:
         st.session_state[KEY_PORTFOLIO_BTC_AMOUNT] = 2.0
-    # Light theme is disabled by product decision; always force dark theme.
-    st.session_state[KEY_THEME_MODE] = DEFAULT_THEME
 
     for key, value in iter_session_model_defaults():
         if key not in st.session_state:
@@ -360,140 +340,6 @@ def prepare_portfolio_projection(
         b_active,
         settings,
     )
-
-
-@st.cache_data(ttl=3600)
-def prepare_bitcoin_network_simulation(base_df, seed, resolution_days):
-    return build_bitcoin_network_simulation(
-        base_df,
-        seed=int(seed),
-        resolution_days=float(resolution_days),
-    )
-
-
-SERIES_LOADERS = {
-    POWERLAW_SERIES_PRICE: ("BTC price", load_prepared_price_data),
-    POWERLAW_SERIES_REVENUE: ("miner revenue", load_prepared_miner_revenue_data),
-    POWERLAW_SERIES_DIFFICULTY: ("difficulty", load_prepared_difficulty_data),
-    POWERLAW_SERIES_HASHRATE: ("hashrate", load_prepared_hashrate_data),
-    POWERLAW_SERIES_LIGHTNING_NODES: (
-        "Lightning node",
-        load_prepared_lightning_nodes_data,
-    ),
-    POWERLAW_SERIES_LIGHTNING_CAPACITY: (
-        "Lightning capacity",
-        load_prepared_lightning_capacity_data,
-    ),
-    POWERLAW_SERIES_LIQUID_BTC: ("Liquid BTC", load_prepared_liquid_btc_data),
-    POWERLAW_SERIES_LIQUID_TRANSACTIONS: (
-        "Liquid transactions",
-        load_prepared_liquid_transactions_data,
-    ),
-    POWERLAW_SERIES_FILECOIN_BTC: ("Filecoin/BTC", load_prepared_filecoin_btc_data),
-    POWERLAW_SERIES_MONERO_BTC: ("Monero/BTC", load_prepared_monero_btc_data),
-    POWERLAW_SERIES_LITECOIN_BTC: ("Litecoin/BTC", load_prepared_litecoin_btc_data),
-    POWERLAW_SERIES_DOGECOIN_BTC: ("Dogecoin/BTC", load_prepared_dogecoin_btc_data),
-    POWERLAW_SERIES_US_M2: ("U.S. M2", load_prepared_us_m2_data),
-    POWERLAW_SERIES_USDT_SUPPLY: ("USDT supply", load_prepared_usdt_supply_data),
-}
-
-
-def normalize_close_frame(data_df):
-    normalized_df = data_df[data_df["Close"] > 0].copy()
-    normalized_df["LogClose"] = np.log10(normalized_df["Close"])
-    return normalized_df
-
-
-def get_sidebar_currency():
-    sidebar_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
-    if sidebar_currency not in CURRENCY_OPTIONS:
-        return CURRENCY_DOLLAR
-    return sidebar_currency
-
-
-class SeriesFrameStore:
-    def __init__(self, data_source=None):
-        self._frames = {}
-        self._data_source = data_source or get_runtime_data_source()
-
-    @property
-    def data_source(self):
-        return self._data_source
-
-    def get(self, series_name):
-        if series_name not in self._frames:
-            self._frames[series_name] = self._load(series_name)
-        return self._frames[series_name]
-
-    def _load(self, series_name):
-        if series_name not in SERIES_LOADERS and series_name not in {
-            POWERLAW_SERIES_BITCOIN_VOLATILITY,
-            POWERLAW_SERIES_BITCOIN_MARKET_CAP,
-            POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
-        }:
-            st.error(f"Unknown data series: {series_name}")
-            st.stop()
-
-        try:
-            if series_name == POWERLAW_SERIES_BITCOIN_VOLATILITY:
-                return normalize_close_frame(
-                    build_prepared_bitcoin_volatility_data(self.get(POWERLAW_SERIES_PRICE))
-                )
-            if series_name == POWERLAW_SERIES_BITCOIN_MARKET_CAP:
-                return normalize_close_frame(
-                    build_prepared_bitcoin_market_cap_data(
-                        self.get(POWERLAW_SERIES_PRICE),
-                        load_prepared_bitcoin_supply_data(source=self._data_source),
-                    )
-                )
-            if series_name == POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION:
-                return normalize_close_frame(
-                    prepare_bitcoin_network_simulation(
-                        self.get(POWERLAW_SERIES_PRICE),
-                        seed=int(st.session_state.get(KEY_BITCOIN_NETWORK_SIMULATION_SEED, 1)),
-                        resolution_days=float(
-                            st.session_state.get(
-                                KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
-                                0.00001,
-                            )
-                        ),
-                    )
-                )
-
-            label, loader = SERIES_LOADERS[series_name]
-            return normalize_close_frame(loader(source=self._data_source))
-        except Exception as e:
-            label = SERIES_LOADERS.get(series_name, (series_name, None))[0]
-            st.error(f"Error loading {label} data: {e}")
-            st.stop()
-
-
-class SidebarSeriesData:
-    def __init__(self, series_store):
-        self._series_store = series_store
-
-    def __getitem__(self, series_name):
-        data_df = self._series_store.get(series_name)
-        if series_name == POWERLAW_SERIES_PRICE:
-            price_close = build_currency_close_series(
-                data_df,
-                get_sidebar_currency(),
-                source=self._series_store.data_source,
-            )
-            price_close = price_close[price_close > 0]
-            return {
-                "absolute_days": data_df.loc[price_close.index, "AbsDays"].values,
-                "close": price_close.values,
-                "log_close": np.log10(price_close.values),
-                "date_index": price_close.index,
-            }
-
-        return {
-            "absolute_days": data_df["AbsDays"].values,
-            "close": data_df["Close"].values,
-            "log_close": data_df["LogClose"].values,
-            "date_index": data_df.index,
-        }
 
 
 def render_portfolio_view(
@@ -787,7 +633,7 @@ def render_portfolio_view(
             width="stretch",
             theme=None,
             config={"displayModeBar": False},
-            key=f"portfolio_{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}",
+            key=f"portfolio_{st.session_state[KEY_CHART_REVISION]}",
         )
 
         st.markdown(f"#### {portfolio_view.table_title}")
@@ -1222,7 +1068,7 @@ def render_portfolio_view(
             width="stretch",
             theme=None,
             config={"displayModeBar": False},
-            key=f"portfolio_backtest_{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}",
+            key=f"portfolio_backtest_{st.session_state[KEY_CHART_REVISION]}",
         )
 
         backtest_format = {
@@ -1249,114 +1095,6 @@ def render_portfolio_view(
         )
 
 
-def render_cofer_currency_share_view(
-    cofer_df,
-    selected_currencies,
-    *,
-    pl_template,
-    pl_bg_color,
-    pl_grid_color,
-    pl_text_color,
-    c_hover_bg,
-    c_hover_text,
-    c_border,
-):
-    selected_currencies = [
-        currency for currency in selected_currencies if currency in cofer_df.columns
-    ]
-    if not selected_currencies:
-        st.error("No COFER currencies selected.")
-        return
-
-    chart_df = cofer_df[selected_currencies].copy()
-    latest_date = pd.Timestamp(chart_df.dropna(how="all").index.max())
-    latest_values = chart_df.loc[latest_date].dropna().sort_values(ascending=False)
-
-    st.markdown("### COFER reserve currency dominance")
-    metric_columns = st.columns(min(len(latest_values), 4))
-    for metric_col, (currency, value) in zip(metric_columns, latest_values.items()):
-        metric_col.metric(
-            COFER_CURRENCY_LABELS.get(currency, currency),
-            f"{float(value):.2f}%",
-        )
-
-    line_colors = {
-        "BTC": "#f7931a",
-        "USD": "#f0b90b",
-        "EUR": "#3b82f6",
-        "JPY": "#ef4444",
-        "GBP": "#a855f7",
-        "CNY": "#22c55e",
-        "AUD": "#06b6d4",
-        "CAD": "#f97316",
-        "CHF": "#e5e7eb",
-        "Other": "#94a3b8",
-    }
-    fig = go.Figure()
-    for currency in selected_currencies:
-        series = pd.to_numeric(chart_df[currency], errors="coerce")
-        fig.add_trace(
-            go.Scatter(
-                x=series.index,
-                y=series,
-                mode="lines",
-                name=COFER_CURRENCY_LABELS.get(currency, currency),
-                line=dict(color=line_colors.get(currency), width=2.3),
-                connectgaps=False,
-                hovertemplate="%{x|%Y-%m-%d}<br>%{fullData.name}: %{y:.2f}%<extra></extra>",
-            )
-        )
-
-    y_values = chart_df.to_numpy(dtype=float)
-    y_values = y_values[np.isfinite(y_values)]
-    y_max = max(5.0, float(np.nanmax(y_values)) if y_values.size else 100.0)
-    fig.update_layout(
-        template=pl_template,
-        paper_bgcolor=pl_bg_color,
-        plot_bgcolor=pl_bg_color,
-        font=dict(color=pl_text_color),
-        height=620,
-        margin=dict(l=20, r=20, t=32, b=20),
-        hovermode="x unified",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="left",
-            x=0,
-            bgcolor="rgba(0,0,0,0)",
-        ),
-        xaxis=dict(
-            title="",
-            showgrid=True,
-            gridcolor=pl_grid_color,
-            zeroline=False,
-        ),
-        yaxis=dict(
-            title="Percent of world FX reserves",
-            ticksuffix="%",
-            range=[0, min(100.0, y_max * 1.08)],
-            showgrid=True,
-            gridcolor=pl_grid_color,
-            zeroline=False,
-        ),
-        hoverlabel=dict(bgcolor=c_hover_bg, font_color=c_hover_text, bordercolor=c_border),
-    )
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-        config={
-            "displayModeBar": True,
-            "modeBarButtons": [
-                ["toImage"],
-                ["zoom2d", "pan2d", "toggleSpikelines"],
-                ["zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"],
-            ],
-        },
-    )
-    st.caption(f"Latest COFER quarter: {latest_date.year}-Q{latest_date.quarter}")
-
-
 # --- Page Configuration ---
 st.set_page_config(
     layout="wide",
@@ -1368,7 +1106,7 @@ st.set_page_config(
 # --- THEME + STATE ---
 initialize_app_session_state()
 
-theme = get_theme(True)
+theme = get_theme()
 apply_theme_css(theme)
 
 c_text_main = theme["c_text_main"]
@@ -1382,8 +1120,8 @@ c_hover_bg = theme["c_hover_bg"]
 c_hover_text = theme["c_hover_text"]
 c_border = theme["c_border"]
 
-series_store = SeriesFrameStore()
-sidebar_series_data = SidebarSeriesData(series_store)
+series_store = SharedSeriesFrameStore()
+sidebar_series_data = SharedSidebarSeriesData(series_store)
 
 # --- SIDEBAR ASSEMBLY ---
 (
@@ -1406,7 +1144,7 @@ sidebar_series_data = SidebarSeriesData(series_store)
 
 if mode == MODE_COFER:
     cofer_df = load_imf_cofer_currency_share_data(source=series_store.data_source)
-    render_cofer_currency_share_view(
+    render_cofer_view(
         cofer_df,
         cofer_currencies,
         pl_template=pl_template,
@@ -1804,7 +1542,7 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
             f"{selected_harmonic_count}_"
-            f"{st.session_state[KEY_THEME_MODE]}_{st.session_state[KEY_CHART_REVISION]}"
+            f"{st.session_state[KEY_CHART_REVISION]}"
         ),
     )
 else:

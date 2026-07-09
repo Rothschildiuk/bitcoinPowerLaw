@@ -28,7 +28,7 @@ THEMES = {
 }
 
 
-def get_theme(_is_dark=True):
+def get_theme():
     return THEMES["dark"]
 
 

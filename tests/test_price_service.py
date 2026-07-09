@@ -252,6 +252,7 @@ class TestPriceService(unittest.TestCase):
         )
 
         self.assertEqual(float(result.iloc[0]["Close"]), 84.0)
+        self.assertEqual(price_service.get_data_load_status()["resolved_source"], "live")
 
     def test_load_snapshot_or_live_auto_falls_back_to_snapshot_on_live_error(self):
         snapshot_df = pd.DataFrame(
@@ -267,6 +268,9 @@ class TestPriceService(unittest.TestCase):
         )
 
         self.assertEqual(float(result.iloc[0]["Close"]), 42.0)
+        status = price_service.get_data_load_status()
+        self.assertEqual(status["resolved_source"], "snapshot")
+        self.assertIn("network down", status["fallback_reason"])
 
     @patch("services.price_service.fetch_reference_series_frame")
     def test_build_incremental_reference_series_snapshot_fetches_only_missing_tail(

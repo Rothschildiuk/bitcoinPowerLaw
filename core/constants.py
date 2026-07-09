@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.87"
+APP_VERSION = "1.1.88"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
@@ -182,7 +182,6 @@ POWERLAW_EXPONENT_MIN = -300.0
 POWERLAW_EXPONENT_MAX = 300.0
 
 # Session-state keys
-KEY_THEME_MODE = "theme_mode"
 KEY_LAST_MODE = "last_mode"
 KEY_CHART_REVISION = "chart_revision"
 KEY_MODE_SELECTOR = "mode_selector"

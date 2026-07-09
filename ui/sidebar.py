@@ -61,6 +61,7 @@ from ui.kpi import (
     SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT,
     resolve_sigma_band_history_percent_range,
 )
+from ui.data_status import render_data_source_status
 from core.series_registry import (
     get_active_model_config,
     get_logperiodic_series_options,
@@ -268,6 +269,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             1.5,
             2.0,
         ]
+
         def format_sigma_option(value):
             if value == PORTFOLIO_SIGMA_CURRENT:
                 return "Current sigma"
@@ -448,6 +450,7 @@ def render_sidebar_panel(
 
         if mode == MODE_COFER:
             selected_cofer_currencies = _render_cofer_currency_selector()
+            render_data_source_status()
             return (
                 mode,
                 CURRENCY_DOLLAR,
@@ -666,6 +669,7 @@ def render_sidebar_panel(
                     active_series_data["date_index"]
                 ),
             )
+        render_data_source_status()
     return (
         mode,
         currency,

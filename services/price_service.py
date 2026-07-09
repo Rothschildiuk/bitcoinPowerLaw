@@ -77,6 +77,7 @@ SNAPSHOT_DATA_DIR = Path("data/snapshots")
 SNAPSHOT_REFRESH_METADATA_FILENAME = "refresh_metadata.json"
 DATA_SOURCE_ENV_VAR = "POWERLAW_DATA_SOURCE"
 DATA_SOURCE_MODES = {"auto", "snapshot", "live"}
+DATA_LOAD_STATUS_SESSION_KEY = "data_load_status"
 LOCAL_CACHE_SCHEMA_VERSION = 5
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
@@ -137,6 +138,39 @@ def get_runtime_data_source(default="snapshot"):
     if not configured_source:
         return default
     return normalize_data_source(configured_source)
+
+
+def _record_data_load_status(
+    snapshot_key, *, configured_source, resolved_source, fallback_reason=None
+):
+    """Expose the source actually used by the current Streamlit session.
+
+    Snapshot fallback is intentional for availability, but must not be invisible to
+    someone interpreting a chart. The value is deliberately small and serializable
+    so it can live safely in ``st.session_state``.
+    """
+    status = {
+        "snapshot_key": snapshot_key,
+        "configured_source": configured_source,
+        "resolved_source": resolved_source,
+        "snapshot_updated_at": get_snapshot_data_date(snapshot_key),
+        "fallback_reason": str(fallback_reason) if fallback_reason else None,
+    }
+    st.session_state[DATA_LOAD_STATUS_SESSION_KEY] = status
+    return status
+
+
+def get_data_load_status():
+    """Return the latest resolved source, or the configured mode before a load."""
+    status = st.session_state.get(DATA_LOAD_STATUS_SESSION_KEY)
+    if status:
+        return dict(status)
+    return {
+        "configured_source": get_runtime_data_source(),
+        "resolved_source": None,
+        "snapshot_updated_at": get_snapshot_data_date(),
+        "fallback_reason": None,
+    }
 
 
 def _ensure_local_data_cache_dir():
@@ -405,18 +439,46 @@ def _load_snapshot_or_live(snapshot_key, validator_fn, live_loader, *, source="a
         snapshot_df = _read_snapshot_dataframe(snapshot_key)
         if snapshot_df is not None and validator_fn(snapshot_df):
             if source == "snapshot":
+                _record_data_load_status(
+                    snapshot_key,
+                    configured_source=source,
+                    resolved_source="snapshot",
+                )
                 return snapshot_df
             try:
                 live_df = live_loader()
-            except Exception:
+            except Exception as exc:
+                _record_data_load_status(
+                    snapshot_key,
+                    configured_source=source,
+                    resolved_source="snapshot",
+                    fallback_reason=exc,
+                )
                 return snapshot_df
             if live_df is not None and validator_fn(live_df):
+                _record_data_load_status(
+                    snapshot_key,
+                    configured_source=source,
+                    resolved_source="live",
+                )
                 return live_df
+            _record_data_load_status(
+                snapshot_key,
+                configured_source=source,
+                resolved_source="snapshot",
+                fallback_reason="Live source returned missing or invalid data.",
+            )
             return snapshot_df
         if source == "snapshot":
             raise ValueError(f"Local snapshot is missing or invalid: {snapshot_key}")
 
-    return live_loader()
+    live_df = live_loader()
+    _record_data_load_status(
+        snapshot_key,
+        configured_source=source,
+        resolved_source="live",
+    )
+    return live_df
 
 
 def _validate_reference_frame(data_df):
