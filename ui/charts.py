@@ -504,10 +504,10 @@ def render_main_model_chart(
     plot_x_model_render = _sample_trace_values(plot_x_model, model_sample_indices)
 
     if mode == MODE_POWERLAW:
-        p97_5_name = "+2σ (97.5th percentile)"
-        p83_5_name = "+1σ (83.5th percentile)"
-        p16_5_name = "-1σ (16.5th percentile)"
-        p2_5_name = "-2σ (2.5th percentile)"
+        p97_5_name = "+2σ (97.725th percentile)"
+        p83_5_name = "+1σ (84.135th percentile)"
+        p16_5_name = "-1σ (15.865th percentile)"
+        p2_5_name = "-2σ (2.275th percentile)"
 
         p2_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p2_5, 1.0)
         p16_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p16_5, 1.0)
@@ -814,7 +814,7 @@ def render_main_model_chart(
                 "sigma_abs_2",
             )
             add_legend_item(
-                "±2σ (2.5th/97.5th percentile)",
+                "±2σ (2.275th/97.725th percentile)",
                 dict(color="#ea3d2f", width=1.2, dash="dot"),
                 "sigma_abs_2",
                 legendrank=100,
@@ -827,7 +827,7 @@ def render_main_model_chart(
                 legendrank=110,
             )
             add_legend_item(
-                "±1σ (16.5th/83.5th percentile)",
+                "±1σ (15.865th/84.135th percentile)",
                 dict(color="#1199d6", width=1.2, dash="dot"),
                 "sigma_abs_1",
                 legendrank=120,

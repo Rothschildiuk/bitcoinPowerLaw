@@ -10,6 +10,7 @@ from core.power_law import (
     find_best_fit_params_for_offset,
     fit_peak_powerlaw_envelope,
     fit_powerlaw_regression,
+    fit_trough_powerlaw_envelope,
 )
 from core.utils import (
     TrendComputationResult,
@@ -51,6 +52,24 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertTrue(np.allclose(result["peak_days"], np.array([20.0, 110.0, 210.0])))
+        self.assertEqual(len(result["model_values"]), len(model_days))
+
+    def test_fit_trough_powerlaw_envelope_uses_local_lows(self):
+        absolute_days = np.array([10.0, 20.0, 30.0, 100.0, 110.0, 120.0, 200.0, 210.0])
+        log_prices = np.array([1.4, 1.0, 1.3, 2.4, 2.0, 2.3, 3.4, 3.0])
+        model_days = np.array([10.0, 100.0, 200.0])
+
+        result = fit_trough_powerlaw_envelope(
+            absolute_days,
+            log_prices,
+            genesis_offset_days=0.0,
+            model_days=model_days,
+            window_days=40.0,
+            min_trough_count=3,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertTrue(np.allclose(result["trough_days"], np.array([20.0, 110.0, 210.0])))
         self.assertEqual(len(result["model_values"]), len(model_days))
 
     def test_resolve_trend_parameters_preserves_supplied_values_in_powerlaw_mode(self):

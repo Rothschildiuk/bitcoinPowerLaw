@@ -20,6 +20,7 @@ from core.constants import (
     DEFAULT_FORECAST_HORIZON,
     FORECAST_HORIZON_MAX,
     FORECAST_HORIZON_MIN,
+    GAUSSIAN_SIGMA_PERCENTILES,
     GENESIS_DATE,
     KEY_A,
     KEY_A_PRICE,
@@ -160,7 +161,7 @@ def calculate_percentile_offsets(display_df, genesis_offset_days):
         baseline_log = fitted_a + fitted_b * np.log10(base_days)
         baseline_residuals = display_df["LogClose"].values - baseline_log
 
-    return np.percentile(baseline_residuals, [2.5, 16.5, 83.5, 97.5])
+    return np.percentile(baseline_residuals, GAUSSIAN_SIGMA_PERCENTILES)
 
 
 def calculate_residual_sigma_log(display_df):
@@ -196,6 +197,7 @@ def calculate_peak_powerlaw_overlay(
         model_days,
         residuals=residuals,
         threshold_offset=upper_offset,
+        window_days=365.25,
     )
     trough_overlay = power_law.fit_trough_powerlaw_envelope(
         display_df["AbsDays"].to_numpy(dtype=float),
@@ -204,6 +206,7 @@ def calculate_peak_powerlaw_overlay(
         model_days,
         residuals=residuals,
         threshold_offset=lower_offset,
+        window_days=365.25,
     )
     return {
         "peak": peak_overlay,

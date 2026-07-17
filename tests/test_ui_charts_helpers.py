@@ -275,10 +275,10 @@ class TestUIChartsHelpers(unittest.TestCase):
 
         traces_by_name = {str(trace.name): trace for trace in captured["fig"].data}
         for name in {
-            "+2σ (97.5th percentile)",
-            "+1σ (83.5th percentile)",
-            "-1σ (16.5th percentile)",
-            "-2σ (2.5th percentile)",
+            "+2σ (97.725th percentile)",
+            "+1σ (84.135th percentile)",
+            "-1σ (15.865th percentile)",
+            "-2σ (2.275th percentile)",
         }:
             self.assertIn(traces_by_name[name].visible, (None, True))
 
@@ -293,12 +293,12 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertGreaterEqual(captured["fig"].layout.margin.b, 70)
         self.assertEqual(captured["fig"].layout.legend.groupclick, "togglegroup")
         self.assertEqual(
-            traces_by_name["-2σ (2.5th percentile)"].legendgroup,
-            traces_by_name["+2σ (97.5th percentile)"].legendgroup,
+            traces_by_name["-2σ (2.275th percentile)"].legendgroup,
+            traces_by_name["+2σ (97.725th percentile)"].legendgroup,
         )
         self.assertEqual(
-            traces_by_name["-1σ (16.5th percentile)"].legendgroup,
-            traces_by_name["+1σ (83.5th percentile)"].legendgroup,
+            traces_by_name["-1σ (15.865th percentile)"].legendgroup,
+            traces_by_name["+1σ (84.135th percentile)"].legendgroup,
         )
         self.assertEqual(
             traces_by_name["-1.5σ"].legendgroup,
@@ -316,9 +316,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(
             legend_sigma_names,
             [
-                "±2σ (2.5th/97.5th percentile)",
+                "±2σ (2.275th/97.725th percentile)",
                 "±1.5σ",
-                "±1σ (16.5th/83.5th percentile)",
+                "±1σ (15.865th/84.135th percentile)",
                 "±0.5σ",
             ],
         )
@@ -410,8 +410,8 @@ class TestUIChartsHelpers(unittest.TestCase):
             )
 
         trace_names = {str(trace.name) for trace in captured["fig"].data}
-        self.assertNotIn("+1σ (83.5th percentile)", trace_names)
-        self.assertNotIn("-1σ (16.5th percentile)", trace_names)
+        self.assertNotIn("+1σ (84.135th percentile)", trace_names)
+        self.assertNotIn("-1σ (15.865th percentile)", trace_names)
         self.assertIn("Power regression", trace_names)
         self.assertIn("Segmented sigma 0σ to ±0.5σ", trace_names)
         self.assertIn("Segmented sigma -0.5σ to 0σ", trace_names)

@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from core.constants import POWERLAW_EXPONENT_MAX, POWERLAW_EXPONENT_MIN
+from core.constants import (
+    GAUSSIAN_SIGMA_PERCENTILES,
+    POWERLAW_EXPONENT_MAX,
+    POWERLAW_EXPONENT_MIN,
+)
 
 
 @dataclass(frozen=True)
@@ -214,7 +218,10 @@ def calculate_historical_sigma_offsets(
             residuals = log_prices_arr[: index + 1] - historical_model
             finite_residuals = residuals[np.isfinite(residuals)]
             if len(finite_residuals) >= int(min_points):
-                latest_offsets = np.percentile(finite_residuals, [2.5, 16.5, 83.5, 97.5])
+                latest_offsets = np.percentile(
+                    finite_residuals,
+                    GAUSSIAN_SIGMA_PERCENTILES,
+                )
 
         if latest_offsets is not None:
             offsets[:, index] = latest_offsets
@@ -488,7 +495,7 @@ def calculate_monthly_buy_portfolio_values(
     cash_flow_start = current_month_start
     if cash_flow_start < anchor_date:
         cash_flow_start += pd.offsets.MonthBegin(1)
-    purchase_start = current_month_start if monthly_mom_change_ratio != 0.0 else cash_flow_start
+    purchase_start = cash_flow_start
 
     purchase_end = pd.Timestamp(projection_dates.max()).normalize()
     purchase_dates = pd.date_range(start=purchase_start, end=purchase_end, freq="MS")

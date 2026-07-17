@@ -83,6 +83,37 @@ def _select_residual_episode_indices(
     return selected_indices
 
 
+def _select_local_extreme_indices(valid_days, values, window_days, direction):
+    """Select one strict local extreme inside each centered time window."""
+    valid_days = np.asarray(valid_days, dtype=float)
+    values = np.asarray(values, dtype=float)
+    half_window_days = max(float(window_days) / 2.0, 0.0)
+    if half_window_days <= 0.0:
+        return []
+
+    selected_indices = []
+    days_are_sorted = bool(np.all(valid_days[:-1] <= valid_days[1:]))
+    for index, day in enumerate(valid_days):
+        if days_are_sorted:
+            neighborhood = np.arange(
+                np.searchsorted(valid_days, day - half_window_days, side="left"),
+                np.searchsorted(valid_days, day + half_window_days, side="right"),
+            )
+        else:
+            neighborhood = np.flatnonzero(np.abs(valid_days - day) <= half_window_days)
+        if neighborhood.size == 0:
+            continue
+        neighborhood_values = values[neighborhood]
+        local_position = (
+            int(np.argmax(neighborhood_values))
+            if direction == "above"
+            else int(np.argmin(neighborhood_values))
+        )
+        if int(neighborhood[local_position]) == index:
+            selected_indices.append(index)
+    return selected_indices
+
+
 def fit_peak_powerlaw_envelope(
     absolute_days,
     log_prices,
@@ -93,6 +124,7 @@ def fit_peak_powerlaw_envelope(
     min_duration_days=1.0,
     residuals=None,
     threshold_offset=None,
+    window_days=None,
 ):
     days_since_offset = np.asarray(absolute_days, dtype=float) - float(genesis_offset_days)
     log_prices = np.asarray(log_prices, dtype=float)
@@ -107,18 +139,31 @@ def fit_peak_powerlaw_envelope(
         residual_values = valid_logs - (baseline_intercept + baseline_slope * np.log10(valid_days))
     else:
         residual_values = np.asarray(residuals, dtype=float)[valid_mask]
-    if threshold_offset is None:
+    explicit_threshold = threshold_offset is not None
+    if threshold_offset is None and window_days is None:
         residual_sigma = float(np.std(residual_values))
         if not np.isfinite(residual_sigma) or residual_sigma <= 0.0:
             return None
         threshold_offset = float(sigma_threshold) * residual_sigma
-    peak_indices = _select_residual_episode_indices(
-        valid_days,
-        residual_values,
-        threshold=threshold_offset,
-        direction="above",
-        min_duration_days=min_duration_days,
-    )
+    if window_days is not None:
+        peak_indices = _select_local_extreme_indices(
+            valid_days,
+            valid_logs,
+            window_days,
+            direction="above",
+        )
+        if explicit_threshold:
+            peak_indices = [
+                index for index in peak_indices if residual_values[index] >= float(threshold_offset)
+            ]
+    else:
+        peak_indices = _select_residual_episode_indices(
+            valid_days,
+            residual_values,
+            threshold=threshold_offset,
+            direction="above",
+            min_duration_days=min_duration_days,
+        )
 
     if len(peak_indices) < int(min_peak_count):
         return None
@@ -148,6 +193,7 @@ def fit_trough_powerlaw_envelope(
     min_duration_days=1.0,
     residuals=None,
     threshold_offset=None,
+    window_days=None,
 ):
     days_since_offset = np.asarray(absolute_days, dtype=float) - float(genesis_offset_days)
     log_prices = np.asarray(log_prices, dtype=float)
@@ -162,18 +208,33 @@ def fit_trough_powerlaw_envelope(
         residual_values = valid_logs - (baseline_intercept + baseline_slope * np.log10(valid_days))
     else:
         residual_values = np.asarray(residuals, dtype=float)[valid_mask]
-    if threshold_offset is None:
+    explicit_threshold = threshold_offset is not None
+    if threshold_offset is None and window_days is None:
         residual_sigma = float(np.std(residual_values))
         if not np.isfinite(residual_sigma) or residual_sigma <= 0.0:
             return None
         threshold_offset = float(sigma_threshold) * residual_sigma
-    trough_indices = _select_residual_episode_indices(
-        valid_days,
-        residual_values,
-        threshold=threshold_offset,
-        direction="below",
-        min_duration_days=min_duration_days,
-    )
+    if window_days is not None:
+        trough_indices = _select_local_extreme_indices(
+            valid_days,
+            valid_logs,
+            window_days,
+            direction="below",
+        )
+        if explicit_threshold:
+            trough_indices = [
+                index
+                for index in trough_indices
+                if residual_values[index] <= float(threshold_offset)
+            ]
+    else:
+        trough_indices = _select_residual_episode_indices(
+            valid_days,
+            residual_values,
+            threshold=threshold_offset,
+            direction="below",
+            min_duration_days=min_duration_days,
+        )
 
     if len(trough_indices) < int(min_trough_count):
         return None
