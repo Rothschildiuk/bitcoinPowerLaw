@@ -1604,4 +1604,7 @@ render_model_kpis(
     target_series_unit,
     logperiodic_stats_rows=logperiodic_stats_rows,
     perrenod_stats_rows=perrenod_stats_rows,
+    historical_powerlaw_fair=historical_powerlaw_fair,
+    historical_powerlaw_sigma_offsets=historical_powerlaw_sigma_offsets,
+    use_historical_powerlaw=show_historical_powerlaw,
 )

@@ -282,6 +282,82 @@ def calculate_powerlaw_band_shares(df_display, p2_5, p16_5, p83_5, p97_5):
     return band_shares
 
 
+def _resolve_historical_sigma_offset(level, historical_offsets):
+    p2_5, p16_5, p83_5, p97_5 = historical_offsets
+    level = float(level)
+    if level <= -1.0:
+        return p2_5 + (level + 2.0) * (p16_5 - p2_5)
+    if level <= 0.0:
+        return p16_5 + (level + 1.0) * (0.0 - p16_5)
+    if level <= 1.0:
+        return level * p83_5
+    return p83_5 + (level - 1.0) * (p97_5 - p83_5)
+
+
+def calculate_historical_powerlaw_band_shares(
+    df_display,
+    historical_model_log,
+    historical_sigma_offsets,
+    selected_mask=None,
+):
+    model_log = np.asarray(historical_model_log, dtype=float)
+    sigma_offsets = np.asarray(historical_sigma_offsets, dtype=float)
+    log_prices = np.asarray(df_display["LogClose"], dtype=float)
+    if model_log.shape != log_prices.shape or sigma_offsets.shape != (4, len(log_prices)):
+        return _empty_band_shares(), None
+
+    residuals = log_prices - model_log
+    valid_mask = np.isfinite(residuals) & np.all(np.isfinite(sigma_offsets), axis=0)
+    if selected_mask is not None:
+        valid_mask &= np.asarray(selected_mask, dtype=bool)
+    if not np.any(valid_mask):
+        return _empty_band_shares(), None
+
+    total = float(np.count_nonzero(valid_mask))
+    band_shares = []
+    for center_level in SIGMA_LEVELS:
+        lower_level, upper_level = _resolve_sigma_band_edges(center_level)
+        lower_offset = (
+            _resolve_historical_sigma_offset(lower_level, sigma_offsets)
+            if lower_level is not None
+            else None
+        )
+        upper_offset = (
+            _resolve_historical_sigma_offset(upper_level, sigma_offsets)
+            if upper_level is not None
+            else None
+        )
+        if lower_offset is None:
+            count = np.count_nonzero(valid_mask & (residuals < upper_offset))
+        elif upper_offset is None:
+            count = np.count_nonzero(valid_mask & (residuals >= lower_offset))
+        else:
+            count = np.count_nonzero(
+                valid_mask & (residuals >= lower_offset) & (residuals < upper_offset)
+            )
+        band_shares.append(
+            {
+                "center_level": center_level,
+                "lower_level": lower_level,
+                "upper_level": upper_level,
+                "label": _format_sigma_band_label(lower_level, upper_level),
+                "compact_label": _format_compact_sigma_level(center_level),
+                "share": float(count / total * 100.0),
+            }
+        )
+
+    current_index = np.flatnonzero(
+        np.isfinite(residuals) & np.all(np.isfinite(sigma_offsets), axis=0)
+    )
+    if current_index.size == 0:
+        return band_shares, None
+    last_index = current_index[-1]
+    current_sigma = interpolate_sigma_level_from_log_offset(
+        residuals[last_index], sigma_offsets[:, last_index]
+    )
+    return band_shares, current_sigma
+
+
 def calculate_current_powerlaw_sigma_level(df_display, p2_5, p16_5, p83_5, p97_5):
     residuals = np.asarray(df_display["Res"], dtype=float)
     valid_residuals = residuals[np.isfinite(residuals)]
@@ -431,6 +507,9 @@ def render_model_kpis(
     target_series_unit,
     logperiodic_stats_rows=None,
     perrenod_stats_rows=None,
+    historical_powerlaw_fair=None,
+    historical_powerlaw_sigma_offsets=None,
+    use_historical_powerlaw=False,
 ):
     l_p, l_f = df_display["Close"].iloc[-1], df_display["Fair"].iloc[-1]
     l_p_display, l_f_display = (
@@ -499,6 +578,17 @@ def render_model_kpis(
         )
     )
     band_df = filter_sigma_band_history_percent_range(df_display, selected_history_range)
-    band_shares = calculate_powerlaw_band_shares(band_df, p2_5, p16_5, p83_5, p97_5)
+    if use_historical_powerlaw:
+        selected_mask = df_display.index.isin(band_df.index)
+        band_shares, historical_current_sigma = calculate_historical_powerlaw_band_shares(
+            df_display,
+            historical_powerlaw_fair,
+            historical_powerlaw_sigma_offsets,
+            selected_mask,
+        )
+        if historical_current_sigma is not None:
+            current_sigma_level = historical_current_sigma
+    else:
+        band_shares = calculate_powerlaw_band_shares(band_df, p2_5, p16_5, p83_5, p97_5)
     history_label = format_sigma_band_history_percent_range(selected_history_range)
     _render_sigma_band_chart(band_shares, current_sigma_level, history_label)
