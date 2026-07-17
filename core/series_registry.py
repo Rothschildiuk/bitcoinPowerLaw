@@ -136,24 +136,7 @@ from core.constants import (
     KEY_B_BITCOIN_VOLATILITY,
     KEY_B_US_M2,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
-    MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
-    OSC_DEFAULTS,
-    OSC_DEFAULTS_ALUMINUM,
-    OSC_DEFAULTS_CHF,
-    OSC_DEFAULTS_COPPER,
-    OSC_DEFAULTS_DIFFICULTY,
-    OSC_DEFAULTS_EURO,
-    OSC_DEFAULTS_GOLD,
-    OSC_DEFAULTS_HASHRATE,
-    OSC_DEFAULTS_IRON,
-    OSC_DEFAULTS_NDAQ,
-    OSC_DEFAULTS_OIL,
-    OSC_DEFAULTS_RUB,
-    OSC_DEFAULTS_SILVER,
-    OSC_DEFAULTS_SP500,
-    OSC_DEFAULTS_UAH,
-    OSC_DEFAULTS_US_HOUSING,
     LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
     LITECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_BTC_MODEL_ORIGIN_ABS_DAYS,
@@ -196,13 +179,9 @@ class SeriesModelConfig:
     currency_unit: str
     supports_currency_selector: bool = False
     powerlaw_enabled: bool = True
-    logperiodic_enabled: bool = False
     lock_price_scale_to_log: bool = False
     show_halving_lines: bool = False
     analysis_min_abs_day: int | None = None
-    oscillator_defaults: dict | None = None
-    oscillator_min_abs_day: int | None = None
-    oscillator_parameter_bounds: dict[str, tuple[float, float]] | None = None
     powerlaw_intercept_bounds: tuple[float, float] | None = None
     powerlaw_slope_bounds: tuple[float, float] | None = None
     model_origin_abs_day: int | None = None
@@ -222,9 +201,7 @@ _BASE_SERIES_CONFIGS = {
         currency_decimals=0,
         currency_unit=CURRENCY_DOLLAR,
         supports_currency_selector=True,
-        logperiodic_enabled=True,
         show_halving_lines=True,
-        oscillator_defaults=OSC_DEFAULTS,
     ),
     POWERLAW_SERIES_REVENUE: SeriesModelConfig(
         series_name=POWERLAW_SERIES_REVENUE,
@@ -286,12 +263,9 @@ _BASE_SERIES_CONFIGS = {
         currency_suffix="",
         currency_decimals=0,
         currency_unit="RAW",
-        logperiodic_enabled=True,
         lock_price_scale_to_log=True,
         show_halving_lines=True,
         analysis_min_abs_day=DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
-        oscillator_defaults=OSC_DEFAULTS_DIFFICULTY,
-        oscillator_parameter_bounds={"lambda_val": (1.5, 8.0)},
     ),
     POWERLAW_SERIES_HASHRATE: SeriesModelConfig(
         series_name=POWERLAW_SERIES_HASHRATE,
@@ -305,12 +279,9 @@ _BASE_SERIES_CONFIGS = {
         currency_suffix="",
         currency_decimals=0,
         currency_unit="RAW",
-        logperiodic_enabled=True,
         lock_price_scale_to_log=True,
         show_halving_lines=True,
         analysis_min_abs_day=DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
-        oscillator_defaults=OSC_DEFAULTS_HASHRATE,
-        oscillator_parameter_bounds={"lambda_val": (1.5, 8.0)},
     ),
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION: SeriesModelConfig(
         series_name=POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
@@ -508,7 +479,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 0,
         "currency_unit": CURRENCY_DOLLAR,
-        "oscillator_defaults": OSC_DEFAULTS,
     },
     CURRENCY_EURO: {
         "a_key": KEY_A_EURO,
@@ -520,7 +490,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 2,
         "currency_unit": CURRENCY_EURO,
-        "oscillator_defaults": OSC_DEFAULTS_EURO,
     },
     CURRENCY_CHF: {
         "a_key": KEY_A_CHF,
@@ -532,7 +501,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 2,
         "currency_unit": CURRENCY_CHF,
-        "oscillator_defaults": OSC_DEFAULTS_CHF,
     },
     CURRENCY_UAH: {
         "a_key": KEY_A_UAH,
@@ -544,7 +512,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 0,
         "currency_unit": CURRENCY_UAH,
-        "oscillator_defaults": OSC_DEFAULTS_UAH,
     },
     CURRENCY_RUB: {
         "a_key": KEY_A_RUB,
@@ -556,7 +523,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": "",
         "currency_decimals": 0,
         "currency_unit": CURRENCY_RUB,
-        "oscillator_defaults": OSC_DEFAULTS_RUB,
     },
     CURRENCY_GOLD: {
         "a_key": KEY_A_GOLD,
@@ -568,7 +534,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " oz",
         "currency_decimals": 2,
         "currency_unit": "XAU",
-        "oscillator_defaults": OSC_DEFAULTS_GOLD,
     },
     CURRENCY_SILVER: {
         "a_key": KEY_A_SILVER,
@@ -580,7 +545,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " oz",
         "currency_decimals": 2,
         "currency_unit": "XAG",
-        "oscillator_defaults": OSC_DEFAULTS_SILVER,
     },
     CURRENCY_COPPER: {
         "a_key": KEY_A_COPPER,
@@ -592,7 +556,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " lb",
         "currency_decimals": 2,
         "currency_unit": "Copper lb",
-        "oscillator_defaults": OSC_DEFAULTS_COPPER,
     },
     CURRENCY_ALUMINUM: {
         "a_key": KEY_A_ALUMINUM,
@@ -604,7 +567,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " t",
         "currency_decimals": 2,
         "currency_unit": "Aluminum tonne",
-        "oscillator_defaults": OSC_DEFAULTS_ALUMINUM,
     },
     CURRENCY_IRON: {
         "a_key": KEY_A_IRON,
@@ -616,7 +578,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " t",
         "currency_decimals": 2,
         "currency_unit": "Iron ore tonne",
-        "oscillator_defaults": OSC_DEFAULTS_IRON,
     },
     CURRENCY_OIL: {
         "a_key": KEY_A_OIL,
@@ -628,7 +589,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " bbl",
         "currency_decimals": 2,
         "currency_unit": "Oil barrel",
-        "oscillator_defaults": OSC_DEFAULTS_OIL,
     },
     CURRENCY_US_HOUSING: {
         "a_key": KEY_A_US_HOUSING,
@@ -640,7 +600,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " index",
         "currency_decimals": 2,
         "currency_unit": "Case-Shiller index",
-        "oscillator_defaults": OSC_DEFAULTS_US_HOUSING,
     },
     CURRENCY_SP500: {
         "a_key": KEY_A_SP500,
@@ -652,7 +611,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " index",
         "currency_decimals": 2,
         "currency_unit": "S&P 500 index",
-        "oscillator_defaults": OSC_DEFAULTS_SP500,
     },
     CURRENCY_NDAQ: {
         "a_key": KEY_A_NDAQ,
@@ -664,7 +622,6 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_suffix": " index",
         "currency_decimals": 2,
         "currency_unit": "Nasdaq Composite index",
-        "oscillator_defaults": OSC_DEFAULTS_NDAQ,
     },
 }
 
@@ -748,28 +705,20 @@ def get_powerlaw_series_group_for_series(series_name):
     return _POWERLAW_SERIES_GROUPS[0][0]
 
 
-def get_logperiodic_series_options():
-    return [
-        config.series_name for config in _BASE_SERIES_CONFIGS.values() if config.logperiodic_enabled
-    ]
-
-
-def get_selected_series_name(mode, powerlaw_series, logperiodic_series):
-    if mode == MODE_LOGPERIODIC:
-        return logperiodic_series
+def get_selected_series_name(mode, powerlaw_series):
     if mode == MODE_PORTFOLIO:
         return POWERLAW_SERIES_PRICE
     return powerlaw_series
 
 
-def get_active_model_config(mode, powerlaw_series, logperiodic_series, selected_currency):
-    selected_series = get_selected_series_name(mode, powerlaw_series, logperiodic_series)
+def get_active_model_config(mode, powerlaw_series, selected_currency):
+    selected_series = get_selected_series_name(mode, powerlaw_series)
     return get_series_config(selected_series, selected_currency=selected_currency)
 
 
-def series_supports_currency_selector(mode, powerlaw_series, logperiodic_series):
+def series_supports_currency_selector(mode, powerlaw_series):
     return get_active_model_config(
-        mode, powerlaw_series, logperiodic_series, selected_currency=CURRENCY_DOLLAR
+        mode, powerlaw_series, selected_currency=CURRENCY_DOLLAR
     ).supports_currency_selector
 
 

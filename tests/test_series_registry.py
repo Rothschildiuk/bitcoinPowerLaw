@@ -21,7 +21,6 @@ from core.constants import (
     LITECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
-    MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
     POWERLAW_SERIES_DOGECOIN_BTC,
@@ -49,7 +48,6 @@ from core.series_registry import (
     get_active_model_config,
     get_powerlaw_series_group_for_series,
     get_powerlaw_series_group_map,
-    get_logperiodic_series_options,
     get_powerlaw_series_groups,
     get_powerlaw_series_options,
     get_selected_series_name,
@@ -67,13 +65,10 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertLessEqual(config.powerlaw_slope_bounds[0], config.default_b)
         self.assertGreaterEqual(config.powerlaw_slope_bounds[1], config.default_b)
 
-    def test_options_follow_registry_capabilities(self):
+    def test_options_follow_registry(self):
         self.assertIn(POWERLAW_SERIES_REVENUE, get_powerlaw_series_options())
         self.assertIn(POWERLAW_SERIES_BITCOIN_MARKET_CAP, get_powerlaw_series_options())
         self.assertIn(POWERLAW_SERIES_LIQUID_TRANSACTIONS, get_powerlaw_series_options())
-        self.assertIn(POWERLAW_SERIES_DIFFICULTY, get_logperiodic_series_options())
-        self.assertIn(POWERLAW_SERIES_HASHRATE, get_logperiodic_series_options())
-        self.assertNotIn(POWERLAW_SERIES_LIQUID_TRANSACTIONS, get_logperiodic_series_options())
 
     def test_powerlaw_series_groups_cover_all_powerlaw_options(self):
         grouped_series = [
@@ -87,27 +82,33 @@ class TestSeriesRegistry(unittest.TestCase):
         group_map = get_powerlaw_series_group_map()
 
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_HASHRATE), "Bitcoin Network"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_HASHRATE),
+            "Bitcoin Network",
         )
         self.assertEqual(
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_LIQUID_TRANSACTIONS),
             "Liquid Network",
         )
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_FILECOIN_BTC), "Shitcoins"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_FILECOIN_BTC),
+            "Shitcoins",
         )
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_MONERO_BTC), "Shitcoins"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_MONERO_BTC),
+            "Shitcoins",
         )
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_LITECOIN_BTC), "Shitcoins"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_LITECOIN_BTC),
+            "Shitcoins",
         )
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_DOGECOIN_BTC), "Shitcoins"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_DOGECOIN_BTC),
+            "Shitcoins",
         )
         self.assertEqual(get_powerlaw_series_group_for_series(POWERLAW_SERIES_US_M2), "Fiat Money")
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_USDT_SUPPLY), "Fiat Money"
+            get_powerlaw_series_group_for_series(POWERLAW_SERIES_USDT_SUPPLY),
+            "Fiat Money",
         )
         self.assertIn(POWERLAW_SERIES_HASHRATE, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_MARKET_CAP, group_map["Bitcoin Network"])
@@ -120,7 +121,6 @@ class TestSeriesRegistry(unittest.TestCase):
         volatility_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_BITCOIN_VOLATILITY,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 
@@ -134,7 +134,6 @@ class TestSeriesRegistry(unittest.TestCase):
         market_cap_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_BITCOIN_MARKET_CAP,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 
@@ -148,7 +147,6 @@ class TestSeriesRegistry(unittest.TestCase):
         filecoin_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_FILECOIN_BTC,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 
@@ -168,7 +166,6 @@ class TestSeriesRegistry(unittest.TestCase):
                 series_config = get_active_model_config(
                     MODE_POWERLAW,
                     series_name,
-                    POWERLAW_SERIES_PRICE,
                     CURRENCY_DOLLAR,
                 )
 
@@ -178,7 +175,6 @@ class TestSeriesRegistry(unittest.TestCase):
     def test_price_series_config_tracks_selected_currency(self):
         euro_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_EURO,
         )
@@ -191,7 +187,6 @@ class TestSeriesRegistry(unittest.TestCase):
         chf_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_PRICE,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_CHF,
         )
 
@@ -202,7 +197,6 @@ class TestSeriesRegistry(unittest.TestCase):
 
         uah_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_UAH,
         )
@@ -215,7 +209,6 @@ class TestSeriesRegistry(unittest.TestCase):
         rub_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_PRICE,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_RUB,
         )
 
@@ -226,7 +219,6 @@ class TestSeriesRegistry(unittest.TestCase):
 
         silver_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_SILVER,
         )
@@ -240,7 +232,6 @@ class TestSeriesRegistry(unittest.TestCase):
         copper_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_PRICE,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_COPPER,
         )
 
@@ -252,7 +243,6 @@ class TestSeriesRegistry(unittest.TestCase):
 
         iron_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_IRON,
         )
@@ -266,7 +256,6 @@ class TestSeriesRegistry(unittest.TestCase):
         aluminum_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_PRICE,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_ALUMINUM,
         )
 
@@ -278,7 +267,6 @@ class TestSeriesRegistry(unittest.TestCase):
 
         oil_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_OIL,
         )
@@ -292,7 +280,6 @@ class TestSeriesRegistry(unittest.TestCase):
         us_housing_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_PRICE,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_US_HOUSING,
         )
 
@@ -300,12 +287,10 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(us_housing_config.currency_decimals, 2)
         self.assertEqual(us_housing_config.currency_unit, "Case-Shiller index")
         self.assertEqual(us_housing_config.target_series_unit, CURRENCY_US_HOUSING)
-        self.assertIsNotNone(us_housing_config.oscillator_defaults)
         self.assertTrue(us_housing_config.supports_currency_selector)
 
         sp500_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_SP500,
         )
@@ -314,12 +299,10 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(sp500_config.currency_decimals, 2)
         self.assertEqual(sp500_config.currency_unit, "S&P 500 index")
         self.assertEqual(sp500_config.target_series_unit, CURRENCY_SP500)
-        self.assertIsNotNone(sp500_config.oscillator_defaults)
         self.assertTrue(sp500_config.supports_currency_selector)
 
         ndaq_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_NDAQ,
         )
@@ -328,19 +311,16 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(ndaq_config.currency_decimals, 2)
         self.assertEqual(ndaq_config.currency_unit, "Nasdaq Composite index")
         self.assertEqual(ndaq_config.target_series_unit, CURRENCY_NDAQ)
-        self.assertIsNotNone(ndaq_config.oscillator_defaults)
         self.assertTrue(ndaq_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
         price_config = get_active_model_config(
             MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
             POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
@@ -351,10 +331,9 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertTrue(sim_config.lock_price_scale_to_log)
         self.assert_default_params_are_within_powerlaw_bounds(sim_config)
 
-    def test_logperiodic_difficulty_uses_start_2010_analysis_cutoff(self):
+    def test_difficulty_uses_start_2010_analysis_cutoff(self):
         difficulty_config = get_active_model_config(
-            MODE_LOGPERIODIC,
-            POWERLAW_SERIES_PRICE,
+            MODE_POWERLAW,
             POWERLAW_SERIES_DIFFICULTY,
             CURRENCY_DOLLAR,
         )
@@ -364,26 +343,13 @@ class TestSeriesRegistry(unittest.TestCase):
             difficulty_config.analysis_min_abs_day,
             DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
         )
-        self.assertEqual(difficulty_config.oscillator_parameter_bounds["lambda_val"], (1.5, 8.0))
         self.assertTrue(difficulty_config.lock_price_scale_to_log)
-
-    def test_bitcoin_price_shows_halving_lines_in_logperiodic(self):
-        price_config = get_active_model_config(
-            MODE_LOGPERIODIC,
-            POWERLAW_SERIES_PRICE,
-            POWERLAW_SERIES_PRICE,
-            CURRENCY_DOLLAR,
-        )
-
-        self.assertEqual(price_config.series_name, POWERLAW_SERIES_PRICE)
-        self.assertTrue(price_config.show_halving_lines)
 
     def test_portfolio_always_uses_bitcoin_price_series(self):
         self.assertEqual(
             get_selected_series_name(
                 MODE_PORTFOLIO,
                 POWERLAW_SERIES_LIQUID_TRANSACTIONS,
-                POWERLAW_SERIES_DIFFICULTY,
             ),
             POWERLAW_SERIES_PRICE,
         )
@@ -393,13 +359,11 @@ class TestSeriesRegistry(unittest.TestCase):
             series_supports_currency_selector(
                 MODE_POWERLAW,
                 POWERLAW_SERIES_LIQUID_TRANSACTIONS,
-                POWERLAW_SERIES_PRICE,
             )
         )
         self.assertTrue(
             series_supports_currency_selector(
                 MODE_POWERLAW,
-                POWERLAW_SERIES_PRICE,
                 POWERLAW_SERIES_PRICE,
             )
         )
@@ -408,7 +372,6 @@ class TestSeriesRegistry(unittest.TestCase):
         liquid_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_LIQUID_TRANSACTIONS,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 
@@ -422,19 +385,16 @@ class TestSeriesRegistry(unittest.TestCase):
         lightning_nodes_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_LIGHTNING_NODES,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
         lightning_btc_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_LIGHTNING_CAPACITY,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
         liquid_btc_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_LIQUID_BTC,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 
@@ -466,7 +426,6 @@ class TestSeriesRegistry(unittest.TestCase):
         m2_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_US_M2,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 
@@ -482,7 +441,6 @@ class TestSeriesRegistry(unittest.TestCase):
         m2_config = get_active_model_config(
             MODE_POWERLAW,
             POWERLAW_SERIES_USDT_SUPPLY,
-            POWERLAW_SERIES_PRICE,
             CURRENCY_DOLLAR,
         )
 

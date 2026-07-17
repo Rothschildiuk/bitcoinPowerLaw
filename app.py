@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import oscillator, power_law
+from core import power_law
 from core.constants import (
     APP_VERSION,
     CURRENCY_ALUMINUM,
@@ -17,7 +17,6 @@ from core.constants import (
     CURRENCY_SILVER,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
-    COFER_DEFAULT_CURRENCIES,
     DEFAULT_FORECAST_HORIZON,
     FORECAST_HORIZON_MAX,
     FORECAST_HORIZON_MIN,
@@ -29,13 +28,9 @@ from core.constants import (
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
     KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
-    KEY_COFER_CURRENCIES,
     KEY_CURRENCY_SELECTOR,
     KEY_GENESIS_OFFSET,
     KEY_LAST_MODE,
-    KEY_LOGPERIODIC_HARMONICS,
-    KEY_LOGPERIODIC_SERIES,
-    KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     KEY_POWERLAW_SIGMA_DISPLAY_MODE,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BACKTEST_HAS_RUN,
@@ -52,11 +47,8 @@ from core.constants import (
     KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_PORTFOLIO_STRATEGY_VIEW,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
-    MODE_COFER,
-    MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
-    OSC_DEFAULTS,
     POWERLAW_SIGMA_MODE_CLASSIC,
     POWERLAW_SIGMA_MODE_HISTORICAL,
     POWERLAW_SERIES_DOGECOIN_BTC,
@@ -97,24 +89,17 @@ from core.utils import (
     build_portfolio_view_model,
     calculate_expanding_powerlaw_parameters,
     calculate_historical_sigma_offsets,
-    calculate_r2_score,
     estimate_current_monthly_pension,
     evaluate_powerlaw_values,
-    interpolate_sigma_level_from_log_offset,
     powerlaw_parameters_are_unstable,
     resolve_trend_parameters,
     resolve_portfolio_scenario_log_offset,
 )
-from services.price_service import (
-    build_currency_close_series,
-    get_snapshot_data_date,
-    load_imf_cofer_currency_share_data,
-)
+from services.price_service import build_currency_close_series, get_snapshot_data_date
 from ui.charts import (
     _resolve_model_view_max,
     render_main_model_chart,
 )
-from ui.cofer import render_cofer_currency_share_view as render_cofer_view
 from ui.kpi import render_model_kpis
 from ui.sidebar import render_sidebar_panel
 from services.series_store import (
@@ -130,10 +115,6 @@ def initialize_app_session_state():
         KEY_CURRENCY_SELECTOR: CURRENCY_EURO,
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
-        KEY_LOGPERIODIC_SERIES: POWERLAW_SERIES_PRICE,
-        KEY_COFER_CURRENCIES: list(COFER_DEFAULT_CURRENCIES),
-        KEY_LOGPERIODIC_HARMONICS: int(OSC_DEFAULTS.get("harmonic_count", 1)),
-        KEY_LOGPERIODIC_SHOW_DECAYED_DSI: True,
         KEY_POWERLAW_SIGMA_DISPLAY_MODE: POWERLAW_SIGMA_MODE_CLASSIC,
         KEY_SIGMA_BAND_HISTORY_RANGE_PCT: (0, 100),
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
@@ -1133,8 +1114,6 @@ sidebar_series_data = SharedSidebarSeriesData(series_store)
     price_scale,
     current_r2,
     powerlaw_series,
-    logperiodic_series,
-    cofer_currencies,
 ) = render_sidebar_panel(
     sidebar_series_data,
     c_text_main,
@@ -1144,29 +1123,12 @@ sidebar_series_data = SharedSidebarSeriesData(series_store)
     FORECAST_HORIZON_MAX,
 )
 
-if mode == MODE_COFER:
-    cofer_df = load_imf_cofer_currency_share_data(source=series_store.data_source)
-    render_cofer_view(
-        cofer_df,
-        cofer_currencies,
-        pl_template=pl_template,
-        pl_bg_color=pl_bg_color,
-        pl_grid_color=pl_grid_color,
-        pl_text_color=pl_text_color,
-        c_hover_bg=c_hover_bg,
-        c_hover_text=c_hover_text,
-        c_border=c_border,
-    )
-    st.stop()
-
-active_model = get_active_model_config(mode, powerlaw_series, logperiodic_series, currency)
+active_model = get_active_model_config(mode, powerlaw_series, currency)
 st.session_state[KEY_A] = float(st.session_state.get(active_model.a_key, active_model.default_a))
 st.session_state[KEY_B] = float(st.session_state.get(active_model.b_key, active_model.default_b))
 
-selected_series_name = get_selected_series_name(mode, powerlaw_series, logperiodic_series)
-active_series_supports_currency = series_supports_currency_selector(
-    mode, powerlaw_series, logperiodic_series
-)
+selected_series_name = get_selected_series_name(mode, powerlaw_series)
+active_series_supports_currency = series_supports_currency_selector(mode, powerlaw_series)
 
 if mode == MODE_POWERLAW and (not active_series_supports_currency) and currency != CURRENCY_DOLLAR:
     st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
@@ -1175,16 +1137,8 @@ if active_series_supports_currency and currency != st.session_state.get(
     KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR
 ):
     st.rerun()
-if (
-    mode == MODE_LOGPERIODIC
-    and (not active_series_supports_currency)
-    and currency != CURRENCY_DOLLAR
-):
-    st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_DOLLAR
-    st.rerun()
-
 # --- MAIN CALCULATIONS ---
-active_model = get_active_model_config(mode, powerlaw_series, logperiodic_series, currency)
+active_model = get_active_model_config(mode, powerlaw_series, currency)
 session_genesis_offset = int(st.session_state.get(KEY_GENESIS_OFFSET, 0))
 genesis_offset = (
     int(active_model.model_origin_abs_day)
@@ -1231,7 +1185,6 @@ trend_result = resolve_trend_parameters(
     df_display["LogClose"].values,
     intercept_a=float(st.session_state.get(active_a_key, active_default_a)),
     slope_b=float(st.session_state.get(active_b_key, active_default_b)),
-    active_mode=mode,
 )
 a_active = trend_result.intercept_a
 b_active = trend_result.slope_b
@@ -1249,7 +1202,7 @@ show_historical_powerlaw = (
     mode == MODE_POWERLAW
     and st.session_state.get(KEY_POWERLAW_SIGMA_DISPLAY_MODE) == POWERLAW_SIGMA_MODE_HISTORICAL
 )
-if mode == MODE_LOGPERIODIC or show_historical_powerlaw:
+if show_historical_powerlaw:
     (
         historical_powerlaw_intercepts,
         historical_powerlaw_slopes,
@@ -1258,13 +1211,12 @@ if mode == MODE_LOGPERIODIC or show_historical_powerlaw:
         df_display["LogD"].values,
         df_display["LogClose"].values,
     )
-    if show_historical_powerlaw:
-        historical_powerlaw_sigma_offsets = calculate_historical_sigma_offsets(
-            df_display["LogD"].values,
-            df_display["LogClose"].values,
-            historical_powerlaw_intercepts,
-            historical_powerlaw_slopes,
-        )
+    historical_powerlaw_sigma_offsets = calculate_historical_sigma_offsets(
+        df_display["LogD"].values,
+        df_display["LogClose"].values,
+        historical_powerlaw_intercepts,
+        historical_powerlaw_slopes,
+    )
 
 currency_prefix = active_model.currency_prefix
 currency_suffix = active_model.currency_suffix
@@ -1273,55 +1225,6 @@ currency_unit = active_model.currency_unit
 df_display["CloseDisplay"] = df_display["Close"]
 df_display["FairDisplay"] = df_display["Fair"]
 
-bitcoin_residual_overlay_df = None
-if mode == MODE_LOGPERIODIC and logperiodic_series != POWERLAW_SERIES_PRICE:
-    raw_df_usd = series_store.get(POWERLAW_SERIES_PRICE)
-    price_model = get_active_model_config(
-        MODE_POWERLAW,
-        POWERLAW_SERIES_PRICE,
-        POWERLAW_SERIES_PRICE,
-        currency,
-    )
-    price_genesis_offset = (
-        int(price_model.model_origin_abs_day)
-        if price_model.model_origin_abs_day is not None
-        else session_genesis_offset
-    )
-    bitcoin_residual_overlay_df = raw_df_usd.copy()
-    bitcoin_residual_overlay_df["Close"] = build_currency_close_series(
-        raw_df_usd,
-        currency,
-        source=series_store.data_source,
-    )
-    bitcoin_residual_overlay_df = bitcoin_residual_overlay_df[
-        (bitcoin_residual_overlay_df["AbsDays"] > price_genesis_offset)
-        & (bitcoin_residual_overlay_df["Close"] > 0)
-    ].copy()
-    bitcoin_residual_overlay_df["LogClose"] = np.log10(bitcoin_residual_overlay_df["Close"])
-    bitcoin_residual_overlay_df["Days"] = (
-        bitcoin_residual_overlay_df["AbsDays"] - price_genesis_offset
-    )
-    bitcoin_residual_overlay_df["LogD"] = np.log10(bitcoin_residual_overlay_df["Days"])
-    bitcoin_trend = resolve_trend_parameters(
-        bitcoin_residual_overlay_df["LogD"].values,
-        bitcoin_residual_overlay_df["LogClose"].values,
-        intercept_a=float(st.session_state.get(price_model.a_key, price_model.default_a)),
-        slope_b=float(st.session_state.get(price_model.b_key, price_model.default_b)),
-        active_mode=MODE_POWERLAW,
-    )
-    bitcoin_residual_overlay_df["Res"] = bitcoin_trend.residual_series
-    bitcoin_percentile_offsets = calculate_percentile_offsets(
-        bitcoin_residual_overlay_df,
-        price_genesis_offset,
-    )
-    if np.all(np.isfinite(bitcoin_percentile_offsets)):
-        bitcoin_residual_overlay_df["ResidualSigma"] = [
-            interpolate_sigma_level_from_log_offset(residual, bitcoin_percentile_offsets)
-            for residual in bitcoin_residual_overlay_df["Res"].to_numpy(dtype=float)
-        ]
-    else:
-        bitcoin_residual_overlay_df = None
-
 if mode in [MODE_POWERLAW, MODE_PORTFOLIO] and powerlaw_parameters_are_unstable(
     current_r2, was_clipped=fair_was_clipped
 ):
@@ -1329,87 +1232,8 @@ if mode in [MODE_POWERLAW, MODE_PORTFOLIO] and powerlaw_parameters_are_unstable(
         "Current PowerLaw parameters are unstable for the selected series. Use Auto-fit model or Reset parameters."
     )
 
-# Use a shared LogPeriodic R² mask so scoring follows the same visible segment.
-lp_r2_mask = np.ones(len(df_display), dtype=bool)
-if mode == MODE_LOGPERIODIC and active_model.oscillator_min_abs_day is not None:
-    lp_r2_mask = df_display["AbsDays"].values >= active_model.oscillator_min_abs_day
-
-# Calculate R2 for Trend if not returned by sidebar (LogPeriodic mode)
-if mode == MODE_LOGPERIODIC:
-    if np.count_nonzero(lp_r2_mask) > 1:
-        current_r2 = calculate_r2_score(
-            df_display["LogClose"].values[lp_r2_mask],
-            df_display["ModelLog"].values[lp_r2_mask],
-        )
-    else:
-        current_r2 = 0.0
-
 p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
 residual_sigma_log = calculate_residual_sigma_log(df_display)
-
-# --- OSCILLATOR CALC ---
-osc_settings = oscillator.OscillatorSettings(
-    t1_age=float(st.session_state.get("t1_age", OSC_DEFAULTS["t1_age"])),
-    lambda_val=float(st.session_state.get("lambda_val", OSC_DEFAULTS["lambda_val"])),
-    harmonic_count=int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1)),
-)
-osc_amp, osc_omega, osc_phi = 0.0, 0.0, 0.0
-r2_combined = current_r2
-osc_reference_log_day = float(df_display["LogD"].min())
-osc_harmonic_coefficients = np.array([], dtype=float)
-selected_harmonic_count = max(1, min(3, int(st.session_state.get(KEY_LOGPERIODIC_HARMONICS, 1))))
-logperiodic_stats_rows = None
-perrenod_stats_rows = None
-perrenod_curve = None
-
-if mode == MODE_LOGPERIODIC:
-    try:
-        osc_result = oscillator.compute_oscillator_overlay(
-            df_display["LogD"].values,
-            df_display["Res"].values,
-            df_display["ModelLog"].values,
-            df_display["LogClose"].values,
-            lp_r2_mask,
-            osc_settings,
-            current_r2,
-        )
-        osc_settings = osc_result.settings
-        osc_amp = osc_result.amplitude
-        osc_omega = osc_result.angular_frequency
-        osc_phi = osc_result.phase_shift
-        r2_combined = osc_result.combined_r2
-        osc_reference_log_day = osc_result.reference_log_day
-        osc_harmonic_coefficients = osc_result.harmonic_coefficients
-        stats_params = {
-            "t1_age": osc_settings.t1_age,
-            "lambda_val": osc_settings.lambda_val,
-        }
-        fit_log_days = df_display["LogD"].values[lp_r2_mask]
-        fit_residuals = df_display["Res"].values[lp_r2_mask]
-        fit_days = df_display["Days"].values[lp_r2_mask]
-        logperiodic_stats_rows = oscillator.compute_oscillator_model_stats_table(
-            fit_log_days,
-            fit_residuals,
-            stats_params,
-        )
-        perrenod_stats_rows = oscillator.compute_perrenod_comparison_stats_table(
-            fit_log_days,
-            fit_residuals,
-            fit_days,
-            (
-                active_model.oscillator_parameter_bounds.get("lambda_val", (1.5, 5.0))
-                if active_model.oscillator_parameter_bounds
-                else (1.5, 5.0)
-            ),
-        )
-    except Exception as e:
-        st.error(f"LogPeriodic Error: {e}")
-        osc_settings = oscillator.OscillatorSettings(
-            t1_age=OSC_DEFAULTS["t1_age"],
-            lambda_val=OSC_DEFAULTS["lambda_val"],
-            harmonic_count=1,
-        )
-        osc_amp, osc_omega, osc_phi, r2_combined = 0, 0, 0, current_r2
 
 # --- VIZ SETUP ---
 view_max = _resolve_model_view_max(df_display, current_gen_date)
@@ -1420,77 +1244,9 @@ m_x, m_dates, m_log_d, m_fair_usd, m_dates_str = prepare_model_grid(
 )
 m_fair_display = m_fair_usd
 
-m_osc_y = np.array([], dtype=float)
-if mode == MODE_LOGPERIODIC:
-    m_osc_y = oscillator.build_oscillator_curve(
-        m_log_d,
-        osc_amp,
-        osc_omega,
-        osc_phi,
-        osc_reference_log_day,
-        osc_harmonic_coefficients,
-    )
-m_osc_y_by_harmonic = {selected_harmonic_count: m_osc_y}
-if mode == MODE_LOGPERIODIC:
-    m_osc_y_by_harmonic = {}
-    for harmonic_count in range(1, selected_harmonic_count + 1):
-        harmonic_settings = oscillator.OscillatorSettings(
-            t1_age=osc_settings.t1_age,
-            lambda_val=osc_settings.lambda_val,
-            harmonic_count=harmonic_count,
-        )
-        harmonic_result = oscillator.compute_oscillator_overlay(
-            df_display["LogD"].values,
-            df_display["Res"].values,
-            df_display["ModelLog"].values,
-            df_display["LogClose"].values,
-            lp_r2_mask,
-            harmonic_settings,
-            current_r2,
-        )
-        m_osc_y_by_harmonic[harmonic_count] = oscillator.build_oscillator_curve(
-            m_log_d,
-            harmonic_result.amplitude,
-            harmonic_result.angular_frequency,
-            harmonic_result.phase_shift,
-            harmonic_result.reference_log_day,
-            harmonic_result.harmonic_coefficients,
-        )
-    if perrenod_stats_rows:
-        target_perrenod_row = next(
-            (
-                row
-                for row in perrenod_stats_rows
-                if row is not None and row.label == "DSI ω,2ω,4ω decayed"
-            ),
-            None,
-        )
-        if target_perrenod_row is not None:
-            try:
-                target_lambda = float(target_perrenod_row.parameter_label.split()[1])
-                perrenod_curve_values = oscillator.build_dsi_regression_curve(
-                    df_display["LogD"].values[lp_r2_mask],
-                    df_display["Res"].values[lp_r2_mask],
-                    m_log_d,
-                    target_lambda,
-                    harmonic_count=3,
-                    fit_days_since_genesis=df_display["Days"].values[lp_r2_mask],
-                    predict_days_since_genesis=m_x,
-                    decay_model="reciprocal_age",
-                )
-                if perrenod_curve_values is not None:
-                    perrenod_curve = {
-                        "label": target_perrenod_row.label,
-                        "r2": target_perrenod_row.r2,
-                        "values": perrenod_curve_values,
-                    }
-            except (IndexError, TypeError, ValueError):
-                perrenod_curve = None
-
 is_log_time = time_scale == TIME_LOG
 plot_x_model = m_x if is_log_time else m_dates
 plot_x_main = df_display["Days"] if is_log_time else df_display.index
-plot_x_osc = df_display["Days"] if is_log_time else df_display.index
 peak_powerlaw_overlay = None
 if mode == MODE_POWERLAW:
     peak_powerlaw_overlay = calculate_peak_powerlaw_overlay(
@@ -1501,7 +1257,7 @@ if mode == MODE_POWERLAW:
         1.0,
     )
 
-if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
+if mode == MODE_POWERLAW:
     render_main_model_chart(
         mode=mode,
         time_scale=time_scale,
@@ -1511,18 +1267,12 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         view_max=view_max,
         plot_x_model=plot_x_model,
         plot_x_main=plot_x_main,
-        plot_x_osc=plot_x_osc,
         m_log_d=m_log_d,
         m_dates=m_dates,
         m_dates_str=m_dates_str,
         m_fair_display=m_fair_display,
         historical_powerlaw_fair=historical_powerlaw_fair,
         historical_powerlaw_sigma_offsets=historical_powerlaw_sigma_offsets,
-        historical_powerlaw_slopes=historical_powerlaw_slopes,
-        show_historical_powerlaw_slope=mode == MODE_LOGPERIODIC,
-        m_osc_y=m_osc_y,
-        m_osc_y_by_harmonic=m_osc_y_by_harmonic,
-        perrenod_curve=perrenod_curve,
         residual_sigma_log=residual_sigma_log,
         p2_5=p2_5,
         p16_5=p16_5,
@@ -1533,9 +1283,6 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
             KEY_POWERLAW_SIGMA_DISPLAY_MODE,
             POWERLAW_SIGMA_MODE_CLASSIC,
         ),
-        osc_t1_age=osc_settings.t1_age,
-        osc_lambda=osc_settings.lambda_val,
-        selected_harmonic_count=selected_harmonic_count,
         pl_template=pl_template,
         pl_bg_color=pl_bg_color,
         pl_grid_color=pl_grid_color,
@@ -1551,10 +1298,6 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         target_series_name=target_series_name,
         target_series_unit=target_series_unit,
         show_halving_lines=active_model.show_halving_lines,
-        bitcoin_residual_overlay_df=bitcoin_residual_overlay_df,
-        osc_visible_start_abs_day=(
-            active_model.oscillator_min_abs_day if mode == MODE_LOGPERIODIC else None
-        ),
         moving_average_windows=(
             (10, 30, 90)
             if mode == MODE_POWERLAW and powerlaw_series == POWERLAW_SERIES_BITCOIN_VOLATILITY
@@ -1562,7 +1305,6 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
-            f"{selected_harmonic_count}_"
             f"{st.session_state[KEY_CHART_REVISION]}"
         ),
     )
@@ -1602,8 +1344,6 @@ render_model_kpis(
     currency_decimals,
     target_series_name,
     target_series_unit,
-    logperiodic_stats_rows=logperiodic_stats_rows,
-    perrenod_stats_rows=perrenod_stats_rows,
     historical_powerlaw_fair=historical_powerlaw_fair,
     historical_powerlaw_sigma_offsets=historical_powerlaw_sigma_offsets,
     use_historical_powerlaw=show_historical_powerlaw,

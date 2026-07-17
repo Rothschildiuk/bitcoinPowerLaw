@@ -16,7 +16,6 @@ from services.price_service import (  # noqa: E402
     load_prepared_dogecoin_btc_data,
     load_prepared_filecoin_btc_data,
     load_prepared_hashrate_data,
-    load_imf_cofer_currency_share_data,
     load_prepared_lightning_capacity_data,
     load_prepared_lightning_nodes_data,
     load_prepared_liquid_btc_data,
@@ -55,7 +54,6 @@ def _build_snapshot_jobs():
         "prepared_dogecoin_btc_data": lambda: load_prepared_dogecoin_btc_data(source="live"),
         "prepared_us_m2_data": lambda: load_prepared_us_m2_data(source="live"),
         "prepared_usdt_supply_data": lambda: load_prepared_usdt_supply_data(source="live"),
-        "imf_cofer_currency_share_data": lambda: load_imf_cofer_currency_share_data(source="live"),
     }
 
 

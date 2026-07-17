@@ -441,16 +441,6 @@ div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] > label[aria-checke
     color: __C_ACCENT_TEXT__ !important;
 }
 
-.cofer-group-title {
-    color: __C_TEXT_VAL__;
-    font-size: 12px;
-    font-weight: 850;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    opacity: 0.78;
-    margin: 8px 0 -2px;
-}
-
 [data-testid="stSidebar"] .stCheckbox,
 [data-testId="stSidebar"] .stCheckbox {
     margin-bottom: -8px !important;

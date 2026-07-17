@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.90"
+APP_VERSION = "1.1.91"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
@@ -91,87 +91,6 @@ POWERLAW_INTERCEPT_MIN = -45.0
 POWERLAW_INTERCEPT_MAX = 45.0
 POWERLAW_SLOPE_MIN = 1.0
 POWERLAW_SLOPE_MAX = 15.0
-OSC_DEFAULTS = {
-    "lambda_val": 2.06,
-    "t1_age": 2.50,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_EURO = {
-    "lambda_val": 2.06,
-    "t1_age": 0.59,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_CHF = {
-    "lambda_val": 2.06,
-    "t1_age": 0.59,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_UAH = {
-    "lambda_val": 2.06,
-    "t1_age": 2.50,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_RUB = {
-    "lambda_val": 2.06,
-    "t1_age": 0.59,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_GOLD = {
-    "lambda_val": 2.08,
-    "t1_age": 2.47,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_SILVER = {
-    "lambda_val": 2.07,
-    "t1_age": 0.84,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_COPPER = {
-    "lambda_val": 2.06,
-    "t1_age": 2.51,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_ALUMINUM = {
-    "lambda_val": 2.07,
-    "t1_age": 2.49,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_IRON = {
-    "lambda_val": 2.06,
-    "t1_age": 0.55,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_OIL = {
-    "lambda_val": 2.06,
-    "t1_age": 2.49,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_US_HOUSING = {
-    "lambda_val": 2.06,
-    "t1_age": 1.74,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_SP500 = {
-    "lambda_val": 2.07,
-    "t1_age": 0.58,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_NDAQ = {
-    "lambda_val": 2.07,
-    "t1_age": 0.58,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_DIFFICULTY = {
-    "lambda_val": 4.01,
-    "t1_age": 2.00,
-    "harmonic_count": 3,
-}
-OSC_DEFAULTS_HASHRATE = {
-    "lambda_val": 4.08,
-    "t1_age": 0.97,
-    "harmonic_count": 3,
-}
-
 # Forecast limits
 DEFAULT_FORECAST_HORIZON = 60
 FORECAST_HORIZON_MIN = 1
@@ -186,7 +105,6 @@ KEY_LAST_MODE = "last_mode"
 KEY_CHART_REVISION = "chart_revision"
 KEY_MODE_SELECTOR = "mode_selector"
 KEY_POWERLAW_SERIES = "powerlaw_series"
-KEY_LOGPERIODIC_SERIES = "logperiodic_series"
 KEY_CURRENCY_SELECTOR = "currency_selector"
 KEY_TIME_SCALE = "time_scale"
 KEY_GENESIS_OFFSET = "genesis_offset"
@@ -250,7 +168,6 @@ KEY_A_US_M2 = "A_us_m2"
 KEY_B_US_M2 = "B_us_m2"
 KEY_A_USDT_SUPPLY = "A_usdt_supply"
 KEY_B_USDT_SUPPLY = "B_usdt_supply"
-KEY_COFER_CURRENCIES = "cofer_currencies"
 KEY_A_BITCOIN_NETWORK_SIMULATION = "A_bitcoin_network_simulation"
 KEY_B_BITCOIN_NETWORK_SIMULATION = "B_bitcoin_network_simulation"
 KEY_BITCOIN_NETWORK_SIMULATION_SEED = "bitcoin_network_simulation_seed"
@@ -258,12 +175,6 @@ KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION = "bitcoin_network_simulation_resoluti
 KEY_POWERLAW_AUTO_FIT = "powerlaw_auto_fit"
 KEY_POWERLAW_ENVELOPE_SIGMA = "powerlaw_envelope_sigma"
 KEY_POWERLAW_SIGMA_DISPLAY_MODE = "powerlaw_sigma_display_mode"
-KEY_LOGPERIODIC_AUTO_FIT = "logperiodic_auto_fit"
-KEY_LOGPERIODIC_LAST_SERIES = "logperiodic_last_series"
-KEY_LOGPERIODIC_HARMONICS = "logperiodic_harmonics"
-KEY_LOGPERIODIC_SHOW_DECAYED_DSI = "logperiodic_show_decayed_dsi"
-KEY_OSC_AUTOFIT_SIGNATURE = "osc_autofit_signature"
-KEY_OSC_AUTOFIT_BEST_PARAMS = "osc_autofit_best_params"
 KEY_SIGMA_BAND_HISTORY_RANGE_PCT = "sigma_band_history_range_pct"
 KEY_SIGMA_BAND_HISTORY_YEARS = "sigma_band_history_years"
 KEY_PORTFOLIO_BTC_AMOUNT = "portfolio_btc_amount"
@@ -290,9 +201,7 @@ KEY_PORTFOLIO_BACKTEST_HAS_RUN = "portfolio_backtest_has_run"
 
 # UI options
 MODE_POWERLAW = "PowerLaw"
-MODE_LOGPERIODIC = "LogPeriodic"
 MODE_PORTFOLIO = "Portfolio"
-MODE_COFER = "COFER"
 POWERLAW_SIGMA_MODE_CLASSIC = "Classic"
 POWERLAW_SIGMA_MODE_SEGMENTED = "Segmented"
 POWERLAW_SIGMA_MODE_HISTORICAL = "Historical"
@@ -332,11 +241,6 @@ POWERLAW_SERIES_OPTIONS = [
     POWERLAW_SERIES_US_M2,
     POWERLAW_SERIES_USDT_SUPPLY,
 ]
-LOGPERIODIC_SERIES_OPTIONS = [
-    POWERLAW_SERIES_PRICE,
-    POWERLAW_SERIES_DIFFICULTY,
-    POWERLAW_SERIES_HASHRATE,
-]
 CURRENCY_DOLLAR = "USD"
 CURRENCY_EURO = "EUR"
 CURRENCY_CHF = "CHF"
@@ -367,20 +271,6 @@ CURRENCY_OPTIONS = [
     CURRENCY_GOLD,
     CURRENCY_NDAQ,
 ]
-COFER_CURRENCY_LABELS = {
-    "BTC": "BTC market cap / FX reserves",
-    "USD": "U.S. dollar",
-    "EUR": "Euro",
-    "JPY": "Japanese yen",
-    "GBP": "Pound sterling",
-    "CNY": "Chinese renminbi",
-    "AUD": "Australian dollar",
-    "CAD": "Canadian dollar",
-    "CHF": "Swiss franc",
-    "Other": "Other currencies",
-}
-COFER_CURRENCY_OPTIONS = list(COFER_CURRENCY_LABELS.keys())
-COFER_DEFAULT_CURRENCIES = ["BTC", "USD", "EUR", "JPY", "CNY"]
 TIME_LOG = "Log"
 TIME_LIN = "Lin"
 THEME_OPTIONS = ["Dark 🌑"]

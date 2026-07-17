@@ -18,7 +18,6 @@ from core.utils import (
     calculate_r2_score,
     calculate_monthly_buy_portfolio_values,
     evaluate_powerlaw_values,
-    get_stable_trend_fit,
     normalize_periodic_growth_rate,
     powerlaw_parameters_are_unstable,
     resolve_trend_parameters,
@@ -35,25 +34,6 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         actual = np.array([5.0, 5.0, 5.0, 5.0])
         predicted = np.array([4.0, 5.0, 6.0, 7.0])
         self.assertEqual(calculate_r2_score(actual, predicted), 0.0)
-
-    def test_get_stable_trend_fit_refits_on_unstable_residuals(self):
-        log_days = np.linspace(1.0, 3.0, 150)
-        true_intercept = 0.5
-        true_slope = 2.0
-        log_prices = true_intercept + true_slope * log_days
-
-        intercept, slope, trend, residuals = get_stable_trend_fit(
-            log_days,
-            log_prices,
-            intercept_a=-100.0,
-            slope_b=100.0,
-            residual_threshold=0.1,
-        )
-
-        self.assertTrue(np.isclose(intercept, true_intercept, atol=1e-10))
-        self.assertTrue(np.isclose(slope, true_slope, atol=1e-10))
-        self.assertTrue(np.allclose(trend, log_prices))
-        self.assertTrue(np.allclose(residuals, 0.0))
 
     def test_fit_peak_powerlaw_envelope_uses_local_highs(self):
         absolute_days = np.array([10.0, 20.0, 30.0, 100.0, 110.0, 120.0, 200.0, 210.0])
@@ -84,31 +64,11 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
             log_prices,
             intercept_a=intercept,
             slope_b=slope,
-            active_mode="PowerLaw",
         )
 
         self.assertIsInstance(result, TrendComputationResult)
         self.assertTrue(np.isclose(result.intercept_a, intercept))
         self.assertTrue(np.isclose(result.slope_b, slope))
-        self.assertTrue(np.allclose(result.trend_log_prices, log_prices))
-        self.assertTrue(np.allclose(result.residual_series, 0.0))
-
-    def test_resolve_trend_parameters_refits_unstable_values_in_logperiodic_mode(self):
-        log_days = np.linspace(1.0, 3.0, 150)
-        true_intercept = 0.5
-        true_slope = 2.0
-        log_prices = true_intercept + true_slope * log_days
-
-        result = resolve_trend_parameters(
-            log_days,
-            log_prices,
-            intercept_a=-100.0,
-            slope_b=100.0,
-            active_mode="LogPeriodic",
-        )
-
-        self.assertTrue(np.isclose(result.intercept_a, true_intercept, atol=1e-10))
-        self.assertTrue(np.isclose(result.slope_b, true_slope, atol=1e-10))
         self.assertTrue(np.allclose(result.trend_log_prices, log_prices))
         self.assertTrue(np.allclose(result.residual_series, 0.0))
 
@@ -121,7 +81,6 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
             log_prices,
             intercept_a=250.0,
             slope_b=40.0,
-            active_mode="PowerLaw",
         )
 
         self.assertTrue(np.all(result.trend_log_prices <= 300.0))

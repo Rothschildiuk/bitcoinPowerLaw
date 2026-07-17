@@ -1,7 +1,7 @@
 # Architecture
 
 ## Purpose
-Streamlit app for exploring Bitcoin-style PowerLaw and LogPeriodic models across price, network, liquidity, fiat, and ecosystem series.
+Streamlit app for exploring Bitcoin-style PowerLaw models across price, network, liquidity, fiat, and ecosystem series.
 
 ## Runtime Flow
 1. `app.py` loads prepared datasets via `services/price_service.py`.
@@ -15,12 +15,11 @@ Streamlit app for exploring Bitcoin-style PowerLaw and LogPeriodic models across
 - `core/constants.py`: app constants, defaults, labels, session keys
 - `core/series_registry.py`: canonical series metadata and grouping
 - `core/power_law.py`: PowerLaw regression, bounds, and controls
-- `core/oscillator.py`: LogPeriodic residual fitting, DSI comparisons, and auto-fit logic
 - `services/price_service.py`: snapshot-first data loaders, normalization, and maintenance cache
 - `ui/sidebar.py`: mode/series/parameter selection
 - `ui/charts.py`: Plotly chart assembly and axis helpers
 - `ui/kpi.py`: fair value and history-share KPI cards
-- `scripts/update_powerlaw_defaults.py`: maintenance script for checked-in PowerLaw and LogPeriodic defaults
+- `scripts/update_powerlaw_defaults.py`: maintenance script for checked-in PowerLaw defaults
 
 ## Design Rules
 - Keep raw external data loading in `services/price_service.py`.
@@ -34,5 +33,3 @@ Streamlit app for exploring Bitcoin-style PowerLaw and LogPeriodic models across
 - PowerLaw chart horizon extends 10 years beyond the newer of today and the latest data point.
 - Difficulty and Hashrate use an analysis cutoff starting at `2010-01-01` to skip the earliest startup-era rows.
 - Currency conversion applies only to Bitcoin price series.
-- LogPeriodic sidebar currently exposes only `1st Cycle Age` and `Lambda`; amplitude and damping stay pinned to series defaults.
-- Difficulty and Hashrate allow a wider LogPeriodic `Lambda` search range than Bitcoin.

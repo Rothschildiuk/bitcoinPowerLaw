@@ -16,8 +16,6 @@ from core.constants import (
     CURRENCY_SP500,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
-    COFER_CURRENCY_OPTIONS,
-    COFER_DEFAULT_CURRENCIES,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
@@ -71,11 +69,6 @@ class TestConstantsSeries(unittest.TestCase):
         self.assertIn(POWERLAW_SERIES_BITCOIN_VOLATILITY, POWERLAW_SERIES_OPTIONS)
         self.assertIn(POWERLAW_SERIES_US_M2, POWERLAW_SERIES_OPTIONS)
         self.assertIn(POWERLAW_SERIES_USDT_SUPPLY, POWERLAW_SERIES_OPTIONS)
-
-    def test_cofer_currency_options_include_major_reserve_currencies(self):
-        self.assertEqual(COFER_DEFAULT_CURRENCIES, ["BTC", "USD", "EUR", "JPY", "CNY"])
-        for currency in ["BTC", "USD", "EUR", "JPY", "GBP", "CNY", "AUD", "CAD", "CHF", "Other"]:
-            self.assertIn(currency, COFER_CURRENCY_OPTIONS)
 
 
 if __name__ == "__main__":

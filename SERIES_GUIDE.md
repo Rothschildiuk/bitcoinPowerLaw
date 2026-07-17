@@ -3,7 +3,7 @@
 Read this file only for series behavior, units, filters, mode support, or adding a new series. The canonical source of truth is `core/series_registry.py`.
 
 ## Registry Fields
-Each series config owns its session keys, defaults, display label/unit, currency behavior, mode availability, chart behavior, optional analysis cutoff, and LogPeriodic parameter bounds.
+Each series config owns its session keys, defaults, display label/unit, currency behavior, chart behavior, and optional analysis cutoff.
 
 ## Families
 - Bitcoin network: Bitcoin, Miner revenue, Bitcoin market cap, Bitcoin volatility, Difficulty, Hashrate.
@@ -13,9 +13,8 @@ Each series config owns its session keys, defaults, display label/unit, currency
 - BTC pairs: Filecoin/BTC, Monero/BTC, Litecoin/BTC, Dogecoin/BTC.
 
 ## Special Behavior
-- Bitcoin is the only series with currency switching (`EUR`, `USD`, `UAH`, `RUB`, `OIL`, `IRON`, `ALUMINUM`, `COPPER`, `US_HOUSING`, `SILVER`, `SP500`, `GOLD`, `NDAQ`) and supports both PowerLaw and LogPeriodic.
-- LogPeriodic fits residuals in log time after removing the PowerLaw trend; DSI comparisons use `omega`, `omega,2omega`, and `omega,2omega,4omega`.
-- Difficulty and Hashrate support both modes, force log scale, start analysis at `2010-01-01`, and use wider LogPeriodic `Lambda` bounds.
+- Bitcoin is the only series with currency switching (`EUR`, `USD`, `UAH`, `RUB`, `OIL`, `IRON`, `ALUMINUM`, `COPPER`, `US_HOUSING`, `SILVER`, `SP500`, `GOLD`, `NDAQ`).
+- Difficulty and Hashrate force log scale and start analysis at `2010-01-01`.
 - Bitcoin volatility is PowerLaw-only, log scale, and derived from 30-day daily BTC/USD log-return volatility.
 - Bitcoin market cap is PowerLaw-only, log scale, and derived from BTC/USD multiplied by circulating BTC supply.
 - Lightning BTC and Liquid BTC display BTC units; Lightning nodes and Liquid transactions display raw units.
@@ -33,4 +32,4 @@ Each series config owns its session keys, defaults, display label/unit, currency
 - Keep series-specific rules in the registry.
 - Derive sidebar and chart behavior from the same config.
 - Avoid spreading new series routing across hand-written `if/elif` branches.
-- Use `make update-defaults` for checked-in PowerLaw and LogPeriodic defaults, then review the `core/constants.py` diff.
+- Use `make update-defaults` for checked-in PowerLaw defaults, then review the `core/constants.py` diff.

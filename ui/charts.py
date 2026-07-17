@@ -2,10 +2,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 
 from core.constants import (
-    MODE_LOGPERIODIC,
     MODE_POWERLAW,
     POWERLAW_SIGMA_MODE_CLASSIC,
     POWERLAW_SIGMA_MODE_HISTORICAL,
@@ -46,12 +44,6 @@ SEGMENTED_SIGMA_DEFAULT_HIDDEN_LEGENDS = {
     "Segmented sigma ±1σ to ±1.5σ",
     "Segmented sigma > ±2σ",
 }
-LOGPERIODIC_SIGMA_DISPLAY_RANGE = (-3.0, 3.0)
-LOGPERIODIC_EXTREMA_HARMONICS = (
-    (1, "ω", "solid", 1.5, 0.82),
-    (2, "ω,2ω", "dash", 1.15, 0.62),
-    (3, "ω,2ω,4ω", "dot", 0.95, 0.48),
-)
 MOVING_AVERAGE_LINE_STYLES = (
     "#22c55e",
     "#f97316",
@@ -460,138 +452,6 @@ def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendran
     )
 
 
-def _add_logperiodic_extrema_traces(fig, extrema_lines, current_gen_date, is_log_time, y_range):
-    if y_range is None or len(y_range) != 2:
-        return
-    y_min, y_max = float(y_range[0]), float(y_range[1])
-    if not np.isfinite(y_min) or not np.isfinite(y_max) or y_max <= y_min:
-        return
-
-    for kind, name, legendrank in (
-        ("high", "Cycle highs", 36),
-        ("low", "Cycle lows", 37),
-    ):
-        kind_lines = [line for line in extrema_lines if line["kind"] == kind]
-        if not kind_lines:
-            continue
-
-        x_values = []
-        y_values = []
-        hover_values = []
-        for line in kind_lines:
-            x_value = line["x"]
-            if is_log_time:
-                hover_date = current_gen_date + pd.Timedelta(days=float(x_value))
-            else:
-                hover_date = pd.Timestamp(x_value)
-            x_values.extend([x_value, x_value, None])
-            y_values.extend([y_min, y_max, None])
-            hover_values.extend(
-                [hover_date.strftime("%d.%m.%Y"), hover_date.strftime("%d.%m.%Y"), None]
-            )
-
-        line_style = kind_lines[0]
-        fig.add_trace(
-            go.Scatter(
-                x=x_values,
-                y=y_values,
-                mode="lines",
-                name=name,
-                legendgroup=f"cycle_{kind}s",
-                legendrank=legendrank,
-                line=dict(
-                    color=line_style["color"],
-                    width=line_style["width"],
-                    dash=line_style["dash"],
-                ),
-                opacity=line_style["opacity"],
-                customdata=hover_values,
-                hovertemplate=f"<b>{name}</b><br>%{{customdata}}<extra></extra>",
-            )
-        )
-
-
-def _resolve_linear_y_span(*series_parts):
-    finite_values = []
-    for values in series_parts:
-        if values is None:
-            continue
-        values_arr = np.asarray(values, dtype=float)
-        finite_values.extend(values_arr[np.isfinite(values_arr)].tolist())
-    if not finite_values:
-        return None
-
-    y_min = float(np.min(finite_values))
-    y_max = float(np.max(finite_values))
-    if y_max <= y_min:
-        y_max = y_min + 1.0
-    padding = max((y_max - y_min) * 0.02, 0.1)
-    return [y_min - padding, y_max + padding]
-
-
-def _iter_logperiodic_extrema_lines(plot_x_model, harmonic_curves, selected_harmonic_count):
-    if not harmonic_curves:
-        return []
-
-    x_values = np.asarray(plot_x_model)
-    extrema_lines = []
-    style_by_count = {
-        harmonic_count: (label, dash, width, opacity)
-        for harmonic_count, label, dash, width, opacity in LOGPERIODIC_EXTREMA_HARMONICS
-    }
-    harmonic_count = int(selected_harmonic_count)
-    if harmonic_count not in harmonic_curves or harmonic_count not in style_by_count:
-        return []
-
-    y_values = np.asarray(harmonic_curves[harmonic_count], dtype=float)
-    if x_values.size != y_values.size or y_values.size < 3:
-        return []
-
-    finite_mask = np.isfinite(y_values)
-    if not np.all(finite_mask):
-        x_curve = x_values[finite_mask]
-        y_curve = y_values[finite_mask]
-    else:
-        x_curve = x_values
-        y_curve = y_values
-    if y_curve.size < 3:
-        return []
-
-    label, dash, width, opacity = style_by_count[harmonic_count]
-    previous_values = y_curve[:-2]
-    current_values = y_curve[1:-1]
-    next_values = y_curve[2:]
-    local_high_mask = (current_values > previous_values) & (current_values >= next_values)
-    local_low_mask = (current_values < previous_values) & (current_values <= next_values)
-
-    for x_value in x_curve[1:-1][local_high_mask]:
-        extrema_lines.append(
-            {
-                "x": x_value,
-                "kind": "high",
-                "label": label,
-                "color": "#ea3d2f",
-                "dash": dash,
-                "width": width,
-                "opacity": opacity,
-            }
-        )
-    for x_value in x_curve[1:-1][local_low_mask]:
-        extrema_lines.append(
-            {
-                "x": x_value,
-                "kind": "low",
-                "label": label,
-                "color": "#1199d6",
-                "dash": dash,
-                "width": width,
-                "opacity": opacity,
-            }
-        )
-
-    return extrema_lines
-
-
 def render_main_model_chart(
     *,
     mode,
@@ -602,25 +462,16 @@ def render_main_model_chart(
     view_max,
     plot_x_model,
     plot_x_main,
-    plot_x_osc,
     m_log_d,
     m_dates,
     m_dates_str,
     m_fair_display,
-    historical_powerlaw_slopes,
-    show_historical_powerlaw_slope,
-    m_osc_y,
-    m_osc_y_by_harmonic,
-    perrenod_curve,
     residual_sigma_log,
     p2_5,
     p16_5,
     p83_5,
     p97_5,
     peak_powerlaw_overlay,
-    osc_t1_age,
-    osc_lambda,
-    selected_harmonic_count,
     pl_template,
     pl_bg_color,
     pl_grid_color,
@@ -639,14 +490,11 @@ def render_main_model_chart(
     chart_key,
     historical_powerlaw_fair=None,
     historical_powerlaw_sigma_offsets=None,
-    bitcoin_residual_overlay_df=None,
-    osc_visible_start_abs_day=None,
     moving_average_windows=None,
     powerlaw_sigma_display_mode=POWERLAW_SIGMA_MODE_CLASSIC,
+    **_removed_options,
 ):
-    fig = (
-        make_subplots(specs=[[{"secondary_y": True}]]) if mode == MODE_LOGPERIODIC else go.Figure()
-    )
+    fig = go.Figure()
     tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
     hover_label = dict(
         bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
@@ -920,7 +768,9 @@ def render_main_model_chart(
             )
             shown_segmented_legendgroups = set()
             for sigma_line in segmented_sigma_lines:
-                show_segmented_legend = sigma_line["legendgroup"] not in shown_segmented_legendgroups
+                show_segmented_legend = (
+                    sigma_line["legendgroup"] not in shown_segmented_legendgroups
+                )
                 shown_segmented_legendgroups.add(sigma_line["legendgroup"])
                 segmented_visible = (
                     "legendonly"
@@ -1034,187 +884,6 @@ def render_main_model_chart(
             gridcolor=pl_grid_color,
             tickfont=tick_font,
         )
-    else:
-        osc_mask = np.ones(len(df_display), dtype=bool)
-        if osc_visible_start_abs_day is not None:
-            osc_mask = df_display["AbsDays"].to_numpy(dtype=float) >= float(
-                osc_visible_start_abs_day
-            )
-
-        osc_x_vals = np.asarray(plot_x_osc)[osc_mask]
-        logperiodic_sigma_offsets = (p2_5, p16_5, p83_5, p97_5)
-        osc_y_vals = _convert_log_offsets_to_sigma_levels(
-            df_display["Res"].to_numpy(dtype=float)[osc_mask],
-            logperiodic_sigma_offsets,
-        )
-        osc_dates = df_display.index.strftime("%d.%m.%Y").to_numpy()[osc_mask]
-        osc_prices = df_display["CloseDisplay"].to_numpy(dtype=float)[osc_mask]
-        osc_hover_data = np.column_stack([osc_dates, osc_prices])
-
-        if bitcoin_residual_overlay_df is not None and not bitcoin_residual_overlay_df.empty:
-            btc_residual_x = (
-                bitcoin_residual_overlay_df["Days"]
-                if is_log_time
-                else bitcoin_residual_overlay_df.index
-            )
-            btc_residual_values = pd.to_numeric(
-                bitcoin_residual_overlay_df["ResidualSigma"], errors="coerce"
-            )
-            btc_residual_mask = np.isfinite(btc_residual_values.to_numpy(dtype=float))
-            if np.any(btc_residual_mask):
-                fig.add_trace(
-                    go.Scatter(
-                        x=np.asarray(btc_residual_x)[btc_residual_mask],
-                        y=btc_residual_values.to_numpy(dtype=float)[btc_residual_mask],
-                        mode="lines",
-                        name="Bitcoin price residual σ",
-                        line=dict(color=pl_btc_color, width=1.4),
-                        customdata=bitcoin_residual_overlay_df.index.strftime(
-                            "%d.%m.%Y"
-                        ).to_numpy()[btc_residual_mask],
-                        hovertemplate="<b>%{customdata}</b><br>Bitcoin price residual: %{y:.2f}σ<extra></extra>",
-                        visible="legendonly",
-                    )
-                )
-
-        fig.add_trace(
-            go.Scatter(
-                x=osc_x_vals,
-                y=osc_y_vals,
-                mode="lines",
-                name="power-law residual σ",
-                line=dict(color="rgba(180, 185, 192, 0.42)", width=1.1),
-                customdata=osc_hover_data,
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b>"
-                    f"<br>{target_series_name}: "
-                    f"{currency_prefix}%{{customdata[1]:,.{currency_decimals}f}}{currency_suffix}"
-                    "<br><b>power-law residual σ</b>: %{y:.2f}σ<extra></extra>"
-                ),
-            )
-        )
-        if show_historical_powerlaw_slope:
-            slope_vals = np.asarray(historical_powerlaw_slopes, dtype=float)[osc_mask]
-            finite_slope_vals = slope_vals[np.isfinite(slope_vals)]
-            final_slope_label = f" {finite_slope_vals[-1]:.3f}" if finite_slope_vals.size else ""
-            fig.add_trace(
-                go.Scatter(
-                    x=osc_x_vals,
-                    y=slope_vals,
-                    mode="lines",
-                    name=f"PowerLaw B{final_slope_label}",
-                    line=dict(color="#f0b90b", width=1.9),
-                    customdata=osc_dates,
-                    hovertemplate="<b>%{customdata}</b><br>PowerLaw B: %{y:.3f}<extra></extra>",
-                    visible="legendonly",
-                ),
-                secondary_y=True,
-            )
-        harmonic_curves = m_osc_y_by_harmonic or {selected_harmonic_count: m_osc_y}
-        harmonic_colors = {1: "#2f80b7", 2: "#f28e2b", 3: "#2aa84a"}
-        harmonic_labels = {1: "ω", 2: "ω,2ω", 3: "ω,2ω,4ω"}
-        for harmonic_count in sorted(harmonic_curves):
-            if harmonic_count > int(selected_harmonic_count):
-                continue
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_x_model_render,
-                    y=_convert_log_offsets_to_sigma_levels(
-                        _sample_trace_values(
-                            harmonic_curves[harmonic_count],
-                            model_sample_indices,
-                        ),
-                        logperiodic_sigma_offsets,
-                    ),
-                    mode="lines",
-                    name=f"DSI {harmonic_labels.get(harmonic_count, harmonic_count)}",
-                    line=dict(
-                        color=harmonic_colors.get(harmonic_count, "#ea3d2f"),
-                        width=(2.6 if harmonic_count == int(selected_harmonic_count) else 1.9),
-                    ),
-                    hoverinfo="skip",
-                    visible="legendonly",
-                )
-            )
-        if perrenod_curve is not None:
-            perrenod_name = str(perrenod_curve.get("label", "DSI ω,2ω,4ω Decayed")).replace(
-                " decayed", " Decayed"
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_x_model_render,
-                    y=_convert_log_offsets_to_sigma_levels(
-                        _sample_trace_values(perrenod_curve["values"], model_sample_indices),
-                        logperiodic_sigma_offsets,
-                    ),
-                    mode="lines",
-                    name=perrenod_name,
-                    line=dict(color="#f0b90b", width=3.0, dash="solid"),
-                    hoverinfo="skip",
-                )
-            )
-        extrema_curves = harmonic_curves
-        extrema_harmonic_count = selected_harmonic_count
-        if perrenod_curve is not None and "values" in perrenod_curve:
-            extrema_curves = {3: perrenod_curve["values"]}
-            extrema_harmonic_count = 3
-        extrema_values = (
-            perrenod_curve["values"]
-            if perrenod_curve is not None and "values" in perrenod_curve
-            else harmonic_curves.get(selected_harmonic_count)
-        )
-        logperiodic_y_range = _resolve_linear_y_span(
-            osc_y_vals,
-            (
-                _convert_log_offsets_to_sigma_levels(
-                    extrema_values,
-                    logperiodic_sigma_offsets,
-                )
-                if extrema_values is not None
-                else None
-            ),
-        )
-        logperiodic_y_range = [
-            LOGPERIODIC_SIGMA_DISPLAY_RANGE[0],
-            LOGPERIODIC_SIGMA_DISPLAY_RANGE[1],
-        ]
-        fig.add_hline(y=0, line_width=1, line_color=pl_legend_color)
-        fig.update_yaxes(
-            type="linear",
-            title_text="Sigma residual",
-            range=logperiodic_y_range,
-            gridcolor=pl_grid_color,
-            tickfont=tick_font,
-            secondary_y=False,
-        )
-        if show_historical_powerlaw_slope:
-            fig.update_yaxes(
-                title_text="PowerLaw B",
-                showgrid=False,
-                tickfont=tick_font,
-                secondary_y=True,
-            )
-
-        extrema_lines = _iter_logperiodic_extrema_lines(
-            plot_x_model,
-            extrema_curves,
-            extrema_harmonic_count,
-        )
-        _add_logperiodic_extrema_traces(
-            fig,
-            extrema_lines,
-            current_gen_date,
-            is_log_time,
-            logperiodic_y_range,
-        )
-        if show_halving_lines:
-            _add_halving_trace(
-                fig,
-                current_gen_date,
-                is_log_time,
-                logperiodic_y_range,
-                legendrank=35,
-            )
 
     if is_log_time:
         x_range, t_vals, t_text = _resolve_log_time_axis(

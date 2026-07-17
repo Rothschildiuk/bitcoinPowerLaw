@@ -26,24 +26,7 @@ from core.constants import (  # noqa: E402
     CURRENCY_SP500,
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
-    MODE_LOGPERIODIC,
     MODE_POWERLAW,
-    OSC_DEFAULTS,
-    OSC_DEFAULTS_ALUMINUM,
-    OSC_DEFAULTS_CHF,
-    OSC_DEFAULTS_COPPER,
-    OSC_DEFAULTS_DIFFICULTY,
-    OSC_DEFAULTS_EURO,
-    OSC_DEFAULTS_GOLD,
-    OSC_DEFAULTS_HASHRATE,
-    OSC_DEFAULTS_IRON,
-    OSC_DEFAULTS_NDAQ,
-    OSC_DEFAULTS_OIL,
-    OSC_DEFAULTS_RUB,
-    OSC_DEFAULTS_SILVER,
-    OSC_DEFAULTS_SP500,
-    OSC_DEFAULTS_UAH,
-    OSC_DEFAULTS_US_HOUSING,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
@@ -61,10 +44,8 @@ from core.constants import (  # noqa: E402
     POWERLAW_SERIES_USDT_SUPPLY,
     POWERLAW_SERIES_US_M2,
 )
-from core import oscillator  # noqa: E402
 from core.power_law import fit_powerlaw_regression  # noqa: E402
 from core.series_registry import get_active_model_config  # noqa: E402
-from core.utils import get_stable_trend_fit  # noqa: E402
 from services.price_service import (  # noqa: E402
     build_currency_close_series,
     build_prepared_bitcoin_market_cap_data,
@@ -97,7 +78,12 @@ DEFAULT_CASES = [
     (POWERLAW_SERIES_PRICE, CURRENCY_GOLD, "DEFAULT_GOLD_A", "DEFAULT_GOLD_B"),
     (POWERLAW_SERIES_PRICE, CURRENCY_SILVER, "DEFAULT_SILVER_A", "DEFAULT_SILVER_B"),
     (POWERLAW_SERIES_PRICE, CURRENCY_COPPER, "DEFAULT_COPPER_A", "DEFAULT_COPPER_B"),
-    (POWERLAW_SERIES_PRICE, CURRENCY_ALUMINUM, "DEFAULT_ALUMINUM_A", "DEFAULT_ALUMINUM_B"),
+    (
+        POWERLAW_SERIES_PRICE,
+        CURRENCY_ALUMINUM,
+        "DEFAULT_ALUMINUM_A",
+        "DEFAULT_ALUMINUM_B",
+    ),
     (POWERLAW_SERIES_PRICE, CURRENCY_IRON, "DEFAULT_IRON_A", "DEFAULT_IRON_B"),
     (POWERLAW_SERIES_PRICE, CURRENCY_OIL, "DEFAULT_OIL_A", "DEFAULT_OIL_B"),
     (
@@ -108,7 +94,12 @@ DEFAULT_CASES = [
     ),
     (POWERLAW_SERIES_PRICE, CURRENCY_SP500, "DEFAULT_SP500_A", "DEFAULT_SP500_B"),
     (POWERLAW_SERIES_PRICE, CURRENCY_NDAQ, "DEFAULT_NDAQ_A", "DEFAULT_NDAQ_B"),
-    (POWERLAW_SERIES_REVENUE, CURRENCY_DOLLAR, "DEFAULT_REVENUE_A", "DEFAULT_REVENUE_B"),
+    (
+        POWERLAW_SERIES_REVENUE,
+        CURRENCY_DOLLAR,
+        "DEFAULT_REVENUE_A",
+        "DEFAULT_REVENUE_B",
+    ),
     (
         POWERLAW_SERIES_BITCOIN_MARKET_CAP,
         CURRENCY_DOLLAR,
@@ -127,7 +118,12 @@ DEFAULT_CASES = [
         "DEFAULT_DIFFICULTY_A",
         "DEFAULT_DIFFICULTY_B",
     ),
-    (POWERLAW_SERIES_HASHRATE, CURRENCY_DOLLAR, "DEFAULT_HASHRATE_A", "DEFAULT_HASHRATE_B"),
+    (
+        POWERLAW_SERIES_HASHRATE,
+        CURRENCY_DOLLAR,
+        "DEFAULT_HASHRATE_A",
+        "DEFAULT_HASHRATE_B",
+    ),
     (
         POWERLAW_SERIES_LIGHTNING_NODES,
         CURRENCY_DOLLAR,
@@ -140,7 +136,12 @@ DEFAULT_CASES = [
         "DEFAULT_LIGHTNING_CAPACITY_A",
         "DEFAULT_LIGHTNING_CAPACITY_B",
     ),
-    (POWERLAW_SERIES_LIQUID_BTC, CURRENCY_DOLLAR, "DEFAULT_LIQUID_BTC_A", "DEFAULT_LIQUID_BTC_B"),
+    (
+        POWERLAW_SERIES_LIQUID_BTC,
+        CURRENCY_DOLLAR,
+        "DEFAULT_LIQUID_BTC_A",
+        "DEFAULT_LIQUID_BTC_B",
+    ),
     (
         POWERLAW_SERIES_LIQUID_TRANSACTIONS,
         CURRENCY_DOLLAR,
@@ -153,7 +154,12 @@ DEFAULT_CASES = [
         "DEFAULT_FILECOIN_BTC_A",
         "DEFAULT_FILECOIN_BTC_B",
     ),
-    (POWERLAW_SERIES_MONERO_BTC, CURRENCY_DOLLAR, "DEFAULT_MONERO_BTC_A", "DEFAULT_MONERO_BTC_B"),
+    (
+        POWERLAW_SERIES_MONERO_BTC,
+        CURRENCY_DOLLAR,
+        "DEFAULT_MONERO_BTC_A",
+        "DEFAULT_MONERO_BTC_B",
+    ),
     (
         POWERLAW_SERIES_LITECOIN_BTC,
         CURRENCY_DOLLAR,
@@ -172,105 +178,6 @@ DEFAULT_CASES = [
         CURRENCY_DOLLAR,
         "DEFAULT_USDT_SUPPLY_A",
         "DEFAULT_USDT_SUPPLY_B",
-    ),
-]
-
-OSCILLATOR_DEFAULT_CASES = [
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_DOLLAR,
-        "OSC_DEFAULTS",
-        OSC_DEFAULTS,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_EURO,
-        "OSC_DEFAULTS_EURO",
-        OSC_DEFAULTS_EURO,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_CHF,
-        "OSC_DEFAULTS_CHF",
-        OSC_DEFAULTS_CHF,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_UAH,
-        "OSC_DEFAULTS_UAH",
-        OSC_DEFAULTS_UAH,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_RUB,
-        "OSC_DEFAULTS_RUB",
-        OSC_DEFAULTS_RUB,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_GOLD,
-        "OSC_DEFAULTS_GOLD",
-        OSC_DEFAULTS_GOLD,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_SILVER,
-        "OSC_DEFAULTS_SILVER",
-        OSC_DEFAULTS_SILVER,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_COPPER,
-        "OSC_DEFAULTS_COPPER",
-        OSC_DEFAULTS_COPPER,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_ALUMINUM,
-        "OSC_DEFAULTS_ALUMINUM",
-        OSC_DEFAULTS_ALUMINUM,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_IRON,
-        "OSC_DEFAULTS_IRON",
-        OSC_DEFAULTS_IRON,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_OIL,
-        "OSC_DEFAULTS_OIL",
-        OSC_DEFAULTS_OIL,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_US_HOUSING,
-        "OSC_DEFAULTS_US_HOUSING",
-        OSC_DEFAULTS_US_HOUSING,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_SP500,
-        "OSC_DEFAULTS_SP500",
-        OSC_DEFAULTS_SP500,
-    ),
-    (
-        POWERLAW_SERIES_PRICE,
-        CURRENCY_NDAQ,
-        "OSC_DEFAULTS_NDAQ",
-        OSC_DEFAULTS_NDAQ,
-    ),
-    (
-        POWERLAW_SERIES_DIFFICULTY,
-        CURRENCY_DOLLAR,
-        "OSC_DEFAULTS_DIFFICULTY",
-        OSC_DEFAULTS_DIFFICULTY,
-    ),
-    (
-        POWERLAW_SERIES_HASHRATE,
-        CURRENCY_DOLLAR,
-        "OSC_DEFAULTS_HASHRATE",
-        OSC_DEFAULTS_HASHRATE,
     ),
 ]
 
@@ -305,7 +212,7 @@ def _load_series_frames():
 
 def _prepare_fit_frame(series_name, currency, series_frames):
     raw_df_usd = series_frames[POWERLAW_SERIES_PRICE]
-    config = get_active_model_config(MODE_POWERLAW, series_name, series_name, currency)
+    config = get_active_model_config(MODE_POWERLAW, series_name, currency)
 
     if config.supports_currency_selector:
         fit_df = raw_df_usd.copy()
@@ -321,46 +228,18 @@ def _prepare_fit_frame(series_name, currency, series_frames):
     return fit_df
 
 
-def _prepare_logperiodic_fit_arrays(
-    series_name,
-    currency,
-    series_frames,
-    *,
-    intercept_a,
-    slope_b,
-):
-    fit_df = _prepare_fit_frame(series_name, currency, series_frames)
-    config = get_active_model_config(MODE_LOGPERIODIC, POWERLAW_SERIES_PRICE, series_name, currency)
-
-    abs_days = fit_df["AbsDays"].to_numpy(dtype=float)
-    log_close = fit_df["LogClose"].to_numpy(dtype=float)
-    days_since_genesis = abs_days
-    valid_days_mask = days_since_genesis > 0
-    if config.oscillator_min_abs_day is not None:
-        valid_days_mask = valid_days_mask & (abs_days >= float(config.oscillator_min_abs_day))
-
-    log_days = np.log10(days_since_genesis[valid_days_mask])
-    _, _, _, residual_series = get_stable_trend_fit(
-        log_days,
-        log_close[valid_days_mask],
-        float(intercept_a),
-        float(slope_b),
-    )
-    return config, log_days, residual_series
-
-
 def compute_default_updates():
     series_frames = _load_series_frames()
     replacements = {}
     powerlaw_summary_rows = []
-    oscillator_summary_rows = []
-    powerlaw_results = {}
 
     for series_name, currency, a_name, b_name in DEFAULT_CASES:
         fit_df = _prepare_fit_frame(series_name, currency, series_frames)
-        config = get_active_model_config(MODE_POWERLAW, series_name, series_name, currency)
+        config = get_active_model_config(MODE_POWERLAW, series_name, currency)
         genesis_offset = (
-            int(config.model_origin_abs_day) if config.model_origin_abs_day is not None else 0
+            int(config.model_origin_abs_day)
+            if config.model_origin_abs_day is not None
+            else 0
         )
         slope_b, intercept_a, r2_value = fit_powerlaw_regression(
             fit_df["AbsDays"].values,
@@ -369,10 +248,6 @@ def compute_default_updates():
         )
         replacements[a_name] = f"{intercept_a:.3f}"
         replacements[b_name] = f"{slope_b:.3f}"
-        powerlaw_results[(series_name, currency)] = {
-            "intercept_a": float(intercept_a),
-            "slope_b": float(slope_b),
-        }
         powerlaw_summary_rows.append(
             {
                 "series": series_name,
@@ -386,64 +261,7 @@ def compute_default_updates():
             }
         )
 
-    for series_name, currency, dict_name, oscillator_defaults in OSCILLATOR_DEFAULT_CASES:
-        fit_params = powerlaw_results[(series_name, currency)]
-        config, log_days, residual_series = _prepare_logperiodic_fit_arrays(
-            series_name,
-            currency,
-            series_frames,
-            intercept_a=fit_params["intercept_a"],
-            slope_b=fit_params["slope_b"],
-        )
-        optimized_candidates = []
-        for harmonic_count in (1, 2, 3):
-            trial_defaults = dict(oscillator_defaults)
-            trial_defaults["harmonic_count"] = harmonic_count
-            optimized_trial = oscillator.optimize_visible_oscillator_parameters(
-                log_days,
-                residual_series,
-                trial_defaults,
-                bounds_override=config.oscillator_parameter_bounds,
-                parameter_order=["t1_age", "lambda_val"],
-                step_map={"t1_age": 0.01, "lambda_val": 0.01},
-                passes=24,
-            )
-            optimized_trial["harmonic_count"] = harmonic_count
-            trial_stats = oscillator.compute_oscillator_model_stats(
-                log_days,
-                residual_series,
-                optimized_trial["t1_age"],
-                optimized_trial["lambda_val"],
-                harmonic_count=harmonic_count,
-            )
-            optimized_candidates.append((trial_stats, optimized_trial))
-
-        best_stats, optimized = min(optimized_candidates, key=lambda item: item[0].aic)
-        replacements[f"{dict_name}.t1_age"] = f"{optimized['t1_age']:.2f}"
-        replacements[f"{dict_name}.lambda_val"] = f"{optimized['lambda_val']:.2f}"
-        replacements[f"{dict_name}.harmonic_count"] = str(int(optimized["harmonic_count"]))
-        oscillator_r2 = oscillator.compute_oscillator_fit_r2(
-            log_days,
-            residual_series,
-            optimized["t1_age"],
-            optimized["lambda_val"],
-            optimized["harmonic_count"],
-        )
-        oscillator_summary_rows.append(
-            {
-                "series": series_name,
-                "currency": currency,
-                "dict_name": dict_name,
-                "t1_age": f"{optimized['t1_age']:.2f}",
-                "lambda_val": f"{optimized['lambda_val']:.2f}",
-                "harmonic_count": str(int(optimized["harmonic_count"])),
-                "aic": f"{best_stats.aic:.1f}",
-                "r2": f"{oscillator_r2:.4f}",
-                "rows": str(len(log_days)),
-            }
-        )
-
-    return replacements, powerlaw_summary_rows, oscillator_summary_rows
+    return replacements, powerlaw_summary_rows
 
 
 def _replace_scalar_constant(content, constant_name, constant_value):
@@ -461,40 +279,13 @@ def _replace_scalar_constant(content, constant_name, constant_value):
     return updated_content
 
 
-def _replace_mapping_entry(content, mapping_name, entry_name, entry_value):
-    block_pattern = rf"(?ms)^({mapping_name} = \{{\n.*?^\}})"
-    block_match = re.search(block_pattern, content)
-    if block_match is None:
-        raise ValueError(f"Unable to find mapping: {mapping_name}")
-
-    block_content = block_match.group(1)
-    entry_pattern = rf'^(\s*"{re.escape(entry_name)}":\s*)-?\d+(?:\.\d+)?(,)$'
-    updated_block, count = re.subn(
-        entry_pattern,
-        rf"\g<1>{entry_value}\g<2>",
-        block_content,
-        count=1,
-        flags=re.MULTILINE,
-    )
-    if count != 1:
-        raise ValueError(f"Unable to update mapping entry: {mapping_name}.{entry_name}")
-    return content.replace(block_content, updated_block, 1)
-
-
 def update_constants_content(content, replacements):
     updated_content = content
 
     for constant_name, constant_value in replacements.items():
-        if "." in constant_name:
-            mapping_name, entry_name = constant_name.split(".", 1)
-            updated_content = _replace_mapping_entry(
-                updated_content,
-                mapping_name,
-                entry_name,
-                constant_value,
-            )
-            continue
-        updated_content = _replace_scalar_constant(updated_content, constant_name, constant_value)
+        updated_content = _replace_scalar_constant(
+            updated_content, constant_name, constant_value
+        )
 
     return updated_content
 
@@ -507,7 +298,7 @@ def update_constants_file(constants_path, replacements):
         constants_path.write_text(updated_content, encoding="utf-8")
 
 
-def print_summary(powerlaw_summary_rows, oscillator_summary_rows):
+def print_summary(powerlaw_summary_rows):
     print("Updated PowerLaw defaults:")
     for row in powerlaw_summary_rows:
         print(
@@ -516,20 +307,11 @@ def print_summary(powerlaw_summary_rows, oscillator_summary_rows):
             f"{row['b_name']}={row['b_value']}, "
             f"R2={row['r2']}, rows={row['rows']}"
         )
-    print("Updated LogPeriodic defaults:")
-    for row in oscillator_summary_rows:
-        print(
-            f"- {row['series']} [{row['currency']}]: "
-            f"{row['dict_name']}.t1_age={row['t1_age']}, "
-            f"{row['dict_name']}.lambda_val={row['lambda_val']}, "
-            f"{row['dict_name']}.harmonic_count={row['harmonic_count']}, "
-            f"R2={row['r2']}, AIC={row['aic']}, rows={row['rows']}"
-        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Recompute and update hardcoded PowerLaw and LogPeriodic defaults."
+        description="Recompute and update hardcoded PowerLaw defaults."
     )
     parser.add_argument(
         "--dry-run",
@@ -538,10 +320,10 @@ def main():
     )
     args = parser.parse_args()
 
-    replacements, powerlaw_summary_rows, oscillator_summary_rows = compute_default_updates()
+    replacements, powerlaw_summary_rows = compute_default_updates()
     if not args.dry_run:
         update_constants_file(CONSTANTS_PATH, replacements)
-    print_summary(powerlaw_summary_rows, oscillator_summary_rows)
+    print_summary(powerlaw_summary_rows)
 
 
 if __name__ == "__main__":

@@ -111,22 +111,7 @@ def calculate_r2_score(actual_values, predicted_values):
     return 1 - (residual_sum_squares / total_sum_squares)
 
 
-def get_stable_trend_fit(log_days, log_prices, intercept_a, slope_b, residual_threshold=5.0):
-    trend_log_prices = intercept_a + slope_b * log_days
-    residual_series = log_prices - trend_log_prices
-    median_abs_residual = float(np.median(np.abs(residual_series)))
-
-    if (not np.isfinite(median_abs_residual)) or median_abs_residual > residual_threshold:
-        fitted_slope_b, fitted_intercept_a = np.polyfit(log_days, log_prices, 1)
-        intercept_a = float(fitted_intercept_a)
-        slope_b = float(fitted_slope_b)
-        trend_log_prices = intercept_a + slope_b * log_days
-        residual_series = log_prices - trend_log_prices
-
-    return intercept_a, slope_b, trend_log_prices, residual_series
-
-
-def resolve_trend_parameters(log_days, log_prices, *, intercept_a, slope_b, active_mode):
+def resolve_trend_parameters(log_days, log_prices, *, intercept_a, slope_b):
     _, clipped_exponents, _ = evaluate_powerlaw_values(
         log_days,
         intercept_a,
@@ -134,14 +119,6 @@ def resolve_trend_parameters(log_days, log_prices, *, intercept_a, slope_b, acti
     )
     trend_log_prices = clipped_exponents
     residual_series = log_prices - trend_log_prices
-
-    if active_mode == "LogPeriodic":
-        intercept_a, slope_b, trend_log_prices, residual_series = get_stable_trend_fit(
-            log_days,
-            log_prices,
-            intercept_a,
-            slope_b,
-        )
 
     return TrendComputationResult(
         intercept_a=float(intercept_a),
@@ -446,9 +423,7 @@ def estimate_current_monthly_pension(
         else 0.0
     )
     minimum_btc_sell_today_delta_pct = (
-        ((current_price / current_floor_price) - 1.0) * 100.0
-        if current_floor_price > 0.0
-        else 0.0
+        ((current_price / current_floor_price) - 1.0) * 100.0 if current_floor_price > 0.0 else 0.0
     )
     model_btc_to_sell = max_monthly_withdrawal / next_month_price if next_month_price > 0.0 else 0.0
     sell_ratio = min(max(float(sell_mom_change_pct) / 100.0, 0.0), 1.0)
@@ -852,12 +827,9 @@ def build_portfolio_real_data_backtest(
         monthly_cash_flow = 0.0
 
     floor_prices = None
-    if (
-        current_gen_date is not None
-        and (
-            (floor_intercept_a is not None and floor_slope_b is not None)
-            or (intercept_a is not None and slope_b is not None and percentile_offsets is not None)
-        )
+    if current_gen_date is not None and (
+        (floor_intercept_a is not None and floor_slope_b is not None)
+        or (intercept_a is not None and slope_b is not None and percentile_offsets is not None)
     ):
         monthly_days = np.maximum(
             (monthly_prices.index - pd.Timestamp(current_gen_date)).days.astype(float),

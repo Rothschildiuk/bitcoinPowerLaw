@@ -6,10 +6,10 @@ BLACK := $(PY) -m black
 BLACK_CONFIG := --config config/pyproject.toml
 BLACK_TARGETS := app.py core services tests ui
 PY_TARGETS := app.py core services tests ui
-UI_TEST_TARGETS := tests/test_oscillator.py tests/test_ui_charts_helpers.py tests/test_ui_sidebar_helpers.py
-UI_CHECK_TARGETS := core/oscillator.py ui/charts.py ui/sidebar.py tests/test_oscillator.py tests/test_ui_charts_helpers.py tests/test_ui_sidebar_helpers.py
+UI_TEST_TARGETS := tests/test_ui_charts_helpers.py tests/test_ui_sidebar_helpers.py
+UI_CHECK_TARGETS := ui/charts.py ui/sidebar.py tests/test_ui_charts_helpers.py tests/test_ui_sidebar_helpers.py
 
-.PHONY: help install run format format-ui check check-ui compile test test-ui test-charts test-oscillator test-sidebar verify clean update-defaults update-data-snapshots update-all-data
+.PHONY: help install run format format-ui check check-ui compile test test-ui test-charts test-sidebar verify clean update-defaults update-data-snapshots update-all-data
 
 $(PY):
 	python3 -m venv $(VENV)
@@ -19,17 +19,16 @@ help:
 	@echo "  make install  - install/update python dependencies into venv"
 	@echo "  make run      - run Streamlit app"
 	@echo "  make format   - run black formatter"
-	@echo "  make format-ui - run black on UI/oscillator work files"
+	@echo "  make format-ui - run black on UI work files"
 	@echo "  make check    - run black --check"
-	@echo "  make check-ui - run black --check on UI/oscillator work files"
+	@echo "  make check-ui - run black --check on UI work files"
 	@echo "  make compile  - compile Python files"
 	@echo "  make test     - run pytest test suite"
-	@echo "  make test-ui  - run targeted UI/oscillator tests"
+	@echo "  make test-ui  - run targeted UI tests"
 	@echo "  make test-charts - run chart helper tests"
-	@echo "  make test-oscillator - run oscillator tests"
 	@echo "  make test-sidebar - run sidebar helper tests"
 	@echo "  make verify   - run format check, compile, and targeted UI tests"
-	@echo "  make update-defaults - recompute and rewrite PowerLaw and LogPeriodic defaults"
+	@echo "  make update-defaults - recompute and rewrite PowerLaw defaults"
 	@echo "  make update-data-snapshots - refresh checked-in daily snapshot CSV files"
 	@echo "  make update-all-data - refresh snapshots, then recompute checked-in defaults"
 	@echo "  make clean    - remove Python cache folders"
@@ -64,9 +63,6 @@ test-ui: $(PY)
 
 test-charts: $(PY)
 	$(PY) -m pytest tests/test_ui_charts_helpers.py -q
-
-test-oscillator: $(PY)
-	$(PY) -m pytest tests/test_oscillator.py -q
 
 test-sidebar: $(PY)
 	$(PY) -m pytest tests/test_ui_sidebar_helpers.py -q

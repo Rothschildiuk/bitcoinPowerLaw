@@ -17,7 +17,7 @@
 - Streamlit app. Python deps come from `config/requirements.txt`; transitive pins live in `config/constraints.txt`.
 - Root `requirements.txt` delegates to `config/requirements.txt`; keep the constraints reference relative to `config/` for Streamlit Cloud.
 - `run.command` runs `make install` when `venv/bin/streamlit` is missing.
-- `make update-defaults` rewrites PowerLaw `A/B` and LogPeriodic defaults in `core/constants.py`.
+- `make update-defaults` rewrites PowerLaw `A/B` defaults in `core/constants.py`.
 - `scripts/playwright/` exists, but no committed entry command is present.
 
 ## Context Budget

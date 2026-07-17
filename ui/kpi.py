@@ -9,9 +9,7 @@ from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_lo
 
 SIGMA_STEP = 0.25
 SIGMA_HALF_STEP = SIGMA_STEP / 2.0
-SIGMA_LEVELS = tuple(
-    float(value) for value in np.arange(-2.25, 2.25 + SIGMA_STEP, SIGMA_STEP)
-)
+SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.25, 2.25 + SIGMA_STEP, SIGMA_STEP))
 SIGMA_BAND_HISTORY_ALL = 0
 SIGMA_BAND_HISTORY_PERCENT_MIN = 0
 SIGMA_BAND_HISTORY_PERCENT_MAX = 100
@@ -505,11 +503,10 @@ def render_model_kpis(
     currency_decimals,
     target_series_name,
     target_series_unit,
-    logperiodic_stats_rows=None,
-    perrenod_stats_rows=None,
     historical_powerlaw_fair=None,
     historical_powerlaw_sigma_offsets=None,
     use_historical_powerlaw=False,
+    **_removed_options,
 ):
     l_p, l_f = df_display["Close"].iloc[-1], df_display["Fair"].iloc[-1]
     l_p_display, l_f_display = (
@@ -565,11 +562,6 @@ def render_model_kpis(
         "from PowerLaw",
         "#9ba3af",
     )
-
-    if logperiodic_stats_rows or perrenod_stats_rows:
-        from core.oscillator import render_logperiodic_regression_stats_table
-
-        render_logperiodic_regression_stats_table(logperiodic_stats_rows, perrenod_stats_rows)
 
     selected_history_range = resolve_sigma_band_history_percent_range(
         st.session_state.get(

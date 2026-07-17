@@ -2,10 +2,12 @@ import unittest
 from unittest.mock import patch
 
 from core.constants import (
+    KEY_POWERLAW_SIGMA_DISPLAY_MODE,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_PORTFOLIO_FORECAST_UNIT,
     PORTFOLIO_VIEW_ACCUMULATION,
     PORTFOLIO_VIEW_PENSION,
+    POWERLAW_SIGMA_MODE_HISTORICAL,
 )
 from ui import sidebar
 
@@ -38,7 +40,9 @@ class TestUISidebarHelpers(unittest.TestCase):
 
         self.assertEqual(session_state[KEY_PORTFOLIO_FORECAST_UNIT], "Year")
 
-    def test_sigma_band_history_control_uses_percent_range_slider_without_default_value(self):
+    def test_sigma_band_history_control_uses_percent_range_slider_without_default_value(
+        self,
+    ):
         session_state = {KEY_SIGMA_BAND_HISTORY_RANGE_PCT: (120, -20)}
         captured = {}
 
@@ -59,6 +63,31 @@ class TestUISidebarHelpers(unittest.TestCase):
         self.assertEqual(captured["kwargs"]["max_value"], 100)
         self.assertEqual(captured["kwargs"]["format"], "%d%%")
         self.assertNotIn("value", captured["kwargs"])
+
+    def test_sigma_display_mode_keeps_historical_value_outside_widget_state(self):
+        session_state = {
+            KEY_POWERLAW_SIGMA_DISPLAY_MODE: POWERLAW_SIGMA_MODE_HISTORICAL,
+        }
+        captured = {}
+
+        def capture_segmented_control(*args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+
+        with (
+            patch.object(sidebar.st, "session_state", session_state),
+            patch.object(sidebar.st, "markdown"),
+            patch.object(sidebar.st, "segmented_control", side_effect=capture_segmented_control),
+        ):
+            sidebar._render_sigma_display_mode_control()
+
+        self.assertEqual(
+            session_state[sidebar.KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR],
+            POWERLAW_SIGMA_MODE_HISTORICAL,
+        )
+        self.assertEqual(
+            captured["kwargs"]["key"], sidebar.KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR
+        )
 
 
 if __name__ == "__main__":

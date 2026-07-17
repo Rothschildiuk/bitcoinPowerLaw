@@ -63,13 +63,23 @@ class TestUpdateDefaultsScript(unittest.TestCase):
 
     def test_default_cases_include_silver_price_model(self):
         self.assertIn(
-            (POWERLAW_SERIES_PRICE, CURRENCY_SILVER, "DEFAULT_SILVER_A", "DEFAULT_SILVER_B"),
+            (
+                POWERLAW_SERIES_PRICE,
+                CURRENCY_SILVER,
+                "DEFAULT_SILVER_A",
+                "DEFAULT_SILVER_B",
+            ),
             DEFAULT_CASES,
         )
 
     def test_default_cases_include_copper_price_model(self):
         self.assertIn(
-            (POWERLAW_SERIES_PRICE, CURRENCY_COPPER, "DEFAULT_COPPER_A", "DEFAULT_COPPER_B"),
+            (
+                POWERLAW_SERIES_PRICE,
+                CURRENCY_COPPER,
+                "DEFAULT_COPPER_A",
+                "DEFAULT_COPPER_B",
+            ),
             DEFAULT_CASES,
         )
 
@@ -109,7 +119,12 @@ class TestUpdateDefaultsScript(unittest.TestCase):
 
     def test_default_cases_include_sp500_price_model(self):
         self.assertIn(
-            (POWERLAW_SERIES_PRICE, CURRENCY_SP500, "DEFAULT_SP500_A", "DEFAULT_SP500_B"),
+            (
+                POWERLAW_SERIES_PRICE,
+                CURRENCY_SP500,
+                "DEFAULT_SP500_A",
+                "DEFAULT_SP500_B",
+            ),
             DEFAULT_CASES,
         )
 
@@ -117,61 +132,6 @@ class TestUpdateDefaultsScript(unittest.TestCase):
         self.assertIn(
             (POWERLAW_SERIES_PRICE, CURRENCY_NDAQ, "DEFAULT_NDAQ_A", "DEFAULT_NDAQ_B"),
             DEFAULT_CASES,
-        )
-
-    def test_oscillator_default_cases_include_us_housing_price_model(self):
-        self.assertIn(
-            (
-                POWERLAW_SERIES_PRICE,
-                CURRENCY_US_HOUSING,
-                "OSC_DEFAULTS_US_HOUSING",
-                update_powerlaw_defaults.OSC_DEFAULTS_US_HOUSING,
-            ),
-            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
-        )
-
-    def test_oscillator_default_cases_include_chf_price_model(self):
-        self.assertIn(
-            (
-                POWERLAW_SERIES_PRICE,
-                CURRENCY_CHF,
-                "OSC_DEFAULTS_CHF",
-                update_powerlaw_defaults.OSC_DEFAULTS_CHF,
-            ),
-            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
-        )
-
-    def test_oscillator_default_cases_include_sp500_price_model(self):
-        self.assertIn(
-            (
-                POWERLAW_SERIES_PRICE,
-                CURRENCY_SP500,
-                "OSC_DEFAULTS_SP500",
-                update_powerlaw_defaults.OSC_DEFAULTS_SP500,
-            ),
-            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
-        )
-
-    def test_oscillator_default_cases_include_ndaq_price_model(self):
-        self.assertIn(
-            (
-                POWERLAW_SERIES_PRICE,
-                CURRENCY_NDAQ,
-                "OSC_DEFAULTS_NDAQ",
-                update_powerlaw_defaults.OSC_DEFAULTS_NDAQ,
-            ),
-            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
-        )
-
-    def test_oscillator_default_cases_include_oil_price_model(self):
-        self.assertIn(
-            (
-                POWERLAW_SERIES_PRICE,
-                CURRENCY_OIL,
-                "OSC_DEFAULTS_OIL",
-                update_powerlaw_defaults.OSC_DEFAULTS_OIL,
-            ),
-            update_powerlaw_defaults.OSCILLATOR_DEFAULT_CASES,
         )
 
     def test_load_series_frames_builds_bitcoin_volatility_from_price_data(self):
@@ -207,28 +167,14 @@ class TestUpdateDefaultsScript(unittest.TestCase):
         self.assertGreater(len(series_frames[POWERLAW_SERIES_BITCOIN_VOLATILITY]), 0)
         self.assertGreater(len(series_frames[POWERLAW_SERIES_BITCOIN_MARKET_CAP]), 0)
 
-    def test_update_constants_content_updates_scalars_and_mapping_entries(self):
-        original = """DEFAULT_A = -16.511
-OSC_DEFAULTS_HASHRATE = {
-    "lambda_val": 4.71,
-    "t1_age": 1.69,
-    "harmonic_count": 1,
-}
-"""
+    def test_update_constants_content_updates_scalars(self):
+        original = "DEFAULT_A = -16.511\n"
         updated = update_constants_content(
             original,
-            {
-                "DEFAULT_A": "-16.400",
-                "OSC_DEFAULTS_HASHRATE.lambda_val": "5.32",
-                "OSC_DEFAULTS_HASHRATE.t1_age": "1.51",
-                "OSC_DEFAULTS_HASHRATE.harmonic_count": "3",
-            },
+            {"DEFAULT_A": "-16.400"},
         )
 
         self.assertIn("DEFAULT_A = -16.400", updated)
-        self.assertIn('"lambda_val": 5.32,', updated)
-        self.assertIn('"t1_age": 1.51,', updated)
-        self.assertIn('"harmonic_count": 3,', updated)
 
 
 if __name__ == "__main__":

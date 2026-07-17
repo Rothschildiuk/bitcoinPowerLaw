@@ -1,26 +1,16 @@
 import streamlit as st
 
-from core import oscillator, power_law
+from core import power_law
 from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_OPTIONS,
-    COFER_CURRENCY_LABELS,
-    COFER_CURRENCY_OPTIONS,
-    COFER_DEFAULT_CURRENCIES,
     DEFAULT_FORECAST_HORIZON,
-    KEY_A,
-    KEY_B,
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
     KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
-    KEY_COFER_CURRENCIES,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
-    KEY_LOGPERIODIC_HARMONICS,
-    KEY_LOGPERIODIC_LAST_SERIES,
-    KEY_LOGPERIODIC_SHOW_DECAYED_DSI,
     KEY_MODE_SELECTOR,
-    KEY_LOGPERIODIC_SERIES,
     KEY_POWERLAW_SIGMA_DISPLAY_MODE,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
@@ -33,15 +23,12 @@ from core.constants import (
     KEY_PORTFOLIO_STRATEGY_VIEW,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_TIME_SCALE,
-    MODE_COFER,
-    MODE_LOGPERIODIC,
     MODE_PORTFOLIO,
     PORTFOLIO_RESET_A,
     PORTFOLIO_RESET_B,
     MODE_POWERLAW,
     POWERLAW_SIGMA_MODE_CLASSIC,
     POWERLAW_SIGMA_MODE_HISTORICAL,
-    POWERLAW_SIGMA_MODE_SEGMENTED,
     POWERLAW_INTERCEPT_MAX,
     POWERLAW_INTERCEPT_MIN,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
@@ -65,7 +52,6 @@ from ui.kpi import (
 from ui.data_status import render_data_source_status
 from core.series_registry import (
     get_active_model_config,
-    get_logperiodic_series_options,
     get_powerlaw_series_group_for_series,
     get_powerlaw_series_group_map,
     get_powerlaw_series_groups,
@@ -75,18 +61,18 @@ from core.series_registry import (
 
 KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
 KEY_LAST_PORTFOLIO_VIEW = "last_portfolio_strategy_view"
-COFER_CURRENCY_GROUPS = [
-    ("Bitcoin", ["BTC"]),
-    ("Major reserves", ["USD", "EUR", "JPY", "GBP"]),
-    ("Newer tracked currencies", ["CNY", "CHF"]),
-    ("Commodity bloc + residual", ["AUD", "CAD", "Other"]),
-]
+KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR = f"{KEY_POWERLAW_SIGMA_DISPLAY_MODE}_selector"
+
+
+def _save_sigma_display_mode():
+    st.session_state[KEY_POWERLAW_SIGMA_DISPLAY_MODE] = st.session_state[
+        KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR
+    ]
 
 
 def _render_sigma_display_mode_control():
     sigma_mode_options = [
         POWERLAW_SIGMA_MODE_CLASSIC,
-        POWERLAW_SIGMA_MODE_SEGMENTED,
         POWERLAW_SIGMA_MODE_HISTORICAL,
     ]
     selected_sigma_mode = st.session_state.get(
@@ -96,60 +82,21 @@ def _render_sigma_display_mode_control():
     if selected_sigma_mode not in sigma_mode_options:
         selected_sigma_mode = POWERLAW_SIGMA_MODE_CLASSIC
         st.session_state[KEY_POWERLAW_SIGMA_DISPLAY_MODE] = selected_sigma_mode
+    selector_mode = st.session_state.get(KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR)
+    if selector_mode not in sigma_mode_options or selector_mode != selected_sigma_mode:
+        st.session_state[KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR] = selected_sigma_mode
 
     st.markdown("**Sigma**")
     st.segmented_control(
         "Sigma",
         sigma_mode_options,
         selection_mode="single",
-        key=KEY_POWERLAW_SIGMA_DISPLAY_MODE,
+        key=KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR,
+        on_change=_save_sigma_display_mode,
         label_visibility="collapsed",
         width="stretch",
     )
     st.markdown("<div class='sidebar-slider-spacer'></div>", unsafe_allow_html=True)
-
-
-def _render_cofer_currency_selector():
-    selected_cofer_currencies = st.session_state.get(
-        KEY_COFER_CURRENCIES,
-        list(COFER_DEFAULT_CURRENCIES),
-    )
-    selected_cofer_currencies = [
-        currency for currency in selected_cofer_currencies if currency in COFER_CURRENCY_OPTIONS
-    ]
-    if not selected_cofer_currencies:
-        selected_cofer_currencies = list(COFER_DEFAULT_CURRENCIES)
-        st.session_state[KEY_COFER_CURRENCIES] = selected_cofer_currencies
-
-    st.markdown("**Reserve currencies**")
-    selected_set = set(selected_cofer_currencies)
-    for group_name, group_currencies in COFER_CURRENCY_GROUPS:
-        st.markdown(f"<div class='cofer-group-title'>{group_name}</div>", unsafe_allow_html=True)
-        columns = st.columns(2)
-        for index, currency in enumerate(group_currencies):
-            widget_key = f"{KEY_COFER_CURRENCIES}_{currency}"
-            if widget_key not in st.session_state:
-                st.session_state[widget_key] = currency in selected_set
-            with columns[index % 2]:
-                st.checkbox(
-                    currency,
-                    key=widget_key,
-                    help=COFER_CURRENCY_LABELS.get(currency, currency),
-                )
-
-    selected_currencies = [
-        currency
-        for currency in COFER_CURRENCY_OPTIONS
-        if bool(st.session_state.get(f"{KEY_COFER_CURRENCIES}_{currency}", False))
-    ]
-    if not selected_currencies:
-        for currency in COFER_DEFAULT_CURRENCIES:
-            st.session_state[f"{KEY_COFER_CURRENCIES}_{currency}"] = True
-        st.session_state[KEY_COFER_CURRENCIES] = list(COFER_DEFAULT_CURRENCIES)
-        st.rerun()
-
-    st.session_state[KEY_COFER_CURRENCIES] = selected_currencies
-    return selected_currencies
 
 
 def _render_sigma_band_history_sidebar_control(_date_index):
@@ -427,7 +374,7 @@ def render_sidebar_panel(
             version_caption = f"{version_caption} · Last update {snapshot_data_date}"
         st.caption(version_caption)
 
-        mode_options = [MODE_POWERLAW, MODE_LOGPERIODIC, MODE_PORTFOLIO, MODE_COFER]
+        mode_options = [MODE_POWERLAW, MODE_PORTFOLIO]
         if st.session_state.get(KEY_MODE_SELECTOR) not in mode_options:
             st.session_state[KEY_MODE_SELECTOR] = st.session_state.get(KEY_LAST_MODE, MODE_POWERLAW)
         mode = st.segmented_control(
@@ -453,28 +400,12 @@ def render_sidebar_panel(
             st.session_state[KEY_CHART_REVISION] += 1
             st.session_state[KEY_LAST_MODE] = mode
 
-        if mode == MODE_COFER:
-            selected_cofer_currencies = _render_cofer_currency_selector()
-            render_data_source_status()
-            return (
-                mode,
-                CURRENCY_DOLLAR,
-                TIME_LOG,
-                "Lin",
-                0.0,
-                st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE),
-                st.session_state.get(KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE),
-                selected_cofer_currencies,
-            )
-
         selected_currency = st.session_state.get(KEY_CURRENCY_SELECTOR, CURRENCY_DOLLAR)
         if selected_currency not in CURRENCY_OPTIONS:
             selected_currency = CURRENCY_DOLLAR
             st.session_state[KEY_CURRENCY_SELECTOR] = selected_currency
 
         powerlaw_series_options = get_powerlaw_series_options()
-        logperiodic_series_options = get_logperiodic_series_options()
-
         powerlaw_series = st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE)
         if powerlaw_series not in powerlaw_series_options:
             powerlaw_series = POWERLAW_SERIES_PRICE
@@ -485,33 +416,11 @@ def render_sidebar_panel(
                 powerlaw_series = st.session_state.get(KEY_POWERLAW_SERIES, POWERLAW_SERIES_PRICE)
                 st.session_state[KEY_POWERLAW_SERIES] = powerlaw_series
                 st.rerun()
-        logperiodic_series = st.session_state.get(KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE)
-        if logperiodic_series not in logperiodic_series_options:
-            logperiodic_series = POWERLAW_SERIES_PRICE
-            st.session_state[KEY_LOGPERIODIC_SERIES] = logperiodic_series
-        if mode == MODE_LOGPERIODIC:
-            st.markdown("**LogPeriodic series**")
-            logperiodic_series = st.radio(
-                "LogPeriodic series",
-                logperiodic_series_options,
-                horizontal=True,
-                key=KEY_LOGPERIODIC_SERIES,
-                width="stretch",
-                label_visibility="collapsed",
-            )
-            if logperiodic_series is None:
-                logperiodic_series = st.session_state.get(
-                    KEY_LOGPERIODIC_SERIES, POWERLAW_SERIES_PRICE
-                )
-                st.session_state[KEY_LOGPERIODIC_SERIES] = logperiodic_series
-                st.rerun()
-
         time_scale = st.session_state.get(KEY_TIME_SCALE, TIME_LOG)
         price_scale = st.session_state.get("price_scale_selector", "Log")
         powerlaw_model = get_active_model_config(
             MODE_POWERLAW,
             powerlaw_series,
-            logperiodic_series,
             selected_currency=selected_currency,
         )
         hide_price_scale = mode == MODE_POWERLAW and powerlaw_model.lock_price_scale_to_log
@@ -552,9 +461,7 @@ def render_sidebar_panel(
                         width="stretch",
                     )
             _render_sigma_display_mode_control()
-        is_non_price_series = not series_supports_currency_selector(
-            mode, powerlaw_series, logperiodic_series
-        )
+        is_non_price_series = not series_supports_currency_selector(mode, powerlaw_series)
 
         if is_non_price_series:
             currency = CURRENCY_DOLLAR
@@ -573,7 +480,6 @@ def render_sidebar_panel(
         active_model = get_active_model_config(
             mode,
             powerlaw_series,
-            logperiodic_series,
             selected_currency=currency,
         )
         a_min, a_max = active_model.powerlaw_intercept_bounds or (
@@ -607,73 +513,41 @@ def render_sidebar_panel(
             r2_label = "PowerLaw R² (90D MA)"
             r2_rolling_window_days = 90
 
-        if mode in [MODE_POWERLAW, MODE_PORTFOLIO]:
-            reset_a = default_a if mode == MODE_POWERLAW else PORTFOLIO_RESET_A
-            reset_b = default_b if mode == MODE_POWERLAW else PORTFOLIO_RESET_B
-            current_r2 = power_law.render_sidebar(
-                model_abs_days,
-                model_log_close,
-                c_text_main,
-                r2_values=r2_values,
-                r2_rolling_window_days=r2_rolling_window_days,
-                r2_label=r2_label,
-                render_extra_controls=(
-                    lambda: (
-                        _render_portfolio_sidebar_controls(
-                            forecast_horizon_min, forecast_horizon_max
-                        )
-                        if mode == MODE_PORTFOLIO
-                        else (
-                            _render_bitcoin_network_simulation_controls()
-                            if active_model.series_name
-                            == POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION
-                            else None
-                        )
+        reset_a = default_a if mode == MODE_POWERLAW else PORTFOLIO_RESET_A
+        reset_b = default_b if mode == MODE_POWERLAW else PORTFOLIO_RESET_B
+        current_r2 = power_law.render_sidebar(
+            model_abs_days,
+            model_log_close,
+            c_text_main,
+            r2_values=r2_values,
+            r2_rolling_window_days=r2_rolling_window_days,
+            r2_label=r2_label,
+            render_extra_controls=(
+                lambda: (
+                    _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_max)
+                    if mode == MODE_PORTFOLIO
+                    else (
+                        _render_bitcoin_network_simulation_controls()
+                        if active_model.series_name == POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION
+                        else None
                     )
-                ),
-                render_after_actions=lambda: _render_sigma_band_history_sidebar_control(
-                    active_series_data["date_index"]
-                ),
-                a_key=a_key,
-                b_key=b_key,
-                default_a=default_a,
-                default_b=default_b,
-                reset_a=reset_a,
-                reset_b=reset_b,
-                a_min=a_min,
-                a_max=a_max,
-                b_min=b_min,
-                b_max=b_max,
-                genesis_offset_days=model_origin_abs_day,
-            )
-        else:
-            # Keep legacy A/B keys aligned before rendering LogPeriodic controls,
-            # so sidebar R² is computed for the newly selected series immediately.
-            st.session_state[KEY_A] = float(st.session_state.get(a_key, default_a))
-            st.session_state[KEY_B] = float(st.session_state.get(b_key, default_b))
-            active_osc_defaults = active_model.oscillator_defaults
-            logperiodic_defaults_signature = f"{logperiodic_series}:{currency}"
-            last_lp_series = st.session_state.get(KEY_LOGPERIODIC_LAST_SERIES)
-            if last_lp_series != logperiodic_defaults_signature:
-                for k, v in active_osc_defaults.items():
-                    if k == "harmonic_count":
-                        st.session_state[KEY_LOGPERIODIC_HARMONICS] = int(v)
-                        oscillator.apply_dsi_mode_option(oscillator.DEFAULT_DSI_MODE)
-                        continue
-                    st.session_state[k] = v
-                st.session_state[KEY_LOGPERIODIC_LAST_SERIES] = logperiodic_defaults_signature
-
-            oscillator.render_sidebar(
-                model_abs_days,
-                model_log_close,
-                c_text_main,
-                defaults_override=active_osc_defaults,
-                min_abs_day_for_fit=active_model.oscillator_min_abs_day,
-                parameter_bounds_override=active_model.oscillator_parameter_bounds,
-                render_after_actions=lambda: _render_sigma_band_history_sidebar_control(
-                    active_series_data["date_index"]
-                ),
-            )
+                )
+            ),
+            render_after_actions=lambda: _render_sigma_band_history_sidebar_control(
+                active_series_data["date_index"]
+            ),
+            a_key=a_key,
+            b_key=b_key,
+            default_a=default_a,
+            default_b=default_b,
+            reset_a=reset_a,
+            reset_b=reset_b,
+            a_min=a_min,
+            a_max=a_max,
+            b_min=b_min,
+            b_max=b_max,
+            genesis_offset_days=model_origin_abs_day,
+        )
         render_data_source_status()
     return (
         mode,
@@ -682,6 +556,4 @@ def render_sidebar_panel(
         price_scale,
         current_r2,
         powerlaw_series,
-        logperiodic_series,
-        st.session_state.get(KEY_COFER_CURRENCIES, list(COFER_DEFAULT_CURRENCIES)),
     )
