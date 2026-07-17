@@ -210,6 +210,41 @@ def calculate_expanding_powerlaw_fit(log_days, log_prices, min_points=100):
     return fitted_log_prices
 
 
+def calculate_historical_sigma_offsets(
+    log_days,
+    log_prices,
+    intercepts,
+    slopes,
+    min_points=100,
+    recalculation_step=7,
+):
+    """Return causal percentile sigma offsets for successive historical fits."""
+    log_days_arr = np.asarray(log_days, dtype=float)
+    log_prices_arr = np.asarray(log_prices, dtype=float)
+    intercepts_arr = np.asarray(intercepts, dtype=float)
+    slopes_arr = np.asarray(slopes, dtype=float)
+    offsets = np.full((4, len(log_days_arr)), np.nan, dtype=float)
+    latest_offsets = None
+
+    for index in range(len(log_days_arr)):
+        if (
+            index + 1 >= int(min_points)
+            and np.isfinite(intercepts_arr[index])
+            and np.isfinite(slopes_arr[index])
+            and (latest_offsets is None or index % int(recalculation_step) == 0)
+        ):
+            historical_model = intercepts_arr[index] + slopes_arr[index] * log_days_arr[: index + 1]
+            residuals = log_prices_arr[: index + 1] - historical_model
+            finite_residuals = residuals[np.isfinite(residuals)]
+            if len(finite_residuals) >= int(min_points):
+                latest_offsets = np.percentile(finite_residuals, [2.5, 16.5, 83.5, 97.5])
+
+        if latest_offsets is not None:
+            offsets[:, index] = latest_offsets
+
+    return offsets
+
+
 def powerlaw_parameters_are_unstable(
     r2_score,
     *,

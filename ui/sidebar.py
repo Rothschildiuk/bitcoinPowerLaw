@@ -40,6 +40,7 @@ from core.constants import (
     PORTFOLIO_RESET_B,
     MODE_POWERLAW,
     POWERLAW_SIGMA_MODE_CLASSIC,
+    POWERLAW_SIGMA_MODE_HISTORICAL,
     POWERLAW_SIGMA_MODE_SEGMENTED,
     POWERLAW_INTERCEPT_MAX,
     POWERLAW_INTERCEPT_MIN,
@@ -83,7 +84,11 @@ COFER_CURRENCY_GROUPS = [
 
 
 def _render_sigma_display_mode_control():
-    sigma_mode_options = [POWERLAW_SIGMA_MODE_CLASSIC, POWERLAW_SIGMA_MODE_SEGMENTED]
+    sigma_mode_options = [
+        POWERLAW_SIGMA_MODE_CLASSIC,
+        POWERLAW_SIGMA_MODE_SEGMENTED,
+        POWERLAW_SIGMA_MODE_HISTORICAL,
+    ]
     selected_sigma_mode = st.session_state.get(
         KEY_POWERLAW_SIGMA_DISPLAY_MODE,
         POWERLAW_SIGMA_MODE_CLASSIC,

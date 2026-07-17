@@ -58,6 +58,7 @@ from core.constants import (
     MODE_POWERLAW,
     OSC_DEFAULTS,
     POWERLAW_SIGMA_MODE_CLASSIC,
+    POWERLAW_SIGMA_MODE_HISTORICAL,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
@@ -95,6 +96,7 @@ from core.utils import (
     build_portfolio_projection,
     build_portfolio_view_model,
     calculate_expanding_powerlaw_parameters,
+    calculate_historical_sigma_offsets,
     calculate_r2_score,
     estimate_current_monthly_pension,
     evaluate_powerlaw_values,
@@ -1241,11 +1243,28 @@ df_display["Fair"], _, fair_was_clipped = evaluate_powerlaw_values(
     1.0,
 )
 historical_powerlaw_slopes = np.array([], dtype=float)
-if mode == MODE_LOGPERIODIC:
-    _, historical_powerlaw_slopes, _ = calculate_expanding_powerlaw_parameters(
+historical_powerlaw_fair = np.array([], dtype=float)
+historical_powerlaw_sigma_offsets = np.empty((4, 0), dtype=float)
+show_historical_powerlaw = (
+    mode == MODE_POWERLAW
+    and st.session_state.get(KEY_POWERLAW_SIGMA_DISPLAY_MODE) == POWERLAW_SIGMA_MODE_HISTORICAL
+)
+if mode == MODE_LOGPERIODIC or show_historical_powerlaw:
+    (
+        historical_powerlaw_intercepts,
+        historical_powerlaw_slopes,
+        historical_powerlaw_fair,
+    ) = calculate_expanding_powerlaw_parameters(
         df_display["LogD"].values,
         df_display["LogClose"].values,
     )
+    if show_historical_powerlaw:
+        historical_powerlaw_sigma_offsets = calculate_historical_sigma_offsets(
+            df_display["LogD"].values,
+            df_display["LogClose"].values,
+            historical_powerlaw_intercepts,
+            historical_powerlaw_slopes,
+        )
 
 currency_prefix = active_model.currency_prefix
 currency_suffix = active_model.currency_suffix
@@ -1497,6 +1516,8 @@ if mode in [MODE_POWERLAW, MODE_LOGPERIODIC]:
         m_dates=m_dates,
         m_dates_str=m_dates_str,
         m_fair_display=m_fair_display,
+        historical_powerlaw_fair=historical_powerlaw_fair,
+        historical_powerlaw_sigma_offsets=historical_powerlaw_sigma_offsets,
         historical_powerlaw_slopes=historical_powerlaw_slopes,
         show_historical_powerlaw_slope=mode == MODE_LOGPERIODIC,
         m_osc_y=m_osc_y,
