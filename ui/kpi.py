@@ -494,6 +494,7 @@ def render_model_kpis(
     df_display,
     a_active,
     b_active,
+    current_r2,
     p2_5,
     p16_5,
     p83_5,
@@ -528,23 +529,33 @@ def render_model_kpis(
         f"{current_sigma_level:+.2f}σ" if current_sigma_level is not None else "N/A"
     )
 
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4, k5 = st.columns(5)
     _kpi_card(
         k1,
+        "POWERLAW MODEL",
+        (
+            f"<span style='color:#f0b90b; font-size:0.75em;'>A = {a_active:.3f}</span>"
+            "&nbsp;&nbsp;"
+            f"<span style='color:#38bdf8; font-size:0.75em;'>B = {b_active:.3f}</span>"
+            f"<br><span style='color:#0ecb81; font-size:0.75em;'>R² = {current_r2 * 100:.4f}%</span>"
+        ),
+    )
+    _kpi_card(
+        k2,
         f"{target_series_name.upper()}",
         _format_money(l_p_display, currency_prefix, currency_suffix, currency_decimals),
         target_series_unit,
         "#9ba3af",
     )
     _kpi_card(
-        k2,
+        k3,
         "FAIR VALUE",
         _format_money(l_f_display, currency_prefix, currency_suffix, currency_decimals),
         f"{diff:+.1f}% from model",
         "#0ecb81" if diff < 0 else "#ea3d2f",
     )
     _kpi_card(
-        k3,
+        k4,
         "-2σ MONTHLY GROWTH",
         _format_money(
             monthly_growth_display,
@@ -556,7 +567,7 @@ def render_model_kpis(
         "#f0b90b",
     )
     _kpi_card(
-        k4,
+        k5,
         "CURRENT SIGMA",
         current_sigma_display,
         "from PowerLaw",

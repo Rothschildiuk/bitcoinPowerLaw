@@ -92,11 +92,12 @@ from core.utils import (
     calculate_historical_sigma_offsets,
     estimate_current_monthly_pension,
     evaluate_powerlaw_values,
+    interpolate_sigma_level_from_log_offset,
     powerlaw_parameters_are_unstable,
     resolve_trend_parameters,
     resolve_portfolio_scenario_log_offset,
 )
-from services.price_service import build_currency_close_series, get_snapshot_data_date
+from services.price_service import build_currency_close_series
 from ui.charts import (
     _resolve_model_view_max,
     render_main_model_chart,
@@ -451,7 +452,7 @@ def render_portfolio_view(
     )
     if unstable_portfolio:
         st.info(
-            "Portfolio projection needs a stable model fit. Click Auto-fit model to calculate fair-value metrics."
+            "Portfolio projection needs a stable model fit to calculate fair-value metrics."
         )
         return
 
@@ -1121,7 +1122,6 @@ sidebar_series_data = SharedSidebarSeriesData(series_store)
     sidebar_series_data,
     c_text_main,
     APP_VERSION,
-    get_snapshot_data_date(),
     FORECAST_HORIZON_MIN,
     FORECAST_HORIZON_MAX,
 )
@@ -1232,7 +1232,7 @@ if mode in [MODE_POWERLAW, MODE_PORTFOLIO] and powerlaw_parameters_are_unstable(
     current_r2, was_clipped=fair_was_clipped
 ):
     st.warning(
-        "Current PowerLaw parameters are unstable for the selected series. Use Auto-fit model or Reset parameters."
+        "Current PowerLaw parameters are unstable for the selected series."
     )
 
 p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
@@ -1338,6 +1338,7 @@ render_model_kpis(
     df_display,
     a_active,
     b_active,
+    current_r2,
     p2_5,
     p16_5,
     p83_5,

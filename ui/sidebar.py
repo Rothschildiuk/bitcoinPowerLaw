@@ -24,18 +24,12 @@ from core.constants import (
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_TIME_SCALE,
     MODE_PORTFOLIO,
-    PORTFOLIO_RESET_A,
-    PORTFOLIO_RESET_B,
     MODE_POWERLAW,
     POWERLAW_SIGMA_MODE_CLASSIC,
     POWERLAW_SIGMA_MODE_HISTORICAL,
-    POWERLAW_INTERCEPT_MAX,
-    POWERLAW_INTERCEPT_MIN,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_PRICE,
-    POWERLAW_SLOPE_MAX,
-    POWERLAW_SLOPE_MIN,
     PORTFOLIO_SIGMA_CURRENT,
     PORTFOLIO_VIEW_ACCUMULATION,
     PORTFOLIO_VIEW_PENSION,
@@ -49,7 +43,7 @@ from ui.kpi import (
     SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT,
     resolve_sigma_band_history_percent_range,
 )
-from ui.data_status import render_data_source_status
+from ui.data_status import get_data_source_summary
 from core.series_registry import (
     get_active_model_config,
     get_powerlaw_series_group_for_series,
@@ -86,9 +80,9 @@ def _render_sigma_display_mode_control():
     if selector_mode not in sigma_mode_options or selector_mode != selected_sigma_mode:
         st.session_state[KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR] = selected_sigma_mode
 
-    st.markdown("**Sigma**")
+    st.markdown("**PowerLaw method**")
     st.segmented_control(
-        "Sigma",
+        "PowerLaw method",
         sigma_mode_options,
         selection_mode="single",
         key=KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR,
@@ -363,16 +357,13 @@ def render_sidebar_panel(
     sidebar_series_data,
     c_text_main,
     app_version,
-    snapshot_data_date,
     forecast_horizon_min,
     forecast_horizon_max,
 ):
     with st.sidebar:
         st.markdown("<div class='app-title'>Bitcoin PowerLaw</div>", unsafe_allow_html=True)
-        version_caption = f"Version {app_version}"
-        if snapshot_data_date:
-            version_caption = f"{version_caption} · Last update {snapshot_data_date}"
-        st.caption(version_caption)
+        st.caption(f"Version {app_version}")
+        st.caption(get_data_source_summary())
 
         mode_options = [MODE_POWERLAW, MODE_PORTFOLIO]
         if st.session_state.get(KEY_MODE_SELECTOR) not in mode_options:
@@ -482,14 +473,6 @@ def render_sidebar_panel(
             powerlaw_series,
             selected_currency=currency,
         )
-        a_min, a_max = active_model.powerlaw_intercept_bounds or (
-            POWERLAW_INTERCEPT_MIN,
-            POWERLAW_INTERCEPT_MAX,
-        )
-        b_min, b_max = active_model.powerlaw_slope_bounds or (
-            POWERLAW_SLOPE_MIN,
-            POWERLAW_SLOPE_MAX,
-        )
         active_series_data = sidebar_series_data[active_model.series_name]
         model_abs_days = active_series_data["absolute_days"]
         model_log_close = active_series_data["log_close"]
@@ -513,8 +496,6 @@ def render_sidebar_panel(
             r2_label = "PowerLaw R² (90D MA)"
             r2_rolling_window_days = 90
 
-        reset_a = default_a if mode == MODE_POWERLAW else PORTFOLIO_RESET_A
-        reset_b = default_b if mode == MODE_POWERLAW else PORTFOLIO_RESET_B
         current_r2 = power_law.render_sidebar(
             model_abs_days,
             model_log_close,
@@ -540,15 +521,8 @@ def render_sidebar_panel(
             b_key=b_key,
             default_a=default_a,
             default_b=default_b,
-            reset_a=reset_a,
-            reset_b=reset_b,
-            a_min=a_min,
-            a_max=a_max,
-            b_min=b_min,
-            b_max=b_max,
             genesis_offset_days=model_origin_abs_day,
         )
-        render_data_source_status()
     return (
         mode,
         currency,
