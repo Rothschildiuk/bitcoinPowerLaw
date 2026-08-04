@@ -1199,6 +1199,7 @@ df_display["Fair"], _, fair_was_clipped = evaluate_powerlaw_values(
     1.0,
 )
 historical_powerlaw_slopes = np.array([], dtype=float)
+historical_powerlaw_intercepts = np.array([], dtype=float)
 historical_powerlaw_fair = np.array([], dtype=float)
 historical_powerlaw_sigma_offsets = np.empty((4, 0), dtype=float)
 show_historical_powerlaw = (
@@ -1274,6 +1275,8 @@ if mode == MODE_POWERLAW:
         m_dates=m_dates,
         m_dates_str=m_dates_str,
         m_fair_display=m_fair_display,
+        historical_powerlaw_intercepts=historical_powerlaw_intercepts,
+        historical_powerlaw_slopes=historical_powerlaw_slopes,
         historical_powerlaw_fair=historical_powerlaw_fair,
         historical_powerlaw_sigma_offsets=historical_powerlaw_sigma_offsets,
         residual_sigma_log=residual_sigma_log,

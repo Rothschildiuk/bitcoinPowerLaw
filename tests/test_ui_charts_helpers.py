@@ -6,6 +6,7 @@ import pandas as pd
 
 from core.constants import (
     MODE_POWERLAW,
+    POWERLAW_SIGMA_MODE_HISTORICAL,
     POWERLAW_SIGMA_MODE_SEGMENTED,
     TIME_LOG,
 )
@@ -25,6 +26,79 @@ from ui.charts import (
 
 
 class TestUIChartsHelpers(unittest.TestCase):
+    def test_historical_powerlaw_continues_from_latest_fit_to_model_horizon(self):
+        dates = pd.date_range("2020-01-01", periods=5, freq="D")
+        display_days = np.array([4000.0, 4001.0, 4002.0])
+        model_days = np.array([4000.0, 4001.0, 4002.0, 4003.0, 4004.0])
+        historical_intercepts = np.array([1.0, 1.0, 1.0])
+        historical_slopes = np.array([0.5, 0.5, 0.5])
+        historical_fair = historical_intercepts + historical_slopes * np.log10(display_days)
+        captured = {}
+
+        def capture_plotly_chart(fig, **kwargs):
+            captured["fig"] = fig
+
+        with patch("ui.charts.st.plotly_chart", side_effect=capture_plotly_chart):
+            render_main_model_chart(
+                mode=MODE_POWERLAW,
+                time_scale=TIME_LOG,
+                price_scale=TIME_LOG,
+                df_display=pd.DataFrame(
+                    {"Days": display_days, "CloseDisplay": [100.0, 101.0, 102.0]},
+                    index=dates[:3],
+                ),
+                current_gen_date=pd.Timestamp("2009-01-03"),
+                view_max=float(model_days[-1]),
+                plot_x_model=model_days,
+                plot_x_main=display_days,
+                m_log_d=np.log10(model_days),
+                m_dates=dates,
+                m_dates_str=dates.strftime("%d.%m.%Y").to_numpy(),
+                m_fair_display=np.linspace(100.0, 104.0, len(model_days)),
+                historical_powerlaw_intercepts=historical_intercepts,
+                historical_powerlaw_slopes=historical_slopes,
+                historical_powerlaw_fair=historical_fair,
+                historical_powerlaw_sigma_offsets=np.tile(
+                    np.array([[-0.2], [-0.1], [0.1], [0.2]]), (1, 3)
+                ),
+                powerlaw_sigma_display_mode=POWERLAW_SIGMA_MODE_HISTORICAL,
+                residual_sigma_log=1.0,
+                p2_5=-0.2,
+                p16_5=-0.1,
+                p83_5=0.1,
+                p97_5=0.2,
+                peak_powerlaw_overlay=None,
+                pl_template="plotly_dark",
+                pl_bg_color="#000",
+                pl_grid_color="#333",
+                pl_btc_color="#fff",
+                pl_legend_color="#fff",
+                pl_text_color="#fff",
+                c_hover_bg="#111",
+                c_hover_text="#fff",
+                c_border="#333",
+                currency_prefix="$",
+                currency_suffix="",
+                currency_decimals=0,
+                target_series_name="Bitcoin",
+                target_series_unit="USD",
+                show_halving_lines=False,
+                chart_key="test-historical-powerlaw-extension",
+            )
+
+        fair_traces = [
+            trace
+            for trace in captured["fig"].data
+            if trace.name == "Historical PowerLaw" and not trace.showlegend
+        ]
+        self.assertEqual(len(fair_traces), 2)
+        self.assertEqual(fair_traces[1].x[0], model_days[2])
+        self.assertEqual(fair_traces[1].x[-1], model_days[-1])
+        for sigma_name in ("Historical +2σ", "Historical +1σ", "Historical -1σ", "Historical -2σ"):
+            sigma_traces = [trace for trace in captured["fig"].data if trace.name == sigma_name]
+            self.assertEqual(len(sigma_traces), 2)
+            self.assertEqual(sigma_traces[1].x[-1], model_days[-1])
+
     def test_convert_log_offsets_to_sigma_levels_uses_powerlaw_percentile_scale(self):
         sigma_levels = _convert_log_offsets_to_sigma_levels(
             np.array([-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3]),

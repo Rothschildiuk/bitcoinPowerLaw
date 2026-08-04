@@ -488,6 +488,8 @@ def render_main_model_chart(
     target_series_unit,
     show_halving_lines,
     chart_key,
+    historical_powerlaw_intercepts=None,
+    historical_powerlaw_slopes=None,
     historical_powerlaw_fair=None,
     historical_powerlaw_sigma_offsets=None,
     moving_average_windows=None,
@@ -680,6 +682,16 @@ def render_main_model_chart(
                 visible="legendonly",
             )
         if use_historical_powerlaw:
+            historical_intercepts = np.asarray(
+                historical_powerlaw_intercepts
+                if historical_powerlaw_intercepts is not None
+                else [],
+                dtype=float,
+            )
+            historical_slopes = np.asarray(
+                historical_powerlaw_slopes if historical_powerlaw_slopes is not None else [],
+                dtype=float,
+            )
             historical_fair_values = np.asarray(
                 historical_powerlaw_fair if historical_powerlaw_fair is not None else [],
                 dtype=float,
@@ -710,6 +722,44 @@ def render_main_model_chart(
                         ),
                     )
                 )
+                latest_fit_index = len(historical_fair_values) - 1
+                latest_fit_available = (
+                    historical_intercepts.shape == historical_fair_values.shape
+                    and historical_slopes.shape == historical_fair_values.shape
+                    and np.isfinite(historical_intercepts[latest_fit_index])
+                    and np.isfinite(historical_slopes[latest_fit_index])
+                )
+                extension_mask = np.asarray(
+                    pd.to_datetime(m_dates) >= pd.Timestamp(df_display.index[-1])
+                )
+                if latest_fit_available and np.any(extension_mask):
+                    extension_log = (
+                        historical_intercepts[latest_fit_index]
+                        + historical_slopes[latest_fit_index] * np.asarray(m_log_d, dtype=float)
+                    )
+                    extension_fair, _, _ = evaluate_powerlaw_values(extension_log, 0.0, 1.0)
+                    extension_indices = np.flatnonzero(extension_mask)
+                    sampled_extension = _resolve_trace_sample_indices(len(extension_indices))
+                    extension_indices = extension_indices[sampled_extension]
+                    extension_x = np.asarray(plot_x_model)[extension_indices]
+                    extension_dates = np.asarray(m_dates_str)[extension_indices]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=extension_x,
+                            y=extension_fair[extension_indices],
+                            mode="lines",
+                            line=dict(color="#f0b90b", width=2.2),
+                            name="Historical PowerLaw",
+                            legendgroup="historical_power_regression",
+                            showlegend=False,
+                            customdata=extension_dates,
+                            hovertemplate=(
+                                "<b>Historical PowerLaw</b>: "
+                                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                                "<br>%{customdata}<extra></extra>"
+                            ),
+                        )
+                    )
                 historical_sigma_offsets = np.asarray(
                     (
                         historical_powerlaw_sigma_offsets
@@ -743,6 +793,24 @@ def render_main_model_chart(
                                 hoverinfo="skip",
                             )
                         )
+                        if latest_fit_available and np.any(extension_mask):
+                            extension_sigma_values, _, _ = evaluate_powerlaw_values(
+                                extension_log,
+                                historical_sigma_offsets[offset_index, latest_fit_index],
+                                1.0,
+                            )
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=extension_x,
+                                    y=extension_sigma_values[extension_indices],
+                                    mode="lines",
+                                    line=dict(color=color, width=1.2, dash="dot"),
+                                    name=f"Historical {sigma_label}",
+                                    legendgroup=legendgroup,
+                                    showlegend=False,
+                                    hoverinfo="skip",
+                                )
+                            )
             else:
                 add_model_line(
                     m_fair_display,
