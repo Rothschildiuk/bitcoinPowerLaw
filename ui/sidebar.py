@@ -12,6 +12,7 @@ from core.constants import (
     KEY_LAST_MODE,
     KEY_MODE_SELECTOR,
     KEY_POWERLAW_SIGMA_DISPLAY_MODE,
+    KEY_POWERLAW_OSCILLATOR,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
@@ -27,6 +28,8 @@ from core.constants import (
     MODE_POWERLAW,
     POWERLAW_SIGMA_MODE_CLASSIC,
     POWERLAW_SIGMA_MODE_HISTORICAL,
+    POWERLAW_OSCILLATOR_OFF,
+    POWERLAW_OSCILLATOR_ON,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_PRICE,
@@ -91,6 +94,24 @@ def _render_sigma_display_mode_control():
         width="stretch",
     )
     st.markdown("<div class='sidebar-slider-spacer'></div>", unsafe_allow_html=True)
+
+
+def _render_powerlaw_oscillator_control():
+    oscillator_options = [POWERLAW_OSCILLATOR_OFF, POWERLAW_OSCILLATOR_ON]
+    selected = st.session_state.get(KEY_POWERLAW_OSCILLATOR, POWERLAW_OSCILLATOR_OFF)
+    if selected not in oscillator_options:
+        selected = POWERLAW_OSCILLATOR_OFF
+        st.session_state[KEY_POWERLAW_OSCILLATOR] = selected
+
+    st.markdown("**Oscillator**")
+    return st.radio(
+        "Oscillator",
+        oscillator_options,
+        horizontal=False,
+        key=KEY_POWERLAW_OSCILLATOR,
+        label_visibility="collapsed",
+        width="stretch",
+    )
 
 
 def _render_sigma_band_history_sidebar_control(_date_index):
@@ -417,13 +438,13 @@ def render_sidebar_panel(
         hide_price_scale = mode == MODE_POWERLAW and powerlaw_model.lock_price_scale_to_log
 
         if mode == MODE_POWERLAW:
-            time_col, price_col = st.columns(2)
+            time_col, price_col, oscillator_col = st.columns(3)
             with time_col:
                 st.markdown("**Time**")
                 time_scale = st.radio(
                     "Time",
                     [TIME_LOG, TIME_LIN],
-                    horizontal=True,
+                    horizontal=False,
                     key=KEY_TIME_SCALE,
                     label_visibility="collapsed",
                     width="stretch",
@@ -436,7 +457,7 @@ def render_sidebar_panel(
                     st.radio(
                         "Price",
                         ["Log"],
-                        horizontal=True,
+                        horizontal=False,
                         key="price_scale_series_fixed",
                         label_visibility="collapsed",
                         disabled=True,
@@ -446,12 +467,16 @@ def render_sidebar_panel(
                     price_scale = st.radio(
                         "Price",
                         ["Log", "Lin"],
-                        horizontal=True,
+                        horizontal=False,
                         key="price_scale_selector",
                         label_visibility="collapsed",
                         width="stretch",
                     )
+            with oscillator_col:
+                oscillator_mode = _render_powerlaw_oscillator_control()
             _render_sigma_display_mode_control()
+        else:
+            oscillator_mode = POWERLAW_OSCILLATOR_OFF
         is_non_price_series = not series_supports_currency_selector(mode, powerlaw_series)
 
         if is_non_price_series:
@@ -530,4 +555,5 @@ def render_sidebar_panel(
         price_scale,
         current_r2,
         powerlaw_series,
+        oscillator_mode,
     )

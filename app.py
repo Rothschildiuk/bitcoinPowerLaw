@@ -33,6 +33,7 @@ from core.constants import (
     KEY_GENESIS_OFFSET,
     KEY_LAST_MODE,
     KEY_POWERLAW_SIGMA_DISPLAY_MODE,
+    KEY_POWERLAW_OSCILLATOR,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BACKTEST_HAS_RUN,
     KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL,
@@ -52,6 +53,8 @@ from core.constants import (
     MODE_POWERLAW,
     POWERLAW_SIGMA_MODE_CLASSIC,
     POWERLAW_SIGMA_MODE_HISTORICAL,
+    POWERLAW_OSCILLATOR_OFF,
+    POWERLAW_OSCILLATOR_ON,
     POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_DIFFICULTY,
     POWERLAW_SERIES_FILECOIN_BTC,
@@ -101,6 +104,7 @@ from services.price_service import build_currency_close_series
 from ui.charts import (
     _resolve_model_view_max,
     render_main_model_chart,
+    render_powerlaw_oscillator_chart,
 )
 from ui.kpi import render_model_kpis
 from ui.sidebar import render_sidebar_panel
@@ -118,6 +122,7 @@ def initialize_app_session_state():
         KEY_CHART_REVISION: 0,
         KEY_POWERLAW_SERIES: POWERLAW_SERIES_PRICE,
         KEY_POWERLAW_SIGMA_DISPLAY_MODE: POWERLAW_SIGMA_MODE_CLASSIC,
+        KEY_POWERLAW_OSCILLATOR: POWERLAW_OSCILLATOR_OFF,
         KEY_SIGMA_BAND_HISTORY_RANGE_PCT: (0, 100),
         KEY_BITCOIN_NETWORK_SIMULATION_SEED: 1,
         KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION: 0.00001,
@@ -1118,6 +1123,7 @@ sidebar_series_data = SharedSidebarSeriesData(series_store)
     price_scale,
     current_r2,
     powerlaw_series,
+    oscillator_mode,
 ) = render_sidebar_panel(
     sidebar_series_data,
     c_text_main,
@@ -1262,7 +1268,12 @@ if mode == MODE_POWERLAW:
     )
 
 if mode == MODE_POWERLAW:
-    render_main_model_chart(
+    chart_renderer = (
+        render_powerlaw_oscillator_chart
+        if oscillator_mode == POWERLAW_OSCILLATOR_ON
+        else render_main_model_chart
+    )
+    chart_renderer(
         mode=mode,
         time_scale=time_scale,
         price_scale=price_scale,
@@ -1311,7 +1322,7 @@ if mode == MODE_POWERLAW:
         ),
         chart_key=(
             f"chart_{mode}_{powerlaw_series}_{currency}_{time_scale}_{price_scale}_"
-            f"{st.session_state[KEY_CHART_REVISION]}"
+            f"{oscillator_mode}_{st.session_state[KEY_CHART_REVISION]}"
         ),
     )
 else:

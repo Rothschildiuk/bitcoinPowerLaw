@@ -1,7 +1,7 @@
 import pandas as pd
 
 # App/meta
-APP_VERSION = "1.1.94"
+APP_VERSION = "1.1.95"
 GENESIS_DATE = pd.to_datetime("2009-01-03")
 DIFFICULTY_HASHRATE_ANALYSIS_START_DATE = pd.to_datetime("2010-01-01")
 DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS = int(
@@ -175,6 +175,7 @@ KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION = "bitcoin_network_simulation_resoluti
 KEY_POWERLAW_AUTO_FIT = "powerlaw_auto_fit"
 KEY_POWERLAW_ENVELOPE_SIGMA = "powerlaw_envelope_sigma"
 KEY_POWERLAW_SIGMA_DISPLAY_MODE = "powerlaw_sigma_display_mode"
+KEY_POWERLAW_OSCILLATOR = "powerlaw_oscillator"
 KEY_SIGMA_BAND_HISTORY_RANGE_PCT = "sigma_band_history_range_pct"
 KEY_SIGMA_BAND_HISTORY_YEARS = "sigma_band_history_years"
 KEY_PORTFOLIO_BTC_AMOUNT = "portfolio_btc_amount"
@@ -211,6 +212,8 @@ MODE_PORTFOLIO = "Portfolio"
 POWERLAW_SIGMA_MODE_CLASSIC = "Classic"
 POWERLAW_SIGMA_MODE_SEGMENTED = "Segmented"
 POWERLAW_SIGMA_MODE_HISTORICAL = "Historical"
+POWERLAW_OSCILLATOR_OFF = "Off"
+POWERLAW_OSCILLATOR_ON = "On"
 POWERLAW_SERIES_PRICE = "Bitcoin"
 POWERLAW_SERIES_REVENUE = "Miner revenue"
 POWERLAW_SERIES_BITCOIN_MARKET_CAP = "Bitcoin market cap"

@@ -452,6 +452,249 @@ def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendran
     )
 
 
+def render_powerlaw_oscillator_chart(
+    *,
+    mode,
+    time_scale,
+    df_display,
+    current_gen_date,
+    view_max,
+    plot_x_model,
+    plot_x_main,
+    m_dates,
+    m_dates_str,
+    historical_powerlaw_fair=None,
+    historical_powerlaw_sigma_offsets=None,
+    powerlaw_sigma_display_mode=POWERLAW_SIGMA_MODE_CLASSIC,
+    p2_5,
+    p16_5,
+    p83_5,
+    p97_5,
+    pl_template,
+    pl_bg_color,
+    pl_grid_color,
+    pl_btc_color,
+    pl_legend_color,
+    pl_text_color,
+    c_hover_bg,
+    c_hover_text,
+    c_border,
+    target_series_name,
+    target_series_unit,
+    show_halving_lines,
+    chart_key,
+    **_unused,
+):
+    fig = go.Figure()
+    is_log_time = time_scale == TIME_LOG
+    tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
+    hover_label = dict(
+        bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
+    )
+    use_historical = powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_HISTORICAL
+    historical_fair_log = np.asarray(
+        historical_powerlaw_fair if historical_powerlaw_fair is not None else [], dtype=float
+    )
+    historical_available = (
+        use_historical
+        and historical_fair_log.shape == df_display["CloseDisplay"].shape
+        and np.any(np.isfinite(historical_fair_log))
+    )
+
+    if historical_available:
+        reference_fair, _, _ = evaluate_powerlaw_values(historical_fair_log, 0.0, 1.0)
+        model_name = "Historical PowerLaw"
+    else:
+        reference_fair = pd.to_numeric(
+            df_display["FairDisplay"], errors="coerce"
+        ).to_numpy(dtype=float)
+        model_name = "Power regression"
+
+    close_values = pd.to_numeric(
+        df_display["CloseDisplay"], errors="coerce"
+    ).to_numpy(dtype=float)
+    oscillator_values = np.full(close_values.shape, np.nan, dtype=float)
+    valid_reference = np.isfinite(reference_fair) & (reference_fair > 0)
+    oscillator_values[valid_reference] = (
+        close_values[valid_reference] / reference_fair[valid_reference]
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=plot_x_main,
+            y=oscillator_values,
+            mode="lines",
+            name=f"{target_series_name} oscillator",
+            line=dict(color=pl_btc_color, width=1.5),
+            customdata=df_display.index.strftime("%d.%m.%Y"),
+            hovertemplate=(
+                f"<b>{target_series_name} / Power Law</b>: %{{y:,.3f}}×"
+                "<br>%{customdata}<extra></extra>"
+            ),
+        )
+    )
+
+    model_indices = _resolve_trace_sample_indices(len(plot_x_model))
+    model_x = _sample_trace_values(plot_x_model, model_indices)
+    model_dates_hover = _sample_trace_values(m_dates_str, model_indices)
+    fig.add_trace(
+        go.Scatter(
+            x=model_x,
+            y=np.ones(len(model_x), dtype=float),
+            mode="lines",
+            name=model_name,
+            line=dict(color="#f0b90b", width=2.0),
+            customdata=model_dates_hover,
+            hovertemplate=(
+                f"<b>{model_name}</b>: %{{y:,.3f}}×"
+                "<br>%{customdata}<extra></extra>"
+            ),
+        )
+    )
+
+    sigma_candidates = []
+    if historical_available:
+        historical_offsets = np.asarray(
+            historical_powerlaw_sigma_offsets
+            if historical_powerlaw_sigma_offsets is not None
+            else [],
+            dtype=float,
+        )
+        if historical_offsets.shape == (4, len(df_display)):
+            styles = (
+                (3, "+2σ", "#ea3d2f", "historical_sigma_2"),
+                (2, "+1σ", "#1199d6", "historical_sigma_1"),
+                (1, "-1σ", "#1199d6", "historical_sigma_1"),
+                (0, "-2σ", "#ea3d2f", "historical_sigma_2"),
+            )
+            extension_mask = np.asarray(
+                pd.to_datetime(m_dates) >= pd.Timestamp(df_display.index[-1])
+            )
+            extension_indices = np.flatnonzero(extension_mask)
+            extension_indices = extension_indices[
+                _resolve_trace_sample_indices(len(extension_indices))
+            ]
+            for offset_index, label, color, legendgroup in styles:
+                sigma_values = np.power(10.0, historical_offsets[offset_index])
+                sigma_candidates.append(sigma_values)
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_x_main,
+                        y=sigma_values,
+                        mode="lines",
+                        name=f"Historical {label}",
+                        legendgroup=legendgroup,
+                        line=dict(color=color, width=1.2, dash="dot"),
+                        showlegend=label in ("+2σ", "+1σ"),
+                        hovertemplate=f"<b>Historical {label}</b>: %{{y:,.3f}}×<extra></extra>",
+                    )
+                )
+                if len(extension_indices):
+                    latest_value = sigma_values[-1]
+                    extension_values = np.full(len(extension_indices), latest_value)
+                    sigma_candidates.append(extension_values)
+                    fig.add_trace(
+                        go.Scatter(
+                            x=np.asarray(plot_x_model)[extension_indices],
+                            y=extension_values,
+                            mode="lines",
+                            name=f"Historical {label}",
+                            legendgroup=legendgroup,
+                            line=dict(color=color, width=1.2, dash="dot"),
+                            showlegend=False,
+                            hoverinfo="skip",
+                        )
+                    )
+    else:
+        for offset, label, color, legendgroup in (
+            (p97_5, "+2σ", "#ea3d2f", "sigma_abs_2"),
+            (p83_5, "+1σ", "#1199d6", "sigma_abs_1"),
+            (p16_5, "-1σ", "#1199d6", "sigma_abs_1"),
+            (p2_5, "-2σ", "#ea3d2f", "sigma_abs_2"),
+        ):
+            sigma_value = 10.0**offset
+            sigma_candidates.append(np.array([sigma_value]))
+            fig.add_trace(
+                go.Scatter(
+                    x=model_x,
+                    y=np.full(len(model_x), sigma_value),
+                    mode="lines",
+                    name=label,
+                    legendgroup=legendgroup,
+                    line=dict(color=color, width=1.2, dash="dot"),
+                    showlegend=label in ("+2σ", "+1σ"),
+                    hovertemplate=f"<b>{label}</b>: %{{y:,.3f}}×<extra></extra>",
+                )
+            )
+
+    finite_parts = [oscillator_values] + sigma_candidates + [np.array([1.0])]
+    finite_values = np.concatenate(
+        [values[np.isfinite(values)] for values in finite_parts if np.any(np.isfinite(values))]
+    )
+    positive_values = finite_values[finite_values > 0]
+    log_min = float(np.log10(np.min(positive_values)))
+    log_max = float(np.log10(np.max(positive_values)))
+    log_padding = max((log_max - log_min) * 0.08, 0.05)
+    y_range = [log_min - log_padding, log_max + log_padding]
+    if show_halving_lines:
+        _add_halving_trace(
+            fig,
+            current_gen_date,
+            is_log_time,
+            [10.0 ** y_range[0], 10.0 ** y_range[1]],
+        )
+
+    fig.update_yaxes(
+        type="log",
+        range=y_range,
+        title_text="Price / Power Law (×)",
+        ticksuffix="×",
+        gridcolor=pl_grid_color,
+        tickfont=tick_font,
+    )
+    if is_log_time:
+        x_range, tick_values, tick_text = _resolve_log_time_axis(
+            df_display, current_gen_date, view_max, m_dates
+        )
+        fig.update_xaxes(
+            type="log",
+            tickvals=tick_values,
+            ticktext=tick_text,
+            range=x_range,
+            gridcolor=pl_grid_color,
+            tickfont=tick_font,
+        )
+    else:
+        fig.update_xaxes(
+            type="date",
+            range=[_resolve_time_axis_start_date(df_display), m_dates[-1]],
+            gridcolor=pl_grid_color,
+            tickfont=tick_font,
+            hoverformat="%d.%m.%Y",
+        )
+    fig.update_layout(
+        height=600,
+        margin=dict(t=40, b=72, l=50, r=20),
+        template=pl_template,
+        font=dict(color=pl_text_color),
+        legend=dict(
+            orientation="h",
+            y=-0.12,
+            yanchor="top",
+            x=0,
+            xanchor="left",
+            font=dict(size=13, color=pl_legend_color),
+            bgcolor="rgba(0,0,0,0)",
+            groupclick="togglegroup",
+        ),
+        paper_bgcolor=pl_bg_color,
+        plot_bgcolor=pl_bg_color,
+        hovermode="x unified",
+        hoverlabel=hover_label,
+    )
+    st.plotly_chart(fig, width="stretch", config=_main_chart_plotly_config(), key=chart_key)
+
+
 def render_main_model_chart(
     *,
     mode,

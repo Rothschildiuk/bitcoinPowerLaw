@@ -2,17 +2,37 @@ import unittest
 from unittest.mock import patch
 
 from core.constants import (
+    KEY_POWERLAW_OSCILLATOR,
     KEY_POWERLAW_SIGMA_DISPLAY_MODE,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
     KEY_PORTFOLIO_FORECAST_UNIT,
     PORTFOLIO_VIEW_ACCUMULATION,
     PORTFOLIO_VIEW_PENSION,
     POWERLAW_SIGMA_MODE_HISTORICAL,
+    POWERLAW_OSCILLATOR_ON,
 )
 from ui import sidebar
 
 
 class TestUISidebarHelpers(unittest.TestCase):
+    def test_oscillator_control_preserves_on_selection(self):
+        session_state = {KEY_POWERLAW_OSCILLATOR: POWERLAW_OSCILLATOR_ON}
+
+        with (
+            patch.object(sidebar.st, "session_state", session_state),
+            patch.object(sidebar.st, "markdown"),
+            patch.object(
+                sidebar.st,
+                "radio",
+                return_value=POWERLAW_OSCILLATOR_ON,
+            ) as radio,
+        ):
+            selected = sidebar._render_powerlaw_oscillator_control()
+
+        self.assertEqual(selected, POWERLAW_OSCILLATOR_ON)
+        self.assertEqual(radio.call_args.kwargs["key"], KEY_POWERLAW_OSCILLATOR)
+        self.assertFalse(radio.call_args.kwargs["horizontal"])
+
     def test_sync_portfolio_forecast_unit_defaults_to_month_when_entering_accumulation(
         self,
     ):

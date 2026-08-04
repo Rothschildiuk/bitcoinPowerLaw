@@ -22,10 +22,78 @@ from ui.charts import (
     _sample_trace_values,
     _resolve_time_axis_start_date,
     render_main_model_chart,
+    render_powerlaw_oscillator_chart,
 )
 
 
 class TestUIChartsHelpers(unittest.TestCase):
+    def test_powerlaw_oscillator_uses_straight_unit_baseline_for_classic_and_historical(self):
+        dates = pd.date_range("2020-01-01", periods=4, freq="D")
+        days = np.array([4000.0, 4001.0, 4002.0, 4003.0])
+        df_display = pd.DataFrame(
+            {
+                "Days": days[:3],
+                "CloseDisplay": [110.0, 90.0, 120.0],
+                "FairDisplay": [100.0, 100.0, 100.0],
+            },
+            index=dates[:3],
+        )
+
+        for sigma_mode, expected_model_name in (
+            ("Classic", "Power regression"),
+            (POWERLAW_SIGMA_MODE_HISTORICAL, "Historical PowerLaw"),
+        ):
+            captured = {}
+
+            def capture_plotly_chart(fig, **kwargs):
+                captured["fig"] = fig
+
+            with patch("ui.charts.st.plotly_chart", side_effect=capture_plotly_chart):
+                render_powerlaw_oscillator_chart(
+                    mode=MODE_POWERLAW,
+                    time_scale=TIME_LOG,
+                    df_display=df_display,
+                    current_gen_date=pd.Timestamp("2009-01-03"),
+                    view_max=float(days[-1]),
+                    plot_x_model=days,
+                    plot_x_main=days[:3],
+                    m_dates=dates,
+                    m_dates_str=dates.strftime("%d.%m.%Y").to_numpy(),
+                    historical_powerlaw_fair=np.log10([100.0, 100.0, 100.0]),
+                    historical_powerlaw_sigma_offsets=np.tile(
+                        np.array([[-0.2], [-0.1], [0.1], [0.2]]), (1, 3)
+                    ),
+                    powerlaw_sigma_display_mode=sigma_mode,
+                    p2_5=-0.2,
+                    p16_5=-0.1,
+                    p83_5=0.1,
+                    p97_5=0.2,
+                    pl_template="plotly_dark",
+                    pl_bg_color="#000",
+                    pl_grid_color="#333",
+                    pl_btc_color="#fff",
+                    pl_legend_color="#fff",
+                    pl_text_color="#fff",
+                    c_hover_bg="#111",
+                    c_hover_text="#fff",
+                    c_border="#333",
+                    target_series_name="Bitcoin",
+                    target_series_unit="USD",
+                    show_halving_lines=False,
+                    chart_key=f"test-oscillator-{sigma_mode}",
+                )
+
+            model_trace = next(
+                trace for trace in captured["fig"].data if trace.name == expected_model_name
+            )
+            np.testing.assert_allclose(model_trace.y, 1.0)
+            self.assertEqual(model_trace.x[-1], days[-1])
+            oscillator_trace = next(
+                trace for trace in captured["fig"].data if trace.name == "Bitcoin oscillator"
+            )
+            np.testing.assert_allclose(oscillator_trace.y, [1.1, 0.9, 1.2])
+            self.assertEqual(captured["fig"].layout.yaxis.type, "log")
+
     def test_historical_powerlaw_continues_from_latest_fit_to_model_horizon(self):
         dates = pd.date_range("2020-01-01", periods=5, freq="D")
         display_days = np.array([4000.0, 4001.0, 4002.0])
