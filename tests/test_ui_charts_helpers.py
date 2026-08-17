@@ -27,7 +27,9 @@ from ui.charts import (
 
 
 class TestUIChartsHelpers(unittest.TestCase):
-    def test_powerlaw_oscillator_uses_straight_unit_baseline_for_classic_and_historical(self):
+    def test_powerlaw_oscillator_uses_straight_unit_baseline_for_classic_and_historical(
+        self,
+    ):
         dates = pd.date_range("2020-01-01", periods=4, freq="D")
         days = np.array([4000.0, 4001.0, 4002.0, 4003.0])
         df_display = pd.DataFrame(
@@ -84,12 +86,16 @@ class TestUIChartsHelpers(unittest.TestCase):
                 )
 
             model_trace = next(
-                trace for trace in captured["fig"].data if trace.name == expected_model_name
+                trace
+                for trace in captured["fig"].data
+                if trace.name == expected_model_name
             )
             np.testing.assert_allclose(model_trace.y, 1.0)
             self.assertEqual(model_trace.x[-1], days[-1])
             oscillator_trace = next(
-                trace for trace in captured["fig"].data if trace.name == "Bitcoin oscillator"
+                trace
+                for trace in captured["fig"].data
+                if trace.name == "Bitcoin oscillator"
             )
             np.testing.assert_allclose(oscillator_trace.y, [1.1, 0.9, 1.2])
             self.assertEqual(captured["fig"].layout.yaxis.type, "log")
@@ -100,7 +106,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         model_days = np.array([4000.0, 4001.0, 4002.0, 4003.0, 4004.0])
         historical_intercepts = np.array([1.0, 1.0, 1.0])
         historical_slopes = np.array([0.5, 0.5, 0.5])
-        historical_fair = historical_intercepts + historical_slopes * np.log10(display_days)
+        historical_fair = historical_intercepts + historical_slopes * np.log10(
+            display_days
+        )
         captured = {}
 
         def capture_plotly_chart(fig, **kwargs):
@@ -162,10 +170,41 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(len(fair_traces), 2)
         self.assertEqual(fair_traces[1].x[0], model_days[2])
         self.assertEqual(fair_traces[1].x[-1], model_days[-1])
-        for sigma_name in ("Historical +2σ", "Historical +1σ", "Historical -1σ", "Historical -2σ"):
-            sigma_traces = [trace for trace in captured["fig"].data if trace.name == sigma_name]
+        self.assertNotIn("%{customdata}", fair_traces[0].hovertemplate)
+        sigma_names = (
+            "+2σ (97.725th percentile)",
+            "+1σ (84.135th percentile)",
+            "-1σ (15.865th percentile)",
+            "-2σ (2.275th percentile)",
+        )
+        for sigma_name in sigma_names:
+            sigma_traces = [
+                trace for trace in captured["fig"].data if trace.name == sigma_name
+            ]
             self.assertEqual(len(sigma_traces), 2)
             self.assertEqual(sigma_traces[1].x[-1], model_days[-1])
+            for sigma_trace in sigma_traces:
+                self.assertIn(f"<b>{sigma_name}</b>", sigma_trace.hovertemplate)
+                self.assertIn("%{y:,.0f}", sigma_trace.hovertemplate)
+
+        hover_trace_names = [
+            trace.name
+            for trace in captured["fig"].data
+            if not trace.showlegend
+            and trace.name in (*sigma_names, "Historical PowerLaw")
+            and len(trace.x) == len(display_days)
+            and trace.x[0] == display_days[0]
+        ]
+        self.assertEqual(
+            hover_trace_names,
+            [
+                sigma_names[0],
+                sigma_names[1],
+                "Historical PowerLaw",
+                sigma_names[2],
+                sigma_names[3],
+            ],
+        )
 
     def test_convert_log_offsets_to_sigma_levels_uses_powerlaw_percentile_scale(self):
         sigma_levels = _convert_log_offsets_to_sigma_levels(
@@ -178,7 +217,9 @@ class TestUIChartsHelpers(unittest.TestCase):
     def test_iter_moving_average_series_uses_requested_windows(self):
         df_display = pd.DataFrame(
             {"CloseDisplay": [10.0, 20.0, 30.0, 40.0]},
-            index=pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"]),
+            index=pd.to_datetime(
+                ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"]
+            ),
         )
 
         lines = _iter_moving_average_series(df_display, (2, 3))
@@ -192,7 +233,9 @@ class TestUIChartsHelpers(unittest.TestCase):
 
         self.assertTrue(config["displayModeBar"])
         modebar_buttons = [
-            button for button_group in config["modeBarButtons"] for button in button_group
+            button
+            for button_group in config["modeBarButtons"]
+            for button in button_group
         ]
         self.assertIn("toggleSpikelines", modebar_buttons)
         self.assertLess(
@@ -328,7 +371,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         )
 
         self.assertEqual([level for level, _ in offsets], [-1.5, -0.5, 0.5, 1.5])
-        self.assertTrue(np.allclose([offset for _, offset in offsets], [-0.7, -0.2, 0.3, 0.9]))
+        self.assertTrue(
+            np.allclose([offset for _, offset in offsets], [-0.7, -0.2, 0.3, 0.9])
+        )
 
     def test_resolve_trace_sample_indices_keeps_short_traces_full_resolution(self):
         sample_indices = _resolve_trace_sample_indices(5, max_points=5)
@@ -562,7 +607,8 @@ class TestUIChartsHelpers(unittest.TestCase):
         segmented_legend_names = [
             str(trace.name)
             for trace in captured["fig"].data
-            if trace.showlegend and str(trace.legendgroup).startswith("segmented_sigma_")
+            if trace.showlegend
+            and str(trace.legendgroup).startswith("segmented_sigma_")
         ]
         self.assertIn("Segmented sigma 0σ to ±0.5σ", segmented_legend_names)
         self.assertIn("Segmented sigma ±0.5σ to ±1σ", segmented_legend_names)
@@ -574,7 +620,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         ]
         self.assertLess(len(set(segmented_legend_groups)), len(segmented_legend_groups))
         self.assertEqual(segmented_legend_names.count("Segmented sigma 0σ to ±0.5σ"), 1)
-        self.assertEqual(segmented_legend_names.count("Segmented sigma ±0.5σ to ±1σ"), 1)
+        self.assertEqual(
+            segmented_legend_names.count("Segmented sigma ±0.5σ to ±1σ"), 1
+        )
         segmented_traces = [
             trace
             for trace in captured["fig"].data
@@ -601,7 +649,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertIn("#06b6d4", segmented_colors)
         self.assertIn("#22c55e", segmented_colors)
 
-    def test_powerlaw_chart_downsamples_rendered_model_lines_but_keeps_date_hover_trace(self):
+    def test_powerlaw_chart_downsamples_rendered_model_lines_but_keeps_date_hover_trace(
+        self,
+    ):
         dates = pd.date_range("2020-01-01", periods=3, freq="D")
         display_days = np.array([4000.0, 4001.0, 4002.0])
         model_days = np.arange(1.0, 3002.0)
@@ -666,7 +716,9 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(power_regression_trace.x[0], model_days[0])
         self.assertEqual(power_regression_trace.x[-1], model_days[-1])
 
-        date_hover_trace = next(trace for trace in captured["fig"].data if str(trace.name) == "")
+        date_hover_trace = next(
+            trace for trace in captured["fig"].data if str(trace.name) == ""
+        )
         self.assertEqual(len(date_hover_trace.x), len(model_days))
 
     def test_powerlaw_halving_lines_are_toggleable_from_legend(self):
@@ -724,7 +776,9 @@ class TestUIChartsHelpers(unittest.TestCase):
                 chart_key="test-powerlaw-halvings",
             )
 
-        halving_traces = [trace for trace in captured["fig"].data if trace.name == "Halvings"]
+        halving_traces = [
+            trace for trace in captured["fig"].data if trace.name == "Halvings"
+        ]
         self.assertEqual(len(halving_traces), 1)
         self.assertEqual(halving_traces[0].legendgroup, "halvings")
         self.assertEqual(halving_traces[0].mode, "lines")

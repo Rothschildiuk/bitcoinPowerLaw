@@ -62,7 +62,9 @@ def _main_chart_plotly_config():
     }
 
 
-def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS):
+def _resolve_time_axis_start_date(
+    df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS
+):
     first_data_date = pd.Timestamp(df_display.index.min())
     return first_data_date - pd.Timedelta(days=int(padding_days))
 
@@ -75,7 +77,9 @@ def _resolve_model_view_max(
 ):
     latest_data_date = pd.Timestamp(df_display.index.max()).normalize()
     today_date = (
-        pd.Timestamp.today().normalize() if today is None else pd.Timestamp(today).normalize()
+        pd.Timestamp.today().normalize()
+        if today is None
+        else pd.Timestamp(today).normalize()
     )
     anchor_date = max(latest_data_date, today_date)
     horizon_end_date = anchor_date + pd.DateOffset(years=int(forward_years))
@@ -92,7 +96,9 @@ def _resolve_powerlaw_y_range(
     visible_start_day=None,
     include_bands=True,
 ):
-    btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
+    btc_vals = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(
+        dtype=float
+    )
     fair_vals = np.asarray(m_fair_display, dtype=float)
     if model_x is not None and visible_start_day is not None:
         model_x_arr = np.asarray(model_x)
@@ -252,7 +258,9 @@ def _iter_moving_average_series(df_display, windows):
         if window_days <= 1:
             continue
 
-        rolling_values = close_values.rolling(window_days, min_periods=window_days).mean()
+        rolling_values = close_values.rolling(
+            window_days, min_periods=window_days
+        ).mean()
         if rolling_values.notna().any():
             lines.append((window_days, rolling_values))
 
@@ -350,15 +358,19 @@ def _resolve_segment_mask(sigma_levels, lower_level, upper_level):
     return (sigma_levels >= float(lower_level)) & (sigma_levels < float(upper_level))
 
 
-def _iter_segmented_powerlaw_sigma_lines(df_display, m_log_d, p2_5, p16_5, p83_5, p97_5):
+def _iter_segmented_powerlaw_sigma_lines(
+    df_display, m_log_d, p2_5, p16_5, p83_5, p97_5
+):
     if "Days" not in df_display:
         return []
     if "LogClose" in df_display:
-        log_prices = pd.to_numeric(df_display["LogClose"], errors="coerce").to_numpy(dtype=float)
-    elif "CloseDisplay" in df_display:
-        close_values = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(
+        log_prices = pd.to_numeric(df_display["LogClose"], errors="coerce").to_numpy(
             dtype=float
         )
+    elif "CloseDisplay" in df_display:
+        close_values = pd.to_numeric(
+            df_display["CloseDisplay"], errors="coerce"
+        ).to_numpy(dtype=float)
         log_prices = np.full(close_values.shape, np.nan, dtype=float)
         positive_mask = close_values > 0.0
         log_prices[positive_mask] = np.log10(close_values[positive_mask])
@@ -366,9 +378,13 @@ def _iter_segmented_powerlaw_sigma_lines(df_display, m_log_d, p2_5, p16_5, p83_5
         return []
 
     if "Res" in df_display:
-        residuals = pd.to_numeric(df_display["Res"], errors="coerce").to_numpy(dtype=float)
+        residuals = pd.to_numeric(df_display["Res"], errors="coerce").to_numpy(
+            dtype=float
+        )
     elif "ModelLog" in df_display:
-        model_log = pd.to_numeric(df_display["ModelLog"], errors="coerce").to_numpy(dtype=float)
+        model_log = pd.to_numeric(df_display["ModelLog"], errors="coerce").to_numpy(
+            dtype=float
+        )
         residuals = log_prices - model_log
     else:
         return []
@@ -377,15 +393,21 @@ def _iter_segmented_powerlaw_sigma_lines(df_display, m_log_d, p2_5, p16_5, p83_5
     log_days = np.full(days.shape, np.nan, dtype=float)
     positive_day_mask = days > 0.0
     log_days[positive_day_mask] = np.log10(days[positive_day_mask])
-    sigma_levels = _convert_log_offsets_to_sigma_levels(residuals, (p2_5, p16_5, p83_5, p97_5))
-    valid_mask = np.isfinite(log_days) & np.isfinite(log_prices) & np.isfinite(sigma_levels)
+    sigma_levels = _convert_log_offsets_to_sigma_levels(
+        residuals, (p2_5, p16_5, p83_5, p97_5)
+    )
+    valid_mask = (
+        np.isfinite(log_days) & np.isfinite(log_prices) & np.isfinite(sigma_levels)
+    )
     if np.count_nonzero(valid_mask) < 2:
         return []
 
     model_log_days = np.asarray(m_log_d, dtype=float)
     lines = []
     for lower_level, upper_level, label, color, dash in _iter_segmented_sigma_bands():
-        segment_mask = valid_mask & _resolve_segment_mask(sigma_levels, lower_level, upper_level)
+        segment_mask = valid_mask & _resolve_segment_mask(
+            sigma_levels, lower_level, upper_level
+        )
         if np.count_nonzero(segment_mask) < 2:
             continue
         segment_log_days = log_days[segment_mask]
@@ -401,7 +423,9 @@ def _iter_segmented_powerlaw_sigma_lines(df_display, m_log_d, p2_5, p16_5, p83_5
         )
         if was_clipped:
             continue
-        legend_name, legendgroup = _resolve_segmented_sigma_legend(lower_level, upper_level)
+        legend_name, legendgroup = _resolve_segmented_sigma_legend(
+            lower_level, upper_level
+        )
         lines.append(
             {
                 "name": _format_segmented_sigma_name(label),
@@ -428,7 +452,9 @@ def _add_halving_trace(fig, current_gen_date, is_log_time, y_range, *, legendran
     halving_hover_values = []
     for halving_date in HALVING_DATES:
         halving_x = (
-            max(1.0, float((halving_date - current_gen_date).days)) if is_log_time else halving_date
+            max(1.0, float((halving_date - current_gen_date).days))
+            if is_log_time
+            else halving_date
         )
         halving_x_values.extend([halving_x, halving_x, None])
         halving_y_values.extend([y_min, y_max, None])
@@ -493,7 +519,8 @@ def render_powerlaw_oscillator_chart(
     )
     use_historical = powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_HISTORICAL
     historical_fair_log = np.asarray(
-        historical_powerlaw_fair if historical_powerlaw_fair is not None else [], dtype=float
+        historical_powerlaw_fair if historical_powerlaw_fair is not None else [],
+        dtype=float,
     )
     historical_available = (
         use_historical
@@ -510,9 +537,9 @@ def render_powerlaw_oscillator_chart(
         ).to_numpy(dtype=float)
         model_name = "Power regression"
 
-    close_values = pd.to_numeric(
-        df_display["CloseDisplay"], errors="coerce"
-    ).to_numpy(dtype=float)
+    close_values = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(
+        dtype=float
+    )
     oscillator_values = np.full(close_values.shape, np.nan, dtype=float)
     valid_reference = np.isfinite(reference_fair) & (reference_fair > 0)
     oscillator_values[valid_reference] = (
@@ -546,8 +573,7 @@ def render_powerlaw_oscillator_chart(
             line=dict(color="#f0b90b", width=2.0),
             customdata=model_dates_hover,
             hovertemplate=(
-                f"<b>{model_name}</b>: %{{y:,.3f}}×"
-                "<br>%{customdata}<extra></extra>"
+                f"<b>{model_name}</b>: %{{y:,.3f}}×" "<br>%{customdata}<extra></extra>"
             ),
         )
     )
@@ -555,9 +581,11 @@ def render_powerlaw_oscillator_chart(
     sigma_candidates = []
     if historical_available:
         historical_offsets = np.asarray(
-            historical_powerlaw_sigma_offsets
-            if historical_powerlaw_sigma_offsets is not None
-            else [],
+            (
+                historical_powerlaw_sigma_offsets
+                if historical_powerlaw_sigma_offsets is not None
+                else []
+            ),
             dtype=float,
         )
         if historical_offsets.shape == (4, len(df_display)):
@@ -629,7 +657,11 @@ def render_powerlaw_oscillator_chart(
 
     finite_parts = [oscillator_values] + sigma_candidates + [np.array([1.0])]
     finite_values = np.concatenate(
-        [values[np.isfinite(values)] for values in finite_parts if np.any(np.isfinite(values))]
+        [
+            values[np.isfinite(values)]
+            for values in finite_parts
+            if np.any(np.isfinite(values))
+        ]
     )
     positive_values = finite_values[finite_values > 0]
     log_min = float(np.log10(np.min(positive_values)))
@@ -692,7 +724,9 @@ def render_powerlaw_oscillator_chart(
         hovermode="x unified",
         hoverlabel=hover_label,
     )
-    st.plotly_chart(fig, width="stretch", config=_main_chart_plotly_config(), key=chart_key)
+    st.plotly_chart(
+        fig, width="stretch", config=_main_chart_plotly_config(), key=chart_key
+    )
 
 
 def render_main_model_chart(
@@ -754,10 +788,18 @@ def render_main_model_chart(
         p16_5_name = "-1σ (15.865th percentile)"
         p2_5_name = "-2σ (2.275th percentile)"
 
-        p2_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p2_5, 1.0)
-        p16_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p16_5, 1.0)
-        p83_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p83_5, 1.0)
-        p97_5_series, _, _ = evaluate_powerlaw_values(np.log10(m_fair_display), p97_5, 1.0)
+        p2_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p2_5, 1.0
+        )
+        p16_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p16_5, 1.0
+        )
+        p83_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p83_5, 1.0
+        )
+        p97_5_series, _, _ = evaluate_powerlaw_values(
+            np.log10(m_fair_display), p97_5, 1.0
+        )
 
         if is_log_time:
             fig.add_trace(
@@ -801,7 +843,9 @@ def render_main_model_chart(
             _iter_moving_average_series(df_display, moving_average_windows)
         ):
             ma_name = f"{window_days}D MA"
-            ma_color = MOVING_AVERAGE_LINE_STYLES[ma_index % len(MOVING_AVERAGE_LINE_STYLES)]
+            ma_color = MOVING_AVERAGE_LINE_STYLES[
+                ma_index % len(MOVING_AVERAGE_LINE_STYLES)
+            ]
             fig.add_trace(
                 go.Scatter(
                     x=plot_x_main,
@@ -879,8 +923,12 @@ def render_main_model_chart(
                 )
             )
 
-        use_segmented_sigma = powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_SEGMENTED
-        use_historical_powerlaw = powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_HISTORICAL
+        use_segmented_sigma = (
+            powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_SEGMENTED
+        )
+        use_historical_powerlaw = (
+            powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_HISTORICAL
+        )
         use_classic_sigma = not use_segmented_sigma and not use_historical_powerlaw
         historical_powerlaw_available = False
         optional_sigma_series = {}
@@ -926,45 +974,38 @@ def render_main_model_chart(
             )
         if use_historical_powerlaw:
             historical_intercepts = np.asarray(
-                historical_powerlaw_intercepts
-                if historical_powerlaw_intercepts is not None
-                else [],
+                (
+                    historical_powerlaw_intercepts
+                    if historical_powerlaw_intercepts is not None
+                    else []
+                ),
                 dtype=float,
             )
             historical_slopes = np.asarray(
-                historical_powerlaw_slopes if historical_powerlaw_slopes is not None else [],
+                (
+                    historical_powerlaw_slopes
+                    if historical_powerlaw_slopes is not None
+                    else []
+                ),
                 dtype=float,
             )
             historical_fair_values = np.asarray(
-                historical_powerlaw_fair if historical_powerlaw_fair is not None else [],
+                (
+                    historical_powerlaw_fair
+                    if historical_powerlaw_fair is not None
+                    else []
+                ),
                 dtype=float,
             )
-            if historical_fair_values.shape == df_display["CloseDisplay"].shape and np.any(
-                np.isfinite(historical_fair_values)
-            ):
+            if historical_fair_values.shape == df_display[
+                "CloseDisplay"
+            ].shape and np.any(np.isfinite(historical_fair_values)):
                 historical_fair_display, _, _ = evaluate_powerlaw_values(
                     historical_fair_values,
                     0.0,
                     1.0,
                 )
                 historical_powerlaw_available = True
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_x_main,
-                        y=historical_fair_display,
-                        mode="lines",
-                        line=dict(color="#f0b90b", width=2.2),
-                        name="Historical PowerLaw",
-                        legendgroup="historical_power_regression",
-                        showlegend=False,
-                        customdata=df_display.index.strftime("%d.%m.%Y"),
-                        hovertemplate=(
-                            "<b>Historical PowerLaw</b>: "
-                            f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
-                            "<br>%{customdata}<extra></extra>"
-                        ),
-                    )
-                )
                 latest_fit_index = len(historical_fair_values) - 1
                 latest_fit_available = (
                     historical_intercepts.shape == historical_fair_values.shape
@@ -975,34 +1016,24 @@ def render_main_model_chart(
                 extension_mask = np.asarray(
                     pd.to_datetime(m_dates) >= pd.Timestamp(df_display.index[-1])
                 )
-                if latest_fit_available and np.any(extension_mask):
-                    extension_log = (
-                        historical_intercepts[latest_fit_index]
-                        + historical_slopes[latest_fit_index] * np.asarray(m_log_d, dtype=float)
+                has_historical_extension = latest_fit_available and np.any(
+                    extension_mask
+                )
+                if has_historical_extension:
+                    extension_log = historical_intercepts[
+                        latest_fit_index
+                    ] + historical_slopes[latest_fit_index] * np.asarray(
+                        m_log_d, dtype=float
                     )
-                    extension_fair, _, _ = evaluate_powerlaw_values(extension_log, 0.0, 1.0)
+                    extension_fair, _, _ = evaluate_powerlaw_values(
+                        extension_log, 0.0, 1.0
+                    )
                     extension_indices = np.flatnonzero(extension_mask)
-                    sampled_extension = _resolve_trace_sample_indices(len(extension_indices))
+                    sampled_extension = _resolve_trace_sample_indices(
+                        len(extension_indices)
+                    )
                     extension_indices = extension_indices[sampled_extension]
                     extension_x = np.asarray(plot_x_model)[extension_indices]
-                    extension_dates = np.asarray(m_dates_str)[extension_indices]
-                    fig.add_trace(
-                        go.Scatter(
-                            x=extension_x,
-                            y=extension_fair[extension_indices],
-                            mode="lines",
-                            line=dict(color="#f0b90b", width=2.2),
-                            name="Historical PowerLaw",
-                            legendgroup="historical_power_regression",
-                            showlegend=False,
-                            customdata=extension_dates,
-                            hovertemplate=(
-                                "<b>Historical PowerLaw</b>: "
-                                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
-                                "<br>%{customdata}<extra></extra>"
-                            ),
-                        )
-                    )
                 historical_sigma_offsets = np.asarray(
                     (
                         historical_powerlaw_sigma_offsets
@@ -1011,14 +1042,15 @@ def render_main_model_chart(
                     ),
                     dtype=float,
                 )
-                if historical_sigma_offsets.shape == (4, len(historical_fair_display)):
-                    historical_sigma_styles = (
-                        (3, "+2σ", "#ea3d2f", "historical_sigma_2"),
-                        (2, "+1σ", "#1199d6", "historical_sigma_1"),
-                        (1, "-1σ", "#1199d6", "historical_sigma_1"),
-                        (0, "-2σ", "#ea3d2f", "historical_sigma_2"),
-                    )
-                    for offset_index, sigma_label, color, legendgroup in historical_sigma_styles:
+                historical_sigma_styles = (
+                    (3, "+2σ (97.725th percentile)", "#ea3d2f", "historical_sigma_2"),
+                    (2, "+1σ (84.135th percentile)", "#1199d6", "historical_sigma_1"),
+                    (1, "-1σ (15.865th percentile)", "#1199d6", "historical_sigma_1"),
+                    (0, "-2σ (2.275th percentile)", "#ea3d2f", "historical_sigma_2"),
+                )
+
+                def add_historical_sigma_traces(styles):
+                    for offset_index, sigma_label, color, legendgroup in styles:
                         sigma_values, _, _ = evaluate_powerlaw_values(
                             historical_fair_values,
                             historical_sigma_offsets[offset_index],
@@ -1030,16 +1062,22 @@ def render_main_model_chart(
                                 y=sigma_values,
                                 mode="lines",
                                 line=dict(color=color, width=1.2, dash="dot"),
-                                name=f"Historical {sigma_label}",
+                                name=sigma_label,
                                 legendgroup=legendgroup,
                                 showlegend=False,
-                                hoverinfo="skip",
+                                hovertemplate=(
+                                    f"<b>{sigma_label}</b>: "
+                                    f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                                    "<extra></extra>"
+                                ),
                             )
                         )
-                        if latest_fit_available and np.any(extension_mask):
+                        if has_historical_extension:
                             extension_sigma_values, _, _ = evaluate_powerlaw_values(
                                 extension_log,
-                                historical_sigma_offsets[offset_index, latest_fit_index],
+                                historical_sigma_offsets[
+                                    offset_index, latest_fit_index
+                                ],
                                 1.0,
                             )
                             fig.add_trace(
@@ -1048,12 +1086,60 @@ def render_main_model_chart(
                                     y=extension_sigma_values[extension_indices],
                                     mode="lines",
                                     line=dict(color=color, width=1.2, dash="dot"),
-                                    name=f"Historical {sigma_label}",
+                                    name=sigma_label,
                                     legendgroup=legendgroup,
                                     showlegend=False,
-                                    hoverinfo="skip",
+                                    hovertemplate=(
+                                        f"<b>{sigma_label}</b>: "
+                                        f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                                        "<extra></extra>"
+                                    ),
                                 )
                             )
+
+                historical_sigma_available = historical_sigma_offsets.shape == (
+                    4,
+                    len(historical_fair_display),
+                )
+                if historical_sigma_available:
+                    add_historical_sigma_traces(historical_sigma_styles[:2])
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_x_main,
+                        y=historical_fair_display,
+                        mode="lines",
+                        line=dict(color="#f0b90b", width=2.2),
+                        name="Historical PowerLaw",
+                        legendgroup="historical_power_regression",
+                        showlegend=False,
+                        hovertemplate=(
+                            "<b>Historical PowerLaw</b>: "
+                            f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+                if has_historical_extension:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=extension_x,
+                            y=extension_fair[extension_indices],
+                            mode="lines",
+                            line=dict(color="#f0b90b", width=2.2),
+                            name="Historical PowerLaw",
+                            legendgroup="historical_power_regression",
+                            showlegend=False,
+                            hovertemplate=(
+                                "<b>Historical PowerLaw</b>: "
+                                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+                                "<extra></extra>"
+                            ),
+                        )
+                    )
+
+                if historical_sigma_available:
+                    add_historical_sigma_traces(historical_sigma_styles[2:])
             else:
                 add_model_line(
                     m_fair_display,
@@ -1085,7 +1171,8 @@ def render_main_model_chart(
                 shown_segmented_legendgroups.add(sigma_line["legendgroup"])
                 segmented_visible = (
                     "legendonly"
-                    if sigma_line["legend_name"] in SEGMENTED_SIGMA_DEFAULT_HIDDEN_LEGENDS
+                    if sigma_line["legend_name"]
+                    in SEGMENTED_SIGMA_DEFAULT_HIDDEN_LEGENDS
                     else True
                 )
                 add_segmented_model_line(
@@ -1151,9 +1238,17 @@ def render_main_model_chart(
                 legendrank=130,
             )
         add_legend_item(
-            "Historical PowerLaw" if historical_powerlaw_available else "Power regression",
+            (
+                "Historical PowerLaw"
+                if historical_powerlaw_available
+                else "Power regression"
+            ),
             dict(color="#f0b90b", width=2.2 if historical_powerlaw_available else 1.8),
-            "historical_power_regression" if historical_powerlaw_available else "power_regression",
+            (
+                "historical_power_regression"
+                if historical_powerlaw_available
+                else "power_regression"
+            ),
             legendrank=20,
         )
         if historical_powerlaw_available:
@@ -1171,7 +1266,9 @@ def render_main_model_chart(
             )
         y_range_model_x = plot_x_model if is_log_time else m_dates
         y_range_visible_start = (
-            max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
+            max(1.0, float(df_display["Days"].min()))
+            if is_log_time
+            else df_display.index.min()
         )
         powerlaw_y_range = _resolve_powerlaw_y_range(
             df_display,
