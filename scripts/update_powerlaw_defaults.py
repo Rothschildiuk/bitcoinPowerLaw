@@ -182,12 +182,12 @@ DEFAULT_CASES = [
 ]
 
 
-def _load_series_frames():
-    prepared_price_data = load_prepared_price_data()
-    prepared_bitcoin_supply_data = load_prepared_bitcoin_supply_data()
+def _load_series_frames(source="snapshot"):
+    prepared_price_data = load_prepared_price_data(source=source)
+    prepared_bitcoin_supply_data = load_prepared_bitcoin_supply_data(source=source)
     return {
         POWERLAW_SERIES_PRICE: prepared_price_data,
-        POWERLAW_SERIES_REVENUE: load_prepared_miner_revenue_data(),
+        POWERLAW_SERIES_REVENUE: load_prepared_miner_revenue_data(source=source),
         POWERLAW_SERIES_BITCOIN_MARKET_CAP: build_prepared_bitcoin_market_cap_data(
             prepared_price_data,
             prepared_bitcoin_supply_data,
@@ -195,28 +195,34 @@ def _load_series_frames():
         POWERLAW_SERIES_BITCOIN_VOLATILITY: build_prepared_bitcoin_volatility_data(
             prepared_price_data
         ),
-        POWERLAW_SERIES_DIFFICULTY: load_prepared_difficulty_data(),
-        POWERLAW_SERIES_HASHRATE: load_prepared_hashrate_data(),
-        POWERLAW_SERIES_LIGHTNING_NODES: load_prepared_lightning_nodes_data(),
-        POWERLAW_SERIES_LIGHTNING_CAPACITY: load_prepared_lightning_capacity_data(),
-        POWERLAW_SERIES_LIQUID_BTC: load_prepared_liquid_btc_data(),
-        POWERLAW_SERIES_LIQUID_TRANSACTIONS: load_prepared_liquid_transactions_data(),
-        POWERLAW_SERIES_FILECOIN_BTC: load_prepared_filecoin_btc_data(),
-        POWERLAW_SERIES_MONERO_BTC: load_prepared_monero_btc_data(),
-        POWERLAW_SERIES_LITECOIN_BTC: load_prepared_litecoin_btc_data(),
-        POWERLAW_SERIES_DOGECOIN_BTC: load_prepared_dogecoin_btc_data(),
-        POWERLAW_SERIES_US_M2: load_prepared_us_m2_data(),
-        POWERLAW_SERIES_USDT_SUPPLY: load_prepared_usdt_supply_data(),
+        POWERLAW_SERIES_DIFFICULTY: load_prepared_difficulty_data(source=source),
+        POWERLAW_SERIES_HASHRATE: load_prepared_hashrate_data(source=source),
+        POWERLAW_SERIES_LIGHTNING_NODES: load_prepared_lightning_nodes_data(source=source),
+        POWERLAW_SERIES_LIGHTNING_CAPACITY: load_prepared_lightning_capacity_data(source=source),
+        POWERLAW_SERIES_LIQUID_BTC: load_prepared_liquid_btc_data(source=source),
+        POWERLAW_SERIES_LIQUID_TRANSACTIONS: load_prepared_liquid_transactions_data(
+            source=source
+        ),
+        POWERLAW_SERIES_FILECOIN_BTC: load_prepared_filecoin_btc_data(source=source),
+        POWERLAW_SERIES_MONERO_BTC: load_prepared_monero_btc_data(source=source),
+        POWERLAW_SERIES_LITECOIN_BTC: load_prepared_litecoin_btc_data(source=source),
+        POWERLAW_SERIES_DOGECOIN_BTC: load_prepared_dogecoin_btc_data(source=source),
+        POWERLAW_SERIES_US_M2: load_prepared_us_m2_data(source=source),
+        POWERLAW_SERIES_USDT_SUPPLY: load_prepared_usdt_supply_data(source=source),
     }
 
 
-def _prepare_fit_frame(series_name, currency, series_frames):
+def _prepare_fit_frame(series_name, currency, series_frames, source="snapshot"):
     raw_df_usd = series_frames[POWERLAW_SERIES_PRICE]
     config = get_active_model_config(MODE_POWERLAW, series_name, currency)
 
     if config.supports_currency_selector:
         fit_df = raw_df_usd.copy()
-        fit_df["Close"] = build_currency_close_series(raw_df_usd, currency)
+        fit_df["Close"] = build_currency_close_series(
+            raw_df_usd,
+            currency,
+            source=source,
+        )
         fit_df = fit_df[fit_df["Close"] > 0].copy()
         fit_df["LogClose"] = np.log10(fit_df["Close"])
     else:
@@ -228,13 +234,18 @@ def _prepare_fit_frame(series_name, currency, series_frames):
     return fit_df
 
 
-def compute_default_updates():
-    series_frames = _load_series_frames()
+def compute_default_updates(source="snapshot"):
+    series_frames = _load_series_frames(source=source)
     replacements = {}
     powerlaw_summary_rows = []
 
     for series_name, currency, a_name, b_name in DEFAULT_CASES:
-        fit_df = _prepare_fit_frame(series_name, currency, series_frames)
+        fit_df = _prepare_fit_frame(
+            series_name,
+            currency,
+            series_frames,
+            source=source,
+        )
         config = get_active_model_config(MODE_POWERLAW, series_name, currency)
         genesis_offset = (
             int(config.model_origin_abs_day)

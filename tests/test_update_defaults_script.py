@@ -156,16 +156,36 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             "load_prepared_usdt_supply_data",
         ]
         with ExitStack() as stack:
+            loader_mocks = {}
             for loader_name in loader_names:
-                stack.enter_context(
+                loader_mocks[loader_name] = stack.enter_context(
                     patch.object(update_powerlaw_defaults, loader_name, return_value=price_df)
                 )
             series_frames = update_powerlaw_defaults._load_series_frames()
 
+        for loader_mock in loader_mocks.values():
+            loader_mock.assert_called_once_with(source="snapshot")
         self.assertIn(POWERLAW_SERIES_BITCOIN_VOLATILITY, series_frames)
         self.assertIn(POWERLAW_SERIES_BITCOIN_MARKET_CAP, series_frames)
         self.assertGreater(len(series_frames[POWERLAW_SERIES_BITCOIN_VOLATILITY]), 0)
         self.assertGreater(len(series_frames[POWERLAW_SERIES_BITCOIN_MARKET_CAP]), 0)
+
+    def test_prepare_fit_frame_uses_snapshot_currency_references(self):
+        update_powerlaw_defaults.load_prepared_price_data.clear()
+        price_df = update_powerlaw_defaults.load_prepared_price_data(source="snapshot").head(120)
+
+        with patch.object(
+            update_powerlaw_defaults,
+            "build_currency_close_series",
+            return_value=price_df["Close"],
+        ) as build_currency_close_series:
+            update_powerlaw_defaults._prepare_fit_frame(
+                POWERLAW_SERIES_PRICE,
+                update_powerlaw_defaults.CURRENCY_EURO,
+                {POWERLAW_SERIES_PRICE: price_df},
+            )
+
+        self.assertEqual(build_currency_close_series.call_args.kwargs["source"], "snapshot")
 
     def test_update_constants_content_updates_scalars(self):
         original = "DEFAULT_A = -16.511\n"
