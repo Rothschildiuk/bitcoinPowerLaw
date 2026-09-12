@@ -115,7 +115,8 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertEqual(result.change_usd_col, "DoD_USD")
         self.assertEqual(result.change_pct_col, "DoD_pct")
         self.assertEqual(result.forecast_unit, "Day")
-        self.assertEqual(list(result.portfolio_df["Date"].diff().dt.days.iloc[1:]), [1, 1, 1])
+        self.assertEqual(result.portfolio_df["Date"].iloc[0], pd.Timestamp("2025-11-15"))
+        self.assertTrue((result.portfolio_df["Date"].diff().dt.days.iloc[1:] == 1).all())
 
     def test_build_portfolio_projection_clips_period_days_to_one(self):
         settings = PortfolioSettings(
@@ -135,7 +136,7 @@ class TestPortfolioHelpers(unittest.TestCase):
         )
 
         self.assertTrue(
-            np.allclose(result.portfolio_df["FairPriceUSD"], np.array([100.0, 100.0, 100.0]))
+            np.allclose(result.portfolio_df["FairPriceUSD"], np.full(6, 100.0))
         )
 
     def test_build_portfolio_projection_month_uses_normalized_growth_rate(self):
@@ -191,10 +192,10 @@ class TestPortfolioHelpers(unittest.TestCase):
         )
 
         self.assertTrue(
-            np.allclose(result.portfolio_df["FairPriceUSD"], np.array([200.0, 200.0, 200.0]))
+            np.allclose(result.portfolio_df["FairPriceUSD"], np.full(6, 200.0))
         )
         self.assertTrue(
-            np.allclose(result.portfolio_df["PortfolioUSD"], np.array([300.0, 300.0, 300.0]))
+            np.allclose(result.portfolio_df["PortfolioUSD"], np.full(6, 300.0))
         )
 
     def test_build_portfolio_projection_prefers_percentile_scenario_offsets(self):

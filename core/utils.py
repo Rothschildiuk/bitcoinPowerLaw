@@ -590,31 +590,37 @@ def build_portfolio_projection(
     anchor_day = resolve_projection_anchor_day(df_index, today=anchor_day)
 
     if settings.forecast_unit == "Year":
+        history_periods = 3
+        projection_lookback = history_periods + 1
         latest_year = int(anchor_day.year)
-        start_period = pd.Timestamp(f"{latest_year - 1}-01-01")
+        start_period = pd.Timestamp(f"{latest_year - projection_lookback}-01-01")
         date_index = pd.date_range(
             start=start_period,
-            periods=settings.forecast_horizon + 1,
+            periods=settings.forecast_horizon + projection_lookback,
             freq="YS",
         )
         change_usd_col, change_pct_col = "YoY_USD", "YoY_pct"
         table_title = "Yearly growth table"
     elif settings.forecast_unit == "Day":
+        history_periods = 60
+        projection_lookback = history_periods + 1
         latest_day = anchor_day
-        start_period = latest_day - pd.Timedelta(days=1)
+        start_period = latest_day - pd.Timedelta(days=projection_lookback)
         date_index = pd.date_range(
             start=start_period,
-            periods=settings.forecast_horizon + 1,
+            periods=settings.forecast_horizon + projection_lookback,
             freq="D",
         )
         change_usd_col, change_pct_col = "DoD_USD", "DoD_pct"
         table_title = "Daily growth table"
     else:
+        history_periods = 6
+        projection_lookback = history_periods + 1
         latest_month_start = anchor_day.to_period("M").to_timestamp()
-        start_period = latest_month_start - pd.offsets.MonthBegin(1)
+        start_period = latest_month_start - pd.offsets.MonthBegin(projection_lookback)
         date_index = pd.date_range(
             start=start_period,
-            periods=settings.forecast_horizon + 1,
+            periods=settings.forecast_horizon + projection_lookback,
             freq="MS",
         )
         change_usd_col, change_pct_col = "MoM_USD", "MoM_pct"

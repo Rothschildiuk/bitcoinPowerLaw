@@ -229,7 +229,13 @@ def resolve_current_sigma_level(df_display, percentile_offsets):
     return interpolate_sigma_level_from_log_offset(current_log_offset, percentile_offsets)
 
 
-def style_portfolio_table(table_df, style_format, currency_unit, portfolio_view):
+def style_portfolio_table(
+    table_df,
+    style_format,
+    currency_unit,
+    portfolio_view,
+    historical_periods=0,
+):
     column_colors = {
         f"Fair Price ({currency_unit})": "#f0b90b",
         f"Portfolio if not selling ({currency_unit})": "#f0b90b",
@@ -245,9 +251,13 @@ def style_portfolio_table(table_df, style_format, currency_unit, portfolio_view)
 
     def color_column_values(data):
         styled = pd.DataFrame("", index=data.index, columns=data.columns)
+        if historical_periods > 0:
+            styled.iloc[:historical_periods, :] = (
+                "background-color: rgba(127, 29, 29, 0.38);"
+            )
         for column_name, color in column_colors.items():
             if column_name in styled.columns:
-                styled[column_name] = f"color: {color}; font-weight: 700;"
+                styled[column_name] += f" color: {color}; font-weight: 700;"
         return styled
 
     table_styles = [
@@ -646,6 +656,9 @@ def render_portfolio_view(
                 style_format,
                 currency_unit,
                 portfolio_view,
+                historical_periods={"Year": 3, "Month": 6, "Day": 60}.get(
+                    settings.forecast_unit, 0
+                ),
             ),
             width="stretch",
             hide_index=True,
@@ -680,9 +693,9 @@ def render_portfolio_view(
         st.markdown("#### Monthly BTC pension estimate")
         if KEY_PORTFOLIO_PENSION_PAYOUT_PCT not in st.session_state:
             st.session_state[KEY_PORTFOLIO_PENSION_PAYOUT_PCT] = 100
-        divisor_col, _ = st.columns([1, 3])
+        divisor_col, _ = st.columns([3, 1])
         with divisor_col:
-            payout_options = [25, 50, 75, 100]
+            payout_options = list(range(5, 101, 5))
             current_payout_pct = int(
                 min(
                     payout_options,
