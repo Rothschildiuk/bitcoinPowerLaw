@@ -30,6 +30,7 @@ node_modules/
 .playwright-cli/
 AGENTS.local.md
 
+
 # Local data files
 *.csv
 *.xlsx
