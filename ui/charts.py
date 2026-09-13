@@ -1013,8 +1013,11 @@ def render_main_model_chart(
                     and np.isfinite(historical_intercepts[latest_fit_index])
                     and np.isfinite(historical_slopes[latest_fit_index])
                 )
+                # The historical traces already contain the last observed date.
+                # Starting the extension on that same date makes Plotly's unified
+                # hover render every model value twice at the join.
                 extension_mask = np.asarray(
-                    pd.to_datetime(m_dates) >= pd.Timestamp(df_display.index[-1])
+                    pd.to_datetime(m_dates) > pd.Timestamp(df_display.index[-1])
                 )
                 has_historical_extension = latest_fit_available and np.any(
                     extension_mask

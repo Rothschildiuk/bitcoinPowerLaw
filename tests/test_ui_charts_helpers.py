@@ -168,8 +168,9 @@ class TestUIChartsHelpers(unittest.TestCase):
             if trace.name == "Historical PowerLaw" and not trace.showlegend
         ]
         self.assertEqual(len(fair_traces), 2)
-        self.assertEqual(fair_traces[1].x[0], model_days[2])
+        self.assertEqual(fair_traces[1].x[0], model_days[3])
         self.assertEqual(fair_traces[1].x[-1], model_days[-1])
+        self.assertTrue(set(fair_traces[0].x).isdisjoint(fair_traces[1].x))
         self.assertNotIn("%{customdata}", fair_traces[0].hovertemplate)
         sigma_names = (
             "+2σ (97.725th percentile)",
@@ -182,7 +183,9 @@ class TestUIChartsHelpers(unittest.TestCase):
                 trace for trace in captured["fig"].data if trace.name == sigma_name
             ]
             self.assertEqual(len(sigma_traces), 2)
+            self.assertEqual(sigma_traces[1].x[0], model_days[3])
             self.assertEqual(sigma_traces[1].x[-1], model_days[-1])
+            self.assertTrue(set(sigma_traces[0].x).isdisjoint(sigma_traces[1].x))
             for sigma_trace in sigma_traces:
                 self.assertIn(f"<b>{sigma_name}</b>", sigma_trace.hovertemplate)
                 self.assertIn("%{y:,.0f}", sigma_trace.hovertemplate)
