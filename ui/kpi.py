@@ -35,6 +35,18 @@ def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
     return f"{currency_prefix}{value:,.{currency_decimals}f}{currency_suffix}"
 
 
+def _calculate_return_to_model_pct(current_value, model_value):
+    current_value = float(current_value)
+    model_value = float(model_value)
+    if (
+        current_value <= 0.0
+        or not np.isfinite(current_value)
+        or not np.isfinite(model_value)
+    ):
+        return None
+    return ((model_value / current_value) - 1.0) * 100.0
+
+
 def resolve_sigma_band_history_max_years(date_values):
     date_index = pd.to_datetime(date_values, errors="coerce")
     valid_dates = date_index[~pd.isna(date_index)]
@@ -514,7 +526,31 @@ def render_model_kpis(
         df_display["CloseDisplay"].iloc[-1],
         df_display["FairDisplay"].iloc[-1],
     )
-    diff = ((l_p - l_f) / l_f) * 100
+    model_deviation_pct = (
+        ((l_p - l_f) / l_f) * 100.0
+        if l_f > 0.0 and np.isfinite(l_p) and np.isfinite(l_f)
+        else None
+    )
+    return_to_model_pct = _calculate_return_to_model_pct(l_p, l_f)
+    if model_deviation_pct is None or return_to_model_pct is None:
+        model_comparison_display = "N/A"
+    else:
+        deviation_label = "discount" if model_deviation_pct < 0.0 else "premium"
+        return_label = "upside" if return_to_model_pct >= 0.0 else "downside"
+        return_color = "#0ecb81" if return_to_model_pct >= 0.0 else "#ea3d2f"
+        return_value = (
+            f"{return_to_model_pct:+.1f}%"
+            if return_to_model_pct >= 0.0
+            else f"{abs(return_to_model_pct):.1f}%"
+        )
+        model_comparison_display = (
+            "<span class='metric-model-comparison'>"
+            f"<span style='color:#ea3d2f'>{abs(model_deviation_pct):.1f}% "
+            f"{deviation_label}</span>"
+            "<span class='metric-model-separator'>·</span>"
+            f"<span style='color:{return_color}'>{return_value} {return_label}</span>"
+            "</span>"
+        )
     monthly_growth = calculate_negative_two_sigma_monthly_growth(
         df_display,
         a_active,
@@ -551,8 +587,8 @@ def render_model_kpis(
         k3,
         "FAIR VALUE",
         _format_money(l_f_display, currency_prefix, currency_suffix, currency_decimals),
-        f"{diff:+.1f}% from model",
-        "#0ecb81" if diff < 0 else "#ea3d2f",
+        model_comparison_display,
+        "#9ba3af",
     )
     _kpi_card(
         k4,

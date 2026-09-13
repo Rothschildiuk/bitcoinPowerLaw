@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ui.kpi import (
+    _calculate_return_to_model_pct,
     calculate_current_powerlaw_sigma_level,
     calculate_negative_two_sigma_monthly_growth,
     calculate_powerlaw_band_shares,
@@ -17,6 +18,15 @@ from ui.kpi import (
 
 
 class TestUIKpi(unittest.TestCase):
+    def test_calculate_return_to_model_pct_shows_upside_from_current_value(self):
+        self.assertAlmostEqual(
+            _calculate_return_to_model_pct(17.81373, 66.73447),
+            274.6237873819801,
+        )
+
+    def test_calculate_return_to_model_pct_handles_invalid_current_value(self):
+        self.assertIsNone(_calculate_return_to_model_pct(0.0, 100.0))
+
     def test_calculate_powerlaw_band_shares_counts_quarter_sigma_centered_zones(self):
         df_display = pd.DataFrame(
             {
