@@ -28,6 +28,7 @@ node_modules/
 .env.*
 *.log
 .playwright-cli/
+AGENTS.local.md
 
 # Local data files
 *.csv
