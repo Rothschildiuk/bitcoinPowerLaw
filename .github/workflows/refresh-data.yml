@@ -67,6 +67,13 @@ jobs:
         if: steps.schedule_guard.outputs.should_run == 'true'
         run: make update-all-data
 
+      # Pushes made with GITHUB_TOKEN do not trigger other workflows, so ci.yml never
+      # sees these commits. Run the suite here instead: a refresh that breaks the app
+      # fails the job and the regenerated constants never reach main.
+      - name: Verify the refreshed data
+        if: steps.schedule_guard.outputs.should_run == 'true'
+        run: make test
+
       - name: Stop if there are no data changes
         if: steps.schedule_guard.outputs.should_run == 'true'
         id: changes
