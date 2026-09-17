@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -7,14 +6,12 @@ import pandas as pd
 from core.power_law import (
     calculate_r2_for_manual_params,
     calculate_r2_for_manual_params_on_rolling_mean,
-    find_best_fit_params_for_offset,
     fit_peak_powerlaw_envelope,
     fit_powerlaw_regression,
     fit_trough_powerlaw_envelope,
 )
 from core.utils import (
     TrendComputationResult,
-    calculate_expanding_powerlaw_fit,
     calculate_expanding_powerlaw_parameters,
     calculate_r2_score,
     calculate_monthly_buy_portfolio_values,
@@ -158,22 +155,6 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
 
         self.assertTrue(np.isclose(r2, 1.0, atol=1e-12))
 
-    @patch("core.power_law.fit_powerlaw_regression")
-    def test_find_best_fit_params_for_offset_preserves_requested_offset(self, mock_fit):
-        mock_fit.return_value = (5.5, -16.1, 0.98)
-
-        offset, intercept, slope, r2 = find_best_fit_params_for_offset(
-            np.array([10.0, 20.0, 30.0]),
-            np.array([1.0, 2.0, 3.0]),
-            genesis_offset_days=42,
-        )
-
-        self.assertEqual(offset, 42)
-        self.assertEqual(intercept, -16.1)
-        self.assertEqual(slope, 5.5)
-        self.assertEqual(r2, 0.98)
-        self.assertEqual(mock_fit.call_args.args[2], 42)
-
     def test_evaluate_powerlaw_values_clips_extreme_exponents(self):
         values, exponents, was_clipped = evaluate_powerlaw_values(
             np.array([1.0, 2.0, 3.0]),
@@ -185,12 +166,11 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(values)))
         self.assertTrue(np.all(exponents <= 300.0))
 
-    def test_calculate_expanding_powerlaw_fit_uses_prefix_regressions(self):
+    def test_calculate_expanding_powerlaw_parameters_uses_prefix_regressions(self):
         log_days = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
         log_prices = np.array([3.0, 5.0, 7.0, 20.0], dtype=float)
 
-        fitted = calculate_expanding_powerlaw_fit(log_days, log_prices, min_points=3)
-        intercepts, slopes, parameter_fitted = calculate_expanding_powerlaw_parameters(
+        intercepts, slopes, fitted = calculate_expanding_powerlaw_parameters(
             log_days,
             log_prices,
             min_points=3,
@@ -202,7 +182,6 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertTrue(np.isnan(fitted[1]))
         self.assertTrue(np.isclose(fitted[2], log_prices[2], atol=1e-12))
         self.assertTrue(np.isclose(fitted[3], expected_last, atol=1e-12))
-        self.assertTrue(np.allclose(fitted, parameter_fitted, equal_nan=True))
         self.assertTrue(np.isclose(slopes[2], 2.0, atol=1e-12))
         self.assertTrue(np.isclose(intercepts[2], 1.0, atol=1e-12))
         self.assertTrue(np.isclose(slopes[3], expected_last_slope, atol=1e-12))

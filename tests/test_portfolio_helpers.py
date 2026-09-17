@@ -3,6 +3,8 @@ import unittest
 import numpy as np
 import pandas as pd
 
+from core.constants import FLOOR_MODEL_TROUGH_ENVELOPE
+from core.power_law import build_causal_powerlaw_floor_prices
 from core.utils import (
     PortfolioProjectionResult,
     PortfolioSettings,
@@ -14,9 +16,36 @@ from core.utils import (
     interpolate_sigma_level_from_log_offset,
     normalize_periodic_growth_rate,
     rate_withdrawal_attractiveness,
+    resolve_backtest_monthly_prices,
     resolve_projection_anchor_day,
     resolve_portfolio_scenario_log_offset,
 )
+
+
+def build_daily_powerlaw_prices(
+    start,
+    end,
+    gen_date,
+    *,
+    intercept=0.0,
+    slope=1.0,
+    cycle_days=None,
+    cycle_amplitude=0.3,
+    tail_start=None,
+    tail_multiplier=1.0,
+):
+    """Daily prices that follow a PowerLaw, optionally cyclical and with a regime break."""
+    dates = pd.date_range(start, end, freq="D")
+    days = np.maximum((dates - pd.Timestamp(gen_date)).days.to_numpy(dtype=float), 1.0)
+    log_prices = intercept + slope * np.log10(days)
+    if cycle_days is not None:
+        log_prices = log_prices + cycle_amplitude * np.sin(2.0 * np.pi * days / float(cycle_days))
+    prices = np.power(10.0, log_prices)
+    if tail_start is not None:
+        prices = np.where(
+            dates >= pd.Timestamp(tail_start), prices * float(tail_multiplier), prices
+        )
+    return pd.DataFrame({"CloseDisplay": prices}, index=dates)
 
 
 class TestPortfolioHelpers(unittest.TestCase):
@@ -118,6 +147,33 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertEqual(result.portfolio_df["Date"].iloc[0], pd.Timestamp("2025-11-15"))
         self.assertTrue((result.portfolio_df["Date"].diff().dt.days.iloc[1:] == 1).all())
 
+    def test_build_portfolio_projection_prepends_history_periods_before_the_anchor(self):
+        """The frame carries history rows before the anchor period, then the forecast."""
+        for forecast_unit, expected_first_date, expected_row_count in (
+            ("Day", pd.Timestamp("2026-01-13"), 3 + 61),
+            ("Month", pd.Timestamp("2025-08-01"), 3 + 7),
+            ("Year", pd.Timestamp("2022-01-01"), 3 + 4),
+        ):
+            with self.subTest(forecast_unit=forecast_unit):
+                settings = PortfolioSettings(
+                    btc_amount=1.0,
+                    monthly_buy_amount=0.0,
+                    forecast_unit=forecast_unit,
+                    forecast_horizon=3,
+                )
+
+                result = build_portfolio_projection(
+                    df_index=pd.to_datetime(["2026-03-15"]),
+                    current_gen_date=pd.Timestamp("2009-01-03"),
+                    intercept_a=2.0,
+                    slope_b=0.0,
+                    settings=settings,
+                    anchor_day=pd.Timestamp("2026-03-15"),
+                )
+
+                self.assertEqual(result.portfolio_df["Date"].iloc[0], expected_first_date)
+                self.assertEqual(len(result.portfolio_df), expected_row_count)
+
     def test_build_portfolio_projection_clips_period_days_to_one(self):
         settings = PortfolioSettings(
             btc_amount=1.0,
@@ -135,9 +191,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-01-15"),
         )
 
-        self.assertTrue(
-            np.allclose(result.portfolio_df["FairPriceUSD"], np.full(6, 100.0))
-        )
+        self.assertTrue(np.allclose(result.portfolio_df["FairPriceUSD"], 100.0))
 
     def test_build_portfolio_projection_month_uses_normalized_growth_rate(self):
         settings = PortfolioSettings(
@@ -191,12 +245,8 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-01-15"),
         )
 
-        self.assertTrue(
-            np.allclose(result.portfolio_df["FairPriceUSD"], np.full(6, 200.0))
-        )
-        self.assertTrue(
-            np.allclose(result.portfolio_df["PortfolioUSD"], np.full(6, 300.0))
-        )
+        self.assertTrue(np.allclose(result.portfolio_df["FairPriceUSD"], 200.0))
+        self.assertTrue(np.allclose(result.portfolio_df["PortfolioUSD"], 300.0))
 
     def test_build_portfolio_projection_prefers_percentile_scenario_offsets(self):
         settings = PortfolioSettings(
@@ -223,12 +273,8 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-01-15"),
         )
 
-        self.assertTrue(
-            np.allclose(result.portfolio_df["FairPriceUSD"], np.array([50.0, 50.0, 50.0]))
-        )
-        self.assertTrue(
-            np.allclose(result.portfolio_df["PortfolioUSD"], np.array([75.0, 75.0, 75.0]))
-        )
+        self.assertTrue(np.allclose(result.portfolio_df["FairPriceUSD"], 50.0))
+        self.assertTrue(np.allclose(result.portfolio_df["PortfolioUSD"], 75.0))
         self.assertTrue(np.isclose(resolve_portfolio_scenario_log_offset(settings), np.log10(0.5)))
 
     def test_resolve_portfolio_scenario_log_offset_interpolates_half_sigma_levels(self):
@@ -262,10 +308,14 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-03-15"),
         )
 
-        self.assertTrue(np.allclose(result.portfolio_df["DcaBTC"], np.array([0.0, 0.0, 0.5])))
-        self.assertTrue(
-            np.allclose(result.portfolio_df["DcaPortfolioUSD"], np.array([0.0, 0.0, 100.0]))
-        )
+        dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
+        dca_value = result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)
+
+        # Buying starts in the month after the anchor, so only the final row holds BTC.
+        self.assertTrue(np.allclose(dca_btc[:-1], 0.0))
+        self.assertTrue(np.isclose(dca_btc[-1], 0.5))
+        self.assertTrue(np.allclose(dca_value[:-1], 0.0))
+        self.assertTrue(np.isclose(dca_value[-1], 100.0))
 
     def test_build_portfolio_projection_sells_percentage_of_positive_monthly_change(self):
         settings = PortfolioSettings(
@@ -288,20 +338,16 @@ class TestPortfolioHelpers(unittest.TestCase):
         expected_cash_flow = -(((90.0 - 59.0) * 1.0) * 0.5)
         expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
 
+        dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
+        invested_capital = result.portfolio_df["DcaInvestedCapitalUSD"].to_numpy(dtype=float)
+        dca_value = result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)
+
+        self.assertTrue(np.allclose(dca_btc[:-1], 1.0))
+        self.assertTrue(np.isclose(dca_btc[-1], expected_april_btc))
+        self.assertTrue(np.allclose(invested_capital[:-1], 0.0))
+        self.assertTrue(np.isclose(invested_capital[-1], expected_cash_flow))
         self.assertTrue(
-            np.allclose(result.portfolio_df["DcaBTC"], np.array([1.0, 1.0, expected_april_btc]))
-        )
-        self.assertTrue(
-            np.allclose(
-                result.portfolio_df["DcaInvestedCapitalUSD"],
-                np.array([0.0, 0.0, expected_cash_flow]),
-            )
-        )
-        self.assertTrue(
-            np.allclose(
-                result.portfolio_df["DcaPortfolioUSD"],
-                np.array([31.0, 59.0, 90.0 + expected_cash_flow]),
-            )
+            np.allclose(dca_value[-3:], np.array([31.0, 59.0, 90.0 + expected_cash_flow]))
         )
 
     def test_build_portfolio_projection_does_not_buy_on_negative_monthly_change(self):
@@ -322,10 +368,8 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-03-15"),
         )
 
-        self.assertTrue(np.allclose(result.portfolio_df["DcaBTC"], np.array([1.0, 1.0, 1.0])))
-        self.assertTrue(
-            np.allclose(result.portfolio_df["DcaInvestedCapitalUSD"], np.array([0.0, 0.0, 0.0]))
-        )
+        self.assertTrue(np.allclose(result.portfolio_df["DcaBTC"], 1.0))
+        self.assertTrue(np.allclose(result.portfolio_df["DcaInvestedCapitalUSD"], 0.0))
 
     def test_build_portfolio_projection_clamps_monthly_change_sell_percentage(self):
         settings = PortfolioSettings(
@@ -348,15 +392,13 @@ class TestPortfolioHelpers(unittest.TestCase):
         expected_cash_flow = -(90.0 - 59.0)
         expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
 
-        self.assertTrue(
-            np.allclose(result.portfolio_df["DcaBTC"], np.array([1.0, 1.0, expected_april_btc]))
-        )
-        self.assertTrue(
-            np.allclose(
-                result.portfolio_df["DcaInvestedCapitalUSD"],
-                np.array([0.0, 0.0, expected_cash_flow]),
-            )
-        )
+        dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
+        invested_capital = result.portfolio_df["DcaInvestedCapitalUSD"].to_numpy(dtype=float)
+
+        self.assertTrue(np.allclose(dca_btc[:-1], 1.0))
+        self.assertTrue(np.isclose(dca_btc[-1], expected_april_btc))
+        self.assertTrue(np.allclose(invested_capital[:-1], 0.0))
+        self.assertTrue(np.isclose(invested_capital[-1], expected_cash_flow))
 
     def test_build_portfolio_projection_keeps_capital_flat_when_selling_full_monthly_growth(self):
         settings = PortfolioSettings(
@@ -378,7 +420,7 @@ class TestPortfolioHelpers(unittest.TestCase):
 
         self.assertTrue(
             np.allclose(
-                result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)[2:],
+                result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)[-3:],
                 np.array([59.0, 59.0, 59.0]),
                 atol=1e-9,
             )
@@ -402,6 +444,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             forecast_unit="Month",
             change_usd_col="MoM_USD",
             change_pct_col="MoM_pct",
+            history_periods=0,
         )
 
         view_model = build_portfolio_view_model(
@@ -412,17 +455,60 @@ class TestPortfolioHelpers(unittest.TestCase):
 
         self.assertEqual(len(view_model.portfolio_display_df), 2)
         self.assertTrue(view_model.dca_enabled)
-        self.assertEqual(view_model.baseline_value, 200.0)
+        self.assertEqual(view_model.baseline_value, 220.0)
         self.assertEqual(view_model.last_value, 240.0)
         self.assertEqual(view_model.last_dca_value, 480.0)
         self.assertEqual(view_model.last_dca_invested_capital, 200.0)
-        self.assertEqual(view_model.total_growth_pct, 20.0)
+        self.assertAlmostEqual(view_model.total_growth_pct, (240.0 / 220.0 - 1.0) * 100.0)
         self.assertIn("Remaining BTC value (USD)", view_model.table_df.columns)
         self.assertIn("Monthly withdrawal (USD)", view_model.table_df.columns)
         self.assertIn("Net cash flow (USD)", view_model.table_df.columns)
         self.assertIn("BTC after monthly cash flow", view_model.table_df.columns)
         self.assertTrue(
             np.allclose(view_model.table_df["Monthly withdrawal (USD)"], np.array([0.0, 0.0]))
+        )
+
+    def test_build_portfolio_view_model_measures_growth_from_the_anchor_period(self):
+        """Total growth covers the forecast horizon, not the prepended history rows."""
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            forecast_unit="Month",
+            forecast_horizon=3,
+        )
+
+        projection_result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-03-15"]),
+            current_gen_date=pd.Timestamp("2026-01-01"),
+            intercept_a=0.0,
+            slope_b=1.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-03-15"),
+        )
+        view_model = build_portfolio_view_model(
+            projection_result,
+            monthly_buy_amount=0.0,
+            currency_unit="USD",
+        )
+
+        portfolio_df = projection_result.portfolio_df
+        anchor_rows = portfolio_df.loc[portfolio_df["Date"] == pd.Timestamp("2026-03-01")]
+        self.assertEqual(len(anchor_rows), 1)
+        anchor_value = float(anchor_rows["PortfolioUSD"].iloc[0])
+        oldest_history_value = float(portfolio_df["PortfolioUSD"].iloc[0])
+
+        self.assertGreater(anchor_value, oldest_history_value)
+        self.assertEqual(view_model.baseline_value, anchor_value)
+        self.assertAlmostEqual(
+            view_model.total_growth_pct,
+            ((view_model.last_value / anchor_value) - 1.0) * 100.0,
+        )
+
+        # The table highlights exactly the rows that precede the anchor period.
+        display_dates = list(view_model.portfolio_display_df["Date"])
+        self.assertEqual(
+            display_dates.index(pd.Timestamp("2026-03-01")),
+            projection_result.history_periods,
         )
 
     def test_build_portfolio_view_model_enables_dca_for_monthly_change_percentage(self):
@@ -443,6 +529,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             forecast_unit="Month",
             change_usd_col="MoM_USD",
             change_pct_col="MoM_pct",
+            history_periods=0,
         )
 
         view_model = build_portfolio_view_model(
@@ -473,6 +560,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             forecast_unit="Month",
             change_usd_col="MoM_USD",
             change_pct_col="MoM_pct",
+            history_periods=0,
         )
 
         view_model = build_portfolio_view_model(
@@ -490,20 +578,21 @@ class TestPortfolioHelpers(unittest.TestCase):
         projection_result = PortfolioProjectionResult(
             portfolio_df=pd.DataFrame(
                 {
-                    "Date": pd.to_datetime(["2026-01-01", "2026-02-01"]),
-                    "FairPriceUSD": [100.0, 120.0],
-                    "PortfolioUSD": [0.0, 120.0],
-                    "DcaBTC": [0.0, 1.0],
-                    "DcaPortfolioUSD": [0.0, 120.0],
-                    "DcaInvestedCapitalUSD": [0.0, 100.0],
-                    "MoM_USD": [np.nan, 120.0],
-                    "MoM_pct": [np.nan, np.nan],
+                    "Date": pd.to_datetime(["2026-01-01", "2026-02-01", "2026-03-01"]),
+                    "FairPriceUSD": [100.0, 100.0, 120.0],
+                    "PortfolioUSD": [0.0, 0.0, 120.0],
+                    "DcaBTC": [0.0, 0.0, 1.0],
+                    "DcaPortfolioUSD": [0.0, 0.0, 120.0],
+                    "DcaInvestedCapitalUSD": [0.0, 0.0, 100.0],
+                    "MoM_USD": [np.nan, 0.0, 120.0],
+                    "MoM_pct": [np.nan, np.nan, np.nan],
                 }
             ),
             table_title="Monthly growth table",
             forecast_unit="Month",
             change_usd_col="MoM_USD",
             change_pct_col="MoM_pct",
+            history_periods=0,
         )
 
         view_model = build_portfolio_view_model(
@@ -554,9 +643,112 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertGreaterEqual(result.strategy_btc, 0.0)
         self.assertTrue((result.backtest_df["MonthlyWithdrawal"] >= 0.0).all())
 
+    def test_resolve_backtest_monthly_prices_dates_rows_on_the_traded_day(self):
+        """Each row is dated on the day it trades, not on the month-start label."""
+        gen_date = pd.Timestamp("2016-01-01")
+        # A month that ends mid-month, as the newest month of a live snapshot does.
+        price_df = build_daily_powerlaw_prices("2020-01-01", "2026-09-13", gen_date)
+
+        monthly_prices = resolve_backtest_monthly_prices(price_df, 5)
+
+        self.assertEqual(monthly_prices.index[-1], pd.Timestamp("2026-09-13"))
+        self.assertTrue((monthly_prices.index.day > 1).any())
+        # One row per month, each carrying that month's closing price.
+        periods = monthly_prices.index.to_period("M")
+        self.assertEqual(len(set(periods)), len(monthly_prices))
+        for date, price in monthly_prices.items():
+            self.assertEqual(price, price_df.loc[date, "CloseDisplay"])
+
+    def test_build_causal_floor_prices_ignore_prices_from_after_each_month(self):
+        """The defining property: a month's floor must not move when later prices arrive."""
+        gen_date = pd.Timestamp("2016-01-01")
+        regime_break = pd.Timestamp("2021-01-01")
+        # Identical history up to the break, then a tenfold regime change afterwards.
+        with_future = build_daily_powerlaw_prices(
+            "2016-01-02",
+            "2026-01-01",
+            gen_date,
+            tail_start=regime_break,
+            tail_multiplier=10.0,
+        )
+        past_only = with_future.loc[: regime_break - pd.Timedelta(days=1)]
+        monthly_index = pd.date_range("2019-01-01", "2020-12-01", freq="MS")
+
+        floor_with_future = build_causal_powerlaw_floor_prices(
+            with_future["CloseDisplay"], monthly_index, gen_date
+        )
+        floor_without_future = build_causal_powerlaw_floor_prices(
+            past_only["CloseDisplay"], monthly_index, gen_date
+        )
+
+        self.assertTrue(np.all(np.isfinite(floor_with_future.to_numpy(dtype=float))))
+        self.assertTrue(np.allclose(floor_with_future, floor_without_future))
+
+        # A full-sample fit would move these same months, which is the bias removed here.
+        full_days = np.maximum(
+            (with_future.index - gen_date).days.to_numpy(dtype=float),
+            1.0,
+        )
+        full_slope, full_intercept = np.polyfit(
+            np.log10(full_days),
+            np.log10(with_future["CloseDisplay"].to_numpy(dtype=float)),
+            1,
+        )
+        monthly_days = np.maximum(
+            (monthly_index - gen_date).days.to_numpy(dtype=float),
+            1.0,
+        )
+        full_sample_floor = np.power(10.0, full_intercept + full_slope * np.log10(monthly_days))
+        self.assertFalse(
+            np.allclose(full_sample_floor, floor_with_future.to_numpy(dtype=float), rtol=0.05)
+        )
+
+    def test_build_causal_floor_prices_ignore_the_future_for_the_trough_envelope(self):
+        gen_date = pd.Timestamp("2016-01-01")
+        regime_break = pd.Timestamp("2021-01-01")
+        with_future = build_daily_powerlaw_prices(
+            "2016-01-02",
+            "2026-01-01",
+            gen_date,
+            cycle_days=500,
+            tail_start=regime_break,
+            tail_multiplier=10.0,
+        )
+        past_only = with_future.loc[: regime_break - pd.Timedelta(days=1)]
+        monthly_index = pd.date_range("2019-01-01", "2020-12-01", freq="MS")
+
+        floor_with_future = build_causal_powerlaw_floor_prices(
+            with_future["CloseDisplay"],
+            monthly_index,
+            gen_date,
+            floor_model=FLOOR_MODEL_TROUGH_ENVELOPE,
+        )
+        floor_without_future = build_causal_powerlaw_floor_prices(
+            past_only["CloseDisplay"],
+            monthly_index,
+            gen_date,
+            floor_model=FLOOR_MODEL_TROUGH_ENVELOPE,
+        )
+
+        self.assertTrue(np.all(np.isfinite(floor_with_future.to_numpy(dtype=float))))
+        self.assertTrue(np.allclose(floor_with_future, floor_without_future))
+
+    def test_build_causal_floor_prices_leave_months_without_history_unfitted(self):
+        gen_date = pd.Timestamp("2016-01-01")
+        daily_prices = build_daily_powerlaw_prices("2016-01-02", "2016-12-31", gen_date)
+        monthly_index = pd.date_range("2016-02-01", "2016-12-01", freq="MS")
+
+        floor_prices = build_causal_powerlaw_floor_prices(
+            daily_prices["CloseDisplay"], monthly_index, gen_date
+        )
+
+        # 100 daily rows are required before a fit is attempted, so early months stay NaN.
+        self.assertTrue(np.isnan(floor_prices.iloc[0]))
+        self.assertTrue(np.isfinite(floor_prices.iloc[-1]))
+
     def test_build_portfolio_real_data_backtest_can_sell_floor_growth(self):
-        dates = pd.date_range("2021-01-01", periods=72, freq="MS")
-        price_df = pd.DataFrame({"CloseDisplay": np.full(len(dates), 100.0)}, index=dates)
+        gen_date = pd.Timestamp("2016-01-01")
+        price_df = build_daily_powerlaw_prices("2016-01-02", "2026-01-01", gen_date)
         settings = PortfolioSettings(
             btc_amount=1.0,
             monthly_buy_amount=0.0,
@@ -564,16 +756,17 @@ class TestPortfolioHelpers(unittest.TestCase):
             forecast_unit="Month",
             forecast_horizon=12,
         )
+        monthly_prices = resolve_backtest_monthly_prices(price_df, 5)
+        floor_prices = build_causal_powerlaw_floor_prices(
+            price_df["CloseDisplay"], monthly_prices.index, gen_date
+        )
 
         full_sell = build_portfolio_real_data_backtest(
             price_df,
             settings,
             "USD",
             years=5,
-            current_gen_date=pd.Timestamp("2020-01-01"),
-            intercept_a=0.0,
-            slope_b=1.0,
-            percentile_offsets=(0.0, 0.0, 0.0, 0.0),
+            floor_prices=floor_prices,
             sell_mom_change_pct=100.0,
             strategy_name="-2σ floor: sell 100% growth",
         )
@@ -582,10 +775,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             settings,
             "USD",
             years=5,
-            current_gen_date=pd.Timestamp("2020-01-01"),
-            intercept_a=0.0,
-            slope_b=1.0,
-            percentile_offsets=(0.0, 0.0, 0.0, 0.0),
+            floor_prices=floor_prices,
             sell_mom_change_pct=50.0,
             strategy_name="-2σ floor: sell 50% growth",
         )
@@ -593,6 +783,7 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertIsNotNone(full_sell)
         self.assertIsNotNone(half_sell)
         self.assertEqual(full_sell.monthly_withdrawal_label, "-2σ monthly withdrawal (USD)")
+        self.assertEqual(full_sell.months_without_floor, 0)
         self.assertGreater(full_sell.backtest_df["MonthlyWithdrawal"].sum(), 0.0)
         self.assertGreater(
             full_sell.backtest_df["MonthlyWithdrawal"].sum(),

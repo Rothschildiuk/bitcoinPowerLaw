@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The data refresh workflow force-pushes to main several times a day; keep only the
+# newest run per ref so rewritten history does not pile up queued jobs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 matches refresh-data.yml, which regenerates core/constants.py.
+        # 3.12 matches the local development venv.
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: config/requirements.txt
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Check formatting
+        run: make check
+
+      - name: Compile sources
+        run: make compile
+
+      - name: Run tests
+        run: make test

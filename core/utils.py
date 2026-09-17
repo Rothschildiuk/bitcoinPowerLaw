@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-import streamlit as st
 
 from core.constants import (
     GAUSSIAN_SIGMA_PERCENTILES,
@@ -30,6 +29,7 @@ class PortfolioProjectionResult:
     forecast_unit: str
     change_usd_col: str
     change_pct_col: str
+    history_periods: int
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,7 @@ class PortfolioBacktestResult:
     total_return_pct: float
     strategy_return_pct: float
     monthly_withdrawal_label: str
+    months_without_floor: int = 0
 
 
 @dataclass(frozen=True)
@@ -181,16 +182,6 @@ def calculate_expanding_powerlaw_parameters(log_days, log_prices, min_points=100
     return intercepts, slopes, fitted_log_prices
 
 
-def calculate_expanding_powerlaw_fit(log_days, log_prices, min_points=100):
-    _, _, fitted_log_prices = calculate_expanding_powerlaw_parameters(
-        log_days,
-        log_prices,
-        min_points=min_points,
-    )
-
-    return fitted_log_prices
-
-
 def calculate_historical_sigma_offsets(
     log_days,
     log_prices,
@@ -291,6 +282,23 @@ def resolve_portfolio_scenario_log_offset(settings):
         log_offset = float(settings.sigma_level) * float(settings.residual_sigma_log)
 
     return log_offset if np.isfinite(log_offset) else 0.0
+
+
+def interpolate_sigma_offset_from_level(sigma_level, percentile_offsets):
+    """Log-offset of a sigma level, interpolated between the stored percentiles."""
+    return float(
+        np.interp(
+            float(sigma_level),
+            (-2.0, -1.0, 0.0, 1.0, 2.0),
+            (
+                percentile_offsets[0],
+                percentile_offsets[1],
+                0.0,
+                percentile_offsets[2],
+                percentile_offsets[3],
+            ),
+        )
+    )
 
 
 def interpolate_sigma_level_from_log_offset(log_offset, percentile_offsets):
@@ -681,6 +689,7 @@ def build_portfolio_projection(
         forecast_unit=settings.forecast_unit,
         change_usd_col=change_usd_col,
         change_pct_col=change_pct_col,
+        history_periods=history_periods,
     )
 
 
@@ -721,7 +730,14 @@ def build_portfolio_view_model(
     portfolio_display_df["ChangeDisplay"] = portfolio_display_df[projection_result.change_usd_col]
     dca_enabled = monthly_buy_amount != 0.0 or monthly_mom_change_pct != 0.0
 
-    baseline_value = projection_result.portfolio_df["PortfolioUSD"].iloc[0]
+    # Growth is reported from the anchor period (today), not from the historical
+    # context rows that build_portfolio_projection prepends ahead of it. Row 0 is the
+    # pre-display row, so the anchor sits one row past the history block.
+    anchor_position = min(
+        max(int(projection_result.history_periods), 0) + 1,
+        len(projection_df) - 1,
+    )
+    baseline_value = projection_df["PortfolioUSD"].iloc[anchor_position]
     last_value = portfolio_display_df["PortfolioUSD"].iloc[-1]
     last_dca_value = portfolio_display_df["DcaPortfolioDisplay"].iloc[-1]
     last_dca_invested_capital = portfolio_display_df["DcaInvestedCapitalDisplay"].iloc[-1]
@@ -788,24 +804,13 @@ def build_portfolio_view_model(
     )
 
 
-def build_portfolio_real_data_backtest(
-    price_display_df,
-    settings,
-    currency_unit,
-    years=5,
-    *,
-    current_gen_date=None,
-    intercept_a=None,
-    slope_b=None,
-    percentile_offsets=None,
-    sell_mom_change_pct=None,
-    strategy_name=None,
-    initial_capital=None,
-    floor_intercept_a=None,
-    floor_slope_b=None,
-    floor_log_offset=0.0,
-    floor_model_label=None,
-):
+def resolve_backtest_monthly_prices(price_display_df, years):
+    """Backtest window as one row per month, dated on that month's last observation.
+
+    Each row is the day the strategy actually trades, so callers can fit and evaluate the
+    model on the same date as the price they transact at. Labelling these rows with the
+    month start instead would date the model a month before the trade it sizes.
+    """
     if price_display_df is None or price_display_df.empty:
         return None
 
@@ -816,9 +821,38 @@ def build_portfolio_real_data_backtest(
 
     latest_date = pd.Timestamp(price_series.index.max())
     start_date = latest_date - pd.DateOffset(years=int(years))
-    price_series = price_series[price_series.index >= start_date]
-    monthly_prices = price_series.resample("MS").last().dropna()
+    windowed_series = price_series[price_series.index >= start_date]
+    if windowed_series.empty:
+        return None
+
+    month_periods = pd.DatetimeIndex(windowed_series.index).to_period("M")
+    is_last_of_month = np.append(month_periods[:-1] != month_periods[1:], True)
+    monthly_prices = windowed_series[is_last_of_month]
     if monthly_prices.size < 2:
+        return None
+    return monthly_prices
+
+
+def build_portfolio_real_data_backtest(
+    price_display_df,
+    settings,
+    currency_unit,
+    years=5,
+    *,
+    floor_prices=None,
+    sell_mom_change_pct=None,
+    strategy_name=None,
+    initial_capital=None,
+    floor_model_label=None,
+):
+    """Replay a withdrawal strategy over real prices.
+
+    ``floor_prices`` sizes the withdrawals and must already be walk-forward; build it
+    with ``build_causal_powerlaw_floor_prices``. Without it the strategy falls back to
+    withdrawing from realised month-on-month price growth, which is causal by nature.
+    """
+    monthly_prices = resolve_backtest_monthly_prices(price_display_df, years)
+    if monthly_prices is None:
         return None
 
     if initial_capital is None:
@@ -839,36 +873,15 @@ def build_portfolio_real_data_backtest(
     if not np.isfinite(monthly_cash_flow):
         monthly_cash_flow = 0.0
 
-    floor_prices = None
-    if current_gen_date is not None and (
-        (floor_intercept_a is not None and floor_slope_b is not None)
-        or (intercept_a is not None and slope_b is not None and percentile_offsets is not None)
-    ):
-        monthly_days = np.maximum(
-            (monthly_prices.index - pd.Timestamp(current_gen_date)).days.astype(float),
-            1.0,
-        )
-        floor_a = float(floor_intercept_a) if floor_intercept_a is not None else float(intercept_a)
-        floor_b = float(floor_slope_b) if floor_slope_b is not None else float(slope_b)
-        floor_offset = (
-            float(floor_log_offset)
-            if floor_intercept_a is not None and floor_slope_b is not None
-            else float(percentile_offsets[0])
-        )
-        fair_prices, _, _ = evaluate_powerlaw_values(
-            np.log10(monthly_days),
-            floor_a,
-            floor_b,
-        )
-        floor_prices = pd.Series(
-            fair_prices * np.power(10.0, floor_offset),
-            index=monthly_prices.index,
-            dtype=float,
-        )
+    if floor_prices is not None:
+        floor_prices = pd.Series(floor_prices, dtype=float).reindex(monthly_prices.index)
+        if not np.any(np.isfinite(floor_prices.to_numpy(dtype=float))):
+            floor_prices = None
 
     rows = []
     previous_actual_price = None
     previous_floor_price = None
+    months_without_floor = 0
     for date, price in monthly_prices.items():
         price = float(price)
         hold_value = initial_btc * price
@@ -880,12 +893,17 @@ def build_portfolio_real_data_backtest(
             )
         else:
             floor_price = float(floor_prices.loc[date])
-            positive_price_growth = (
-                max(floor_price - previous_floor_price, 0.0)
-                if previous_floor_price is not None
-                else 0.0
-            )
-            previous_floor_price = floor_price
+            if np.isfinite(floor_price):
+                positive_price_growth = (
+                    max(floor_price - previous_floor_price, 0.0)
+                    if previous_floor_price is not None
+                    else 0.0
+                )
+                previous_floor_price = floor_price
+            else:
+                # Too little history behind this month to fit a floor on it yet.
+                months_without_floor += 1
+                positive_price_growth = 0.0
         withdrawal = positive_price_growth * strategy_btc * sell_ratio
         period_cash_flow = monthly_cash_flow - withdrawal
         if period_cash_flow >= 0.0:
@@ -970,97 +988,5 @@ def build_portfolio_real_data_backtest(
         total_return_pct=float(total_return_pct),
         strategy_return_pct=float(strategy_return_pct),
         monthly_withdrawal_label=monthly_withdrawal_label,
+        months_without_floor=int(months_without_floor),
     )
-
-
-def inline_radio_control(
-    label, options, *, key=None, index=0, horizontal=True, columns_ratio=(1, 2.2)
-):
-    label_col, control_col = st.columns(list(columns_ratio))
-    label_col.markdown(f"**{label}**")
-    with control_col:
-        return st.radio(
-            label,
-            options,
-            index=index,
-            key=key,
-            horizontal=horizontal,
-            label_visibility="collapsed",
-        )
-
-
-def fancy_control(
-    label,
-    key,
-    step,
-    min_v,
-    max_v,
-    disabled=False,
-    on_manual_change=None,
-    on_auto_fit=None,
-    auto_fit_label="AF",
-    show_buttons=True,
-):
-    if not show_buttons:
-        step_text = f"{step:.10f}".rstrip("0")
-        precision = len(step_text.split(".")[1]) if "." in step_text else 0
-        display_format = f"%.{precision}f"
-        current_value = st.session_state.get(key, min_v)
-        try:
-            current_value = float(current_value)
-        except (TypeError, ValueError):
-            current_value = min_v
-        st.session_state[key] = round(min(max_v, max(min_v, current_value)), precision)
-
-        def on_slider_change():
-            if on_manual_change is not None:
-                on_manual_change()
-
-        return st.slider(
-            key,
-            min_v,
-            max_v,
-            key=key,
-            step=step,
-            format=display_format,
-            label_visibility="collapsed",
-            disabled=disabled,
-            on_change=on_slider_change,
-        )
-
-    step_text = f"{step:.10f}".rstrip("0")
-    precision = len(step_text.split(".")[1]) if "." in step_text else 0
-    display_format = f"%.{precision}f"
-    current_value = st.session_state.get(key, min_v)
-    try:
-        current_value = float(current_value)
-    except (TypeError, ValueError):
-        current_value = min_v
-    st.session_state[key] = round(min(max_v, max(min_v, current_value)), precision)
-
-    def on_slider_change():
-        if on_manual_change is not None:
-            on_manual_change()
-
-    if on_auto_fit is not None:
-        input_col, fit_col = st.columns([3.2, 0.9])
-    else:
-        input_col, fit_col = st, None
-
-    if fit_col is not None:
-        if fit_col.button(auto_fit_label, key=f"{key}_af", disabled=disabled):
-            on_auto_fit()
-
-    value = input_col.number_input(
-        key,
-        min_value=min_v,
-        max_value=max_v,
-        step=step,
-        key=key,
-        format=display_format,
-        label_visibility="collapsed",
-        disabled=disabled,
-        on_change=on_slider_change,
-    )
-
-    return value

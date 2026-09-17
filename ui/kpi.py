@@ -38,11 +38,7 @@ def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
 def _calculate_return_to_model_pct(current_value, model_value):
     current_value = float(current_value)
     model_value = float(model_value)
-    if (
-        current_value <= 0.0
-        or not np.isfinite(current_value)
-        or not np.isfinite(model_value)
-    ):
+    if current_value <= 0.0 or not np.isfinite(current_value) or not np.isfinite(model_value):
         return None
     return ((model_value / current_value) - 1.0) * 100.0
 
@@ -527,9 +523,7 @@ def render_model_kpis(
         df_display["FairDisplay"].iloc[-1],
     )
     model_deviation_pct = (
-        ((l_p - l_f) / l_f) * 100.0
-        if l_f > 0.0 and np.isfinite(l_p) and np.isfinite(l_f)
-        else None
+        ((l_p - l_f) / l_f) * 100.0 if l_f > 0.0 and np.isfinite(l_p) and np.isfinite(l_f) else None
     )
     return_to_model_pct = _calculate_return_to_model_pct(l_p, l_f)
     if model_deviation_pct is None or return_to_model_pct is None:

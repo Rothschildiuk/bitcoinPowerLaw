@@ -6,17 +6,10 @@ import streamlit as st
 from core import power_law
 from core.constants import (
     APP_VERSION,
-    CURRENCY_ALUMINUM,
-    CURRENCY_COPPER,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
-    CURRENCY_GOLD,
-    CURRENCY_IRON,
-    CURRENCY_OPTIONS,
-    CURRENCY_RUB,
-    CURRENCY_SILVER,
-    CURRENCY_UAH,
-    CURRENCY_US_HOUSING,
+    FLOOR_MODEL_SIGMA,
+    FLOOR_MODEL_TROUGH_ENVELOPE,
     DEFAULT_FORECAST_HORIZON,
     FORECAST_HORIZON_MAX,
     FORECAST_HORIZON_MIN,
@@ -44,7 +37,6 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_UNIT,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
     KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
-    KEY_PORTFOLIO_PENSION_DIVISOR,
     KEY_PORTFOLIO_PENSION_PAYOUT_PCT,
     KEY_PORTFOLIO_SIGMA_LEVEL,
     KEY_PORTFOLIO_STRATEGY_VIEW,
@@ -55,23 +47,8 @@ from core.constants import (
     POWERLAW_SIGMA_MODE_HISTORICAL,
     POWERLAW_OSCILLATOR_OFF,
     POWERLAW_OSCILLATOR_ON,
-    POWERLAW_SERIES_DOGECOIN_BTC,
-    POWERLAW_SERIES_DIFFICULTY,
-    POWERLAW_SERIES_FILECOIN_BTC,
-    POWERLAW_SERIES_HASHRATE,
-    POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
-    POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
-    POWERLAW_SERIES_LITECOIN_BTC,
-    POWERLAW_SERIES_LIGHTNING_CAPACITY,
-    POWERLAW_SERIES_LIGHTNING_NODES,
-    POWERLAW_SERIES_LIQUID_BTC,
-    POWERLAW_SERIES_LIQUID_TRANSACTIONS,
-    POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
-    POWERLAW_SERIES_REVENUE,
-    POWERLAW_SERIES_USDT_SUPPLY,
-    POWERLAW_SERIES_US_M2,
     PORTFOLIO_SIGMA_CURRENT,
     PORTFOLIO_SIGMA_PEAK_POWERLAW,
     PORTFOLIO_SIGMA_TROUGH_POWERLAW,
@@ -92,6 +69,7 @@ from core.utils import (
     build_portfolio_projection,
     build_portfolio_view_model,
     calculate_expanding_powerlaw_parameters,
+    resolve_backtest_monthly_prices,
     calculate_historical_sigma_offsets,
     estimate_current_monthly_pension,
     evaluate_powerlaw_values,
@@ -252,9 +230,7 @@ def style_portfolio_table(
     def color_column_values(data):
         styled = pd.DataFrame("", index=data.index, columns=data.columns)
         if historical_periods > 0:
-            styled.iloc[:historical_periods, :] = (
-                "background-color: rgba(127, 29, 29, 0.38);"
-            )
+            styled.iloc[:historical_periods, :] = "background-color: rgba(127, 29, 29, 0.38);"
         for column_name, color in column_colors.items():
             if column_name in styled.columns:
                 styled[column_name] += f" color: {color}; font-weight: 700;"
@@ -466,9 +442,7 @@ def render_portfolio_view(
         was_clipped=model_was_clipped,
     )
     if unstable_portfolio:
-        st.info(
-            "Portfolio projection needs a stable model fit to calculate fair-value metrics."
-        )
+        st.info("Portfolio projection needs a stable model fit to calculate fair-value metrics.")
         return
 
     money_fmt = f"{currency_prefix}{{:,.{display_currency_decimals}f}}{currency_suffix}"
@@ -656,9 +630,7 @@ def render_portfolio_view(
                 style_format,
                 currency_unit,
                 portfolio_view,
-                historical_periods={"Year": 3, "Month": 6, "Day": 60}.get(
-                    settings.forecast_unit, 0
-                ),
+                historical_periods=projection_result.history_periods,
             ),
             width="stretch",
             hide_index=True,
@@ -924,38 +896,29 @@ def render_portfolio_view(
         selected_sell_pct = float(st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT])
         backtest_years = int(st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS])
         selected_floor_model = st.session_state.get(KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL, "-2σ")
-        floor_intercept_a = None
-        floor_slope_b = None
         floor_model_label = floor_model_options.get(selected_floor_model, "-2σ")
-        if selected_floor_model == "trough_envelope_sigma_1":
-            trough_overlay = calculate_peak_powerlaw_overlay(
-                df_display,
-                genesis_offset,
-                df_display["Days"].to_numpy(dtype=float),
-                percentile_offsets,
-                1.0,
-            ).get("trough")
-            if trough_overlay is None:
-                st.warning(
-                    "Trough PowerLaw Envelope σ1 has too few fit points. Falling back to -2σ floor."
-                )
-                floor_model_label = "-2σ"
-            else:
-                floor_intercept_a = float(trough_overlay["intercept"])
-                floor_slope_b = float(trough_overlay["slope"])
+        backtest_monthly_prices = resolve_backtest_monthly_prices(df_display, backtest_years)
+        floor_prices = None
+        if backtest_monthly_prices is not None:
+            # Refit the floor month by month so no month is sized by its own future.
+            floor_prices = power_law.build_causal_powerlaw_floor_prices(
+                df_display["CloseDisplay"],
+                backtest_monthly_prices.index,
+                current_gen_date,
+                floor_model=(
+                    FLOOR_MODEL_TROUGH_ENVELOPE
+                    if selected_floor_model == "trough_envelope_sigma_1"
+                    else FLOOR_MODEL_SIGMA
+                ),
+            )
         result = build_portfolio_real_data_backtest(
             df_display,
             settings,
             currency_unit,
             years=backtest_years,
-            current_gen_date=current_gen_date,
-            intercept_a=a_active,
-            slope_b=b_active,
-            percentile_offsets=percentile_offsets,
+            floor_prices=floor_prices,
             sell_mom_change_pct=selected_sell_pct,
             strategy_name=f"{floor_model_label}: sell {selected_sell_pct:.0f}% growth",
-            floor_intercept_a=floor_intercept_a,
-            floor_slope_b=floor_slope_b,
             floor_model_label=floor_model_label,
         )
     else:
@@ -1095,8 +1058,12 @@ def render_portfolio_view(
             width="stretch",
             hide_index=True,
         )
+        if result.months_without_floor > 0:
+            st.caption(
+                f"{result.months_without_floor} month(s) had too little prior history to fit a floor and withdrew nothing."
+            )
         st.caption(
-            f"Backtest starts with the sidebar BTC quantity. Withdrawals are calculated from one month of model growth on the selected {result.monthly_withdrawal_label.replace(f' ({currency_unit})', '')}, then sold at the real historical monthly BTC price."
+            f"Backtest starts with the sidebar BTC quantity. Withdrawals are calculated from one month of model growth on the selected {result.monthly_withdrawal_label.replace(f' ({currency_unit})', '')}, then sold at the real BTC price on that month's last trading day. The floor is refitted for every month on data available up to that same day and nothing later, so no month is sized by prices it could not have seen."
         )
 
 
@@ -1251,9 +1218,7 @@ df_display["FairDisplay"] = df_display["Fair"]
 if mode in [MODE_POWERLAW, MODE_PORTFOLIO] and powerlaw_parameters_are_unstable(
     current_r2, was_clipped=fair_was_clipped
 ):
-    st.warning(
-        "Current PowerLaw parameters are unstable for the selected series."
-    )
+    st.warning("Current PowerLaw parameters are unstable for the selected series.")
 
 p2_5, p16_5, p83_5, p97_5 = calculate_percentile_offsets(df_display, genesis_offset)
 residual_sigma_log = calculate_residual_sigma_log(df_display)

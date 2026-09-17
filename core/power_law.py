@@ -1,19 +1,24 @@
 import numpy as np
+import pandas as pd
 import streamlit as st
 
 from core.constants import (
     DEFAULT_A,
     DEFAULT_B,
+    FLOOR_MODEL_SIGMA,
+    FLOOR_MODEL_TROUGH_ENVELOPE,
     KEY_A,
     KEY_B,
     KEY_GENESIS_OFFSET,
-    POWERLAW_INTERCEPT_MAX,
-    POWERLAW_INTERCEPT_MIN,
-    POWERLAW_SLOPE_MAX,
-    POWERLAW_SLOPE_MIN,
+    POWERLAW_EXPONENT_MAX,
+    POWERLAW_EXPONENT_MIN,
 )
-from core.optimization_utils import optimize_single_scalar_parameter
-from core.utils import calculate_r2_score
+from core.utils import (
+    calculate_expanding_powerlaw_parameters,
+    calculate_historical_sigma_offsets,
+    calculate_r2_score,
+    interpolate_sigma_offset_from_level,
+)
 
 # --- MATH CORE ---
 
@@ -306,72 +311,109 @@ def calculate_r2_for_manual_params_on_rolling_mean(
     return calculate_r2_score(valid_log_values, predicted_log_values)
 
 
-def find_best_fit_params(absolute_days, log_prices):
-    slope_b, intercept_a, r2_score = fit_powerlaw_regression(absolute_days, log_prices, 0)
-    return 0, intercept_a, slope_b, r2_score
-
-
-def find_best_fit_params_for_offset(absolute_days, log_prices, genesis_offset_days):
-    slope_b, intercept_a, r2_score = fit_powerlaw_regression(
-        absolute_days,
-        log_prices,
-        genesis_offset_days,
-    )
-    return int(genesis_offset_days), intercept_a, slope_b, r2_score
-
-
-def optimize_single_powerlaw_parameter(
-    absolute_days,
-    log_prices,
-    genesis_offset_days,
-    current_intercept_a,
-    current_slope_b,
-    parameter_key,
-    a_min=POWERLAW_INTERCEPT_MIN,
-    a_max=POWERLAW_INTERCEPT_MAX,
-    b_min=POWERLAW_SLOPE_MIN,
-    b_max=POWERLAW_SLOPE_MAX,
+def build_causal_powerlaw_floor_prices(
+    daily_price_series,
+    monthly_index,
+    current_gen_date,
+    *,
+    floor_model=FLOOR_MODEL_SIGMA,
+    sigma_level=-2.0,
+    envelope_sigma_threshold=1.0,
+    envelope_window_days=365.25,
+    min_points=100,
+    sigma_recalculation_step=7,
 ):
-    if parameter_key == "A":
-        best_value, best_r2 = optimize_single_scalar_parameter(
-            float(current_intercept_a),
-            lambda candidate: calculate_r2_for_manual_params(
-                absolute_days, log_prices, genesis_offset_days, float(candidate), current_slope_b
-            ),
-            min_value=float(a_min),
-            max_value=float(a_max),
-            coarse_points=281,
-            fine_window=0.2,
-            fine_points=401,
-        )
-        return round(best_value, 3), best_r2
+    """Refit the withdrawal floor month by month from data known at that month.
 
-    if parameter_key == "B":
-        best_value, best_r2 = optimize_single_scalar_parameter(
-            float(current_slope_b),
-            lambda candidate: calculate_r2_for_manual_params(
-                absolute_days,
-                log_prices,
-                genesis_offset_days,
-                current_intercept_a,
-                float(candidate),
-            ),
-            min_value=float(b_min),
-            max_value=float(b_max),
-            coarse_points=221,
-            fine_window=0.15,
-            fine_points=301,
-        )
-        return round(best_value, 3), best_r2
+    Sizing withdrawals from a model fitted on the whole history lets every month of a
+    backtest see its own future. Here each month's floor is fitted on the prefix of the
+    daily history up to that month instead, so stepping through ``monthly_index`` is
+    walk-forward. Months without enough history behind them come back as NaN.
+    """
+    monthly_index = pd.DatetimeIndex(monthly_index)
+    daily_prices = pd.to_numeric(pd.Series(daily_price_series), errors="coerce").dropna()
+    daily_prices = daily_prices[daily_prices > 0.0].sort_index()
+    if daily_prices.empty or monthly_index.empty:
+        return pd.Series(np.nan, index=monthly_index, dtype=float)
 
-    return round(float(current_intercept_a), 3), calculate_r2_for_manual_params(
-        absolute_days, log_prices, genesis_offset_days, current_intercept_a, current_slope_b
+    current_gen_date = pd.Timestamp(current_gen_date)
+    daily_dates = pd.DatetimeIndex(daily_prices.index)
+    daily_days = np.maximum((daily_dates - current_gen_date).days.to_numpy(dtype=float), 1.0)
+    daily_log_days = np.log10(daily_days)
+    daily_log_prices = np.log10(daily_prices.to_numpy(dtype=float))
+
+    intercepts, slopes, _ = calculate_expanding_powerlaw_parameters(
+        daily_log_days,
+        daily_log_prices,
+        min_points=min_points,
+    )
+    sigma_offsets = calculate_historical_sigma_offsets(
+        daily_log_days,
+        daily_log_prices,
+        intercepts,
+        slopes,
+        min_points=min_points,
+        recalculation_step=sigma_recalculation_step,
     )
 
+    # Newest daily observation available on each entry's own date. Rows are dated on
+    # the day the strategy trades, so the fit sees that day's close and nothing later.
+    cutoff_positions = (
+        np.searchsorted(
+            daily_dates.to_numpy(dtype="datetime64[ns]"),
+            monthly_index.to_numpy(dtype="datetime64[ns]"),
+            side="right",
+        )
+        - 1
+    )
+    monthly_days = np.maximum(
+        (monthly_index - current_gen_date).days.to_numpy(dtype=float),
+        1.0,
+    )
+    monthly_log_days = np.log10(monthly_days)
 
-# Backward-compatible alias used by existing code.
-def find_global_best_fit_optimized(all_abs_days, all_log_close):
-    return find_best_fit_params(all_abs_days, all_log_close)
+    floor_values = np.full(len(monthly_index), np.nan, dtype=float)
+    for position, cutoff in enumerate(cutoff_positions):
+        cutoff = int(cutoff)
+        if cutoff < 0 or (cutoff + 1) < int(min_points):
+            continue
+
+        intercept = intercepts[cutoff]
+        slope = slopes[cutoff]
+        offsets = sigma_offsets[:, cutoff]
+        if not (np.isfinite(intercept) and np.isfinite(slope)) or not np.all(np.isfinite(offsets)):
+            continue
+
+        if floor_model == FLOOR_MODEL_TROUGH_ENVELOPE:
+            prefix_log_days = daily_log_days[: cutoff + 1]
+            prefix_log_prices = daily_log_prices[: cutoff + 1]
+            envelope = fit_trough_powerlaw_envelope(
+                daily_days[: cutoff + 1],
+                prefix_log_prices,
+                0.0,
+                np.array([monthly_days[position]], dtype=float),
+                residuals=prefix_log_prices - (intercept + slope * prefix_log_days),
+                threshold_offset=interpolate_sigma_offset_from_level(
+                    -abs(float(envelope_sigma_threshold)),
+                    offsets,
+                ),
+                window_days=envelope_window_days,
+            )
+            if envelope is None:
+                continue
+            floor_values[position] = float(envelope["model_values"][0])
+            continue
+
+        floor_log = (
+            intercept
+            + slope * monthly_log_days[position]
+            + interpolate_sigma_offset_from_level(sigma_level, offsets)
+        )
+        floor_values[position] = float(
+            np.power(10.0, np.clip(floor_log, POWERLAW_EXPONENT_MIN, POWERLAW_EXPONENT_MAX))
+        )
+
+    return pd.Series(floor_values, index=monthly_index, dtype=float)
 
 
 # --- SIDEBAR RENDERER ---
