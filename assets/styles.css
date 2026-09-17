@@ -400,6 +400,17 @@ footer {visibility: hidden; display: none;}
     width: 20%;
 }
 
+/* Streamlit <=1.57 spaced radio options with a 16px margin on each label and let the
+   wrapped rows sit flush. Newer versions drop that margin and put a single 16px gap on
+   the group, which keeps the horizontal spacing but pushes the rows apart. Only the row
+   gap is reset, so horizontal spacing stays whatever the installed version provides --
+   setting a column gap here would add to the old margin and double it on 1.57.
+   NOTE: the div[data-testid="stSidebar"] rules below never matched - the sidebar is a
+   <section>, not a <div> - so they are dead and the radios keep Streamlit's own look. */
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] {
+    row-gap: 0 !important;
+}
+
 div[data-testid="stSidebar"] .stRadio div[role="radiogroup"],
 div[data-testId="stSidebar"] .stRadio div[role="radiogroup"] {
     gap: 8px;
