@@ -327,7 +327,23 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             PORTFOLIO_HISTORY_PERIODS_MAX,
         )
         st.markdown(f"**History ({horizon_label})**")
-        st.slider(
+
+        def on_history_minus():
+            st.session_state[KEY_PORTFOLIO_HISTORY_PERIODS] = max(
+                PORTFOLIO_HISTORY_PERIODS_MIN,
+                int(st.session_state[KEY_PORTFOLIO_HISTORY_PERIODS]) - 1,
+            )
+
+        def on_history_plus():
+            st.session_state[KEY_PORTFOLIO_HISTORY_PERIODS] = min(
+                PORTFOLIO_HISTORY_PERIODS_MAX,
+                int(st.session_state[KEY_PORTFOLIO_HISTORY_PERIODS]) + 1,
+            )
+
+        y1, y2, y3 = st.columns([1, 2.5, 1])
+        y1.button("➖", key="portfolio_history_m", on_click=on_history_minus)
+        y3.button("➕", key="portfolio_history_p", on_click=on_history_plus)
+        y2.slider(
             f"History ({horizon_label})",
             min_value=PORTFOLIO_HISTORY_PERIODS_MIN,
             max_value=PORTFOLIO_HISTORY_PERIODS_MAX,
@@ -335,7 +351,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             key=KEY_PORTFOLIO_HISTORY_PERIODS,
             label_visibility="collapsed",
         )
-        st.caption(f"Realised {horizon_label} before today, highlighted in the table.")
 
 
 def _render_powerlaw_series_selector(powerlaw_series):
