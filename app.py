@@ -11,6 +11,7 @@ from core.constants import (
     FLOOR_MODEL_SIGMA,
     FLOOR_MODEL_TROUGH_ENVELOPE,
     DEFAULT_FORECAST_HORIZON,
+    DEFAULT_PORTFOLIO_HISTORY_PERIODS,
     FORECAST_HORIZON_MAX,
     FORECAST_HORIZON_MIN,
     GAUSSIAN_SIGMA_PERCENTILES,
@@ -35,6 +36,7 @@ from core.constants import (
     KEY_PORTFOLIO_BTC_AMOUNT,
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_UNIT,
+    KEY_PORTFOLIO_HISTORY_PERIODS,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
     KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
     KEY_PORTFOLIO_PENSION_PAYOUT_PCT,
@@ -111,6 +113,7 @@ def initialize_app_session_state():
         KEY_PORTFOLIO_PENSION_PAYOUT_PCT: 100.0,
         KEY_PORTFOLIO_FORECAST_UNIT: "Month",
         KEY_PORTFOLIO_FORECAST_HORIZON: DEFAULT_FORECAST_HORIZON,
+        KEY_PORTFOLIO_HISTORY_PERIODS: DEFAULT_PORTFOLIO_HISTORY_PERIODS,
         KEY_PORTFOLIO_STRATEGY_VIEW: PORTFOLIO_VIEW_ACCUMULATION,
     }
     for key, value in defaults.items():
@@ -414,6 +417,9 @@ def render_portfolio_view(
         forecast_unit=st.session_state.get(KEY_PORTFOLIO_FORECAST_UNIT, "Month"),
         forecast_horizon=int(
             st.session_state.get(KEY_PORTFOLIO_FORECAST_HORIZON, DEFAULT_FORECAST_HORIZON)
+        ),
+        history_periods=int(
+            st.session_state.get(KEY_PORTFOLIO_HISTORY_PERIODS, DEFAULT_PORTFOLIO_HISTORY_PERIODS)
         ),
         sigma_level=scenario_sigma_level,
         residual_sigma_log=calculate_residual_sigma_log(df_display),

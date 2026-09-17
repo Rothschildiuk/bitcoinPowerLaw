@@ -5,6 +5,7 @@ from core.constants import (
     CURRENCY_DOLLAR,
     CURRENCY_OPTIONS,
     DEFAULT_FORECAST_HORIZON,
+    DEFAULT_PORTFOLIO_HISTORY_PERIODS,
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
     KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
@@ -18,6 +19,7 @@ from core.constants import (
     KEY_PORTFOLIO_FORECAST_HORIZON,
     KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY,
     KEY_PORTFOLIO_FORECAST_UNIT,
+    KEY_PORTFOLIO_HISTORY_PERIODS,
     KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
     KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
     KEY_PORTFOLIO_SIGMA_LEVEL,
@@ -33,6 +35,8 @@ from core.constants import (
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_PRICE,
+    PORTFOLIO_HISTORY_PERIODS_MAX,
+    PORTFOLIO_HISTORY_PERIODS_MIN,
     PORTFOLIO_SIGMA_CURRENT,
     PORTFOLIO_VIEW_ACCUMULATION,
     PORTFOLIO_VIEW_PENSION,
@@ -310,6 +314,28 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             key=KEY_PORTFOLIO_FORECAST_HORIZON,
             label_visibility="collapsed",
         )
+
+        st.session_state[KEY_PORTFOLIO_HISTORY_PERIODS] = min(
+            max(
+                int(
+                    st.session_state.get(
+                        KEY_PORTFOLIO_HISTORY_PERIODS, DEFAULT_PORTFOLIO_HISTORY_PERIODS
+                    )
+                ),
+                PORTFOLIO_HISTORY_PERIODS_MIN,
+            ),
+            PORTFOLIO_HISTORY_PERIODS_MAX,
+        )
+        st.markdown(f"**History ({horizon_label})**")
+        st.slider(
+            f"History ({horizon_label})",
+            min_value=PORTFOLIO_HISTORY_PERIODS_MIN,
+            max_value=PORTFOLIO_HISTORY_PERIODS_MAX,
+            step=1,
+            key=KEY_PORTFOLIO_HISTORY_PERIODS,
+            label_visibility="collapsed",
+        )
+        st.caption(f"Realised {horizon_label} before today, highlighted in the table.")
 
 
 def _render_powerlaw_series_selector(powerlaw_series):

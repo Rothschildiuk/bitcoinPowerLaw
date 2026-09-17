@@ -4,7 +4,10 @@ import numpy as np
 import pandas as pd
 
 from core.constants import (
+    DEFAULT_PORTFOLIO_HISTORY_PERIODS,
     GAUSSIAN_SIGMA_PERCENTILES,
+    PORTFOLIO_HISTORY_PERIODS_MAX,
+    PORTFOLIO_HISTORY_PERIODS_MIN,
     POWERLAW_EXPONENT_MAX,
     POWERLAW_EXPONENT_MIN,
 )
@@ -16,6 +19,7 @@ class PortfolioSettings:
     monthly_buy_amount: float
     forecast_unit: str
     forecast_horizon: int
+    history_periods: int = DEFAULT_PORTFOLIO_HISTORY_PERIODS
     monthly_mom_change_pct: float = 0.0
     sigma_level: float = 0.0
     residual_sigma_log: float = 0.0
@@ -596,10 +600,14 @@ def build_portfolio_projection(
 ):
     average_month_days = 30.44
     anchor_day = resolve_projection_anchor_day(df_index, today=anchor_day)
+    history_periods = min(
+        max(int(settings.history_periods), PORTFOLIO_HISTORY_PERIODS_MIN),
+        PORTFOLIO_HISTORY_PERIODS_MAX,
+    )
+    # Row 0 is the pre-display row the view model drops; the anchor follows the history.
+    projection_lookback = history_periods + 1
 
     if settings.forecast_unit == "Year":
-        history_periods = 3
-        projection_lookback = history_periods + 1
         latest_year = int(anchor_day.year)
         start_period = pd.Timestamp(f"{latest_year - projection_lookback}-01-01")
         date_index = pd.date_range(
@@ -610,8 +618,6 @@ def build_portfolio_projection(
         change_usd_col, change_pct_col = "YoY_USD", "YoY_pct"
         table_title = "Yearly growth table"
     elif settings.forecast_unit == "Day":
-        history_periods = 60
-        projection_lookback = history_periods + 1
         latest_day = anchor_day
         start_period = latest_day - pd.Timedelta(days=projection_lookback)
         date_index = pd.date_range(
@@ -622,8 +628,6 @@ def build_portfolio_projection(
         change_usd_col, change_pct_col = "DoD_USD", "DoD_pct"
         table_title = "Daily growth table"
     else:
-        history_periods = 6
-        projection_lookback = history_periods + 1
         latest_month_start = anchor_day.to_period("M").to_timestamp()
         start_period = latest_month_start - pd.offsets.MonthBegin(projection_lookback)
         date_index = pd.date_range(

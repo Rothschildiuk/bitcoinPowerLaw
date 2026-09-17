@@ -144,22 +144,28 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertEqual(result.change_usd_col, "DoD_USD")
         self.assertEqual(result.change_pct_col, "DoD_pct")
         self.assertEqual(result.forecast_unit, "Day")
-        self.assertEqual(result.portfolio_df["Date"].iloc[0], pd.Timestamp("2025-11-15"))
+        self.assertEqual(result.portfolio_df["Date"].iloc[0], pd.Timestamp("2026-01-14"))
         self.assertTrue((result.portfolio_df["Date"].diff().dt.days.iloc[1:] == 1).all())
 
-    def test_build_portfolio_projection_prepends_history_periods_before_the_anchor(self):
-        """The frame carries history rows before the anchor period, then the forecast."""
-        for forecast_unit, expected_first_date, expected_row_count in (
-            ("Day", pd.Timestamp("2026-01-13"), 3 + 61),
-            ("Month", pd.Timestamp("2025-08-01"), 3 + 7),
-            ("Year", pd.Timestamp("2022-01-01"), 3 + 4),
+    def test_build_portfolio_projection_prepends_the_requested_history_periods(self):
+        """The history setting decides how many realised periods precede the anchor."""
+        for forecast_unit, history_periods, expected_first_date in (
+            # Default: nothing ahead of the anchor but the row the view model drops.
+            ("Day", 0, pd.Timestamp("2026-03-14")),
+            ("Month", 0, pd.Timestamp("2026-02-01")),
+            ("Year", 0, pd.Timestamp("2025-01-01")),
+            # A non-zero setting pushes the frame that many periods further back.
+            ("Day", 5, pd.Timestamp("2026-03-09")),
+            ("Month", 6, pd.Timestamp("2025-08-01")),
+            ("Year", 3, pd.Timestamp("2022-01-01")),
         ):
-            with self.subTest(forecast_unit=forecast_unit):
+            with self.subTest(forecast_unit=forecast_unit, history_periods=history_periods):
                 settings = PortfolioSettings(
                     btc_amount=1.0,
                     monthly_buy_amount=0.0,
                     forecast_unit=forecast_unit,
                     forecast_horizon=3,
+                    history_periods=history_periods,
                 )
 
                 result = build_portfolio_projection(
@@ -171,8 +177,32 @@ class TestPortfolioHelpers(unittest.TestCase):
                     anchor_day=pd.Timestamp("2026-03-15"),
                 )
 
+                self.assertEqual(result.history_periods, history_periods)
                 self.assertEqual(result.portfolio_df["Date"].iloc[0], expected_first_date)
-                self.assertEqual(len(result.portfolio_df), expected_row_count)
+                self.assertEqual(len(result.portfolio_df), 3 + history_periods + 1)
+
+    def test_build_portfolio_projection_clamps_the_history_periods_setting(self):
+        for requested, expected in ((-5, 0), (500, 100)):
+            with self.subTest(requested=requested):
+                settings = PortfolioSettings(
+                    btc_amount=1.0,
+                    monthly_buy_amount=0.0,
+                    forecast_unit="Month",
+                    forecast_horizon=3,
+                    history_periods=requested,
+                )
+
+                result = build_portfolio_projection(
+                    df_index=pd.to_datetime(["2026-03-15"]),
+                    current_gen_date=pd.Timestamp("2009-01-03"),
+                    intercept_a=2.0,
+                    slope_b=0.0,
+                    settings=settings,
+                    anchor_day=pd.Timestamp("2026-03-15"),
+                )
+
+                self.assertEqual(result.history_periods, expected)
+                self.assertEqual(len(result.portfolio_df), 3 + expected + 1)
 
     def test_build_portfolio_projection_clips_period_days_to_one(self):
         settings = PortfolioSettings(

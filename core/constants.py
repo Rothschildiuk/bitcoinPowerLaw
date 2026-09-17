@@ -96,6 +96,10 @@ FLOOR_MODEL_TROUGH_ENVELOPE = "trough_envelope"
 DEFAULT_FORECAST_HORIZON = 60
 FORECAST_HORIZON_MIN = 1
 FORECAST_HORIZON_MAX = 120
+# How many periods of realised history the projection table shows before the anchor
+DEFAULT_PORTFOLIO_HISTORY_PERIODS = 0
+PORTFOLIO_HISTORY_PERIODS_MIN = 0
+PORTFOLIO_HISTORY_PERIODS_MAX = 100
 POWERLAW_EXPONENT_MIN = -300.0
 POWERLAW_EXPONENT_MAX = 300.0
 
@@ -197,6 +201,7 @@ PORTFOLIO_VIEW_PENSION = "Pension"
 PORTFOLIO_VIEW_STRATEGY_TESTER = "Strategy tester"
 KEY_PORTFOLIO_FORECAST_UNIT = "portfolio_forecast_unit"
 KEY_PORTFOLIO_FORECAST_HORIZON = "portfolio_forecast_horizon"
+KEY_PORTFOLIO_HISTORY_PERIODS = "portfolio_history_periods"
 KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY = "portfolio_forecast_months"
 KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT = "portfolio_backtest_strategy_pct"
 KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL = "portfolio_backtest_floor_model"
