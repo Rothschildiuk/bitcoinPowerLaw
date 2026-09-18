@@ -19,6 +19,7 @@ Streamlit app for exploring Bitcoin-style PowerLaw models across price, network,
 - `ui/sidebar.py`: mode/series/parameter selection
 - `ui/charts.py`: Plotly chart assembly and axis helpers
 - `ui/kpi.py`: fair value and history-share KPI cards
+- `ui/viewport.py`: User-Agent based phone detection for server-side layout choices
 - `scripts/update_powerlaw_defaults.py`: maintenance script for checked-in PowerLaw defaults
 
 ## Design Rules
@@ -27,6 +28,10 @@ Streamlit app for exploring Bitcoin-style PowerLaw models across price, network,
 - Keep series-specific behavior in `core/series_registry.py`.
 - Prefer registry wiring over new `if/elif` routing in `app.py`.
 - Keep display filtering and analysis filtering aligned between sidebar and main chart.
+- Responsive layout is split by what can still change in the browser: sizes, spacing and
+  visibility belong in `assets/styles.css` media queries, while anything Plotly bakes into
+  the figure (height, margins, tick density, modebar buttons) is chosen in Python from
+  `ui.viewport.is_mobile_client`.
 - When defaults are meant to track current datasets, update them through `scripts/update_powerlaw_defaults.py` instead of editing `core/constants.py` by hand.
 
 ## Current Important Constraints

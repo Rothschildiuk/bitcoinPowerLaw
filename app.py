@@ -93,6 +93,7 @@ from services.series_store import (
     SidebarSeriesData as SharedSidebarSeriesData,
 )
 from ui.theme import apply_theme_css, get_theme
+from ui.viewport import is_mobile_client
 
 
 def initialize_app_session_state():
@@ -1078,7 +1079,10 @@ st.set_page_config(
     layout="wide",
     page_icon="🚀",
     page_title="BTC Power Law Pro",
-    initial_sidebar_state="expanded",
+    # On a phone the control panel covers the whole screen, so the chart would be hidden
+    # behind it on every page load. Streamlit's own "auto" no longer collapses on narrow
+    # viewports, so the User-Agent decides.
+    initial_sidebar_state="collapsed" if is_mobile_client() else "expanded",
 )
 
 # --- THEME + STATE ---

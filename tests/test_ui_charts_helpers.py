@@ -11,8 +11,10 @@ from core.constants import (
     TIME_LOG,
 )
 from ui.charts import (
+    MOBILE_TICK_LABEL_MIN_SPACING,
     _convert_log_offsets_to_sigma_levels,
     _iter_moving_average_series,
+    _main_chart_layout,
     _main_chart_plotly_config,
     _resolve_optional_sigma_offsets,
     _resolve_log_time_axis,
@@ -20,6 +22,7 @@ from ui.charts import (
     _resolve_powerlaw_y_range,
     _resolve_trace_sample_indices,
     _sample_trace_values,
+    _thin_log_axis_tick_labels,
     _resolve_time_axis_start_date,
     render_main_model_chart,
     render_powerlaw_oscillator_chart,
@@ -765,6 +768,76 @@ class TestUIChartsHelpers(unittest.TestCase):
         self.assertEqual(halving_traces[0].legendgroup, "halvings")
         self.assertEqual(halving_traces[0].mode, "lines")
         self.assertEqual(len(halving_traces[0].x), 12)
+
+    def test_mobile_plotly_config_keeps_only_touch_friendly_buttons(self):
+        config = _main_chart_plotly_config(is_mobile=True)
+
+        modebar_buttons = [
+            button for button_group in config["modeBarButtons"] for button in button_group
+        ]
+
+        self.assertTrue(config["displayModeBar"])
+        self.assertEqual(modebar_buttons, ["autoScale2d", "resetScale2d"])
+
+    def test_mobile_chart_layout_is_shorter_with_tighter_margins(self):
+        desktop = _main_chart_layout(is_mobile=False)
+        mobile = _main_chart_layout(is_mobile=True)
+
+        self.assertLess(mobile["height"], desktop["height"])
+        self.assertLess(mobile["margin"]["l"], desktop["margin"]["l"])
+        self.assertLess(mobile["margin"]["r"], desktop["margin"]["r"])
+        self.assertLess(mobile["legend_font_size"], desktop["legend_font_size"])
+
+    def test_thin_log_axis_tick_labels_keeps_recent_years_and_drops_crowded_ones(self):
+        tick_days = [float(10**exponent) for exponent in (0.0, 1.0, 2.0, 2.02, 3.0)]
+
+        thinned = _thin_log_axis_tick_labels(
+            tick_days,
+            ["a", "b", "c", "d", "e"],
+            0.0,
+            3.0,
+            min_spacing=0.1,
+        )
+
+        # "c" sits 0.02 decades below "d" on a three-decade axis, so only it is blanked.
+        self.assertEqual(thinned, ["a", "b", "", "d", "e"])
+
+    def test_thin_log_axis_tick_labels_is_a_no_op_without_spacing(self):
+        labels = ["2011", "2012", "2013"]
+
+        self.assertEqual(
+            _thin_log_axis_tick_labels([1.0, 2.0, 3.0], labels, 0.0, 1.0, min_spacing=0.0),
+            labels,
+        )
+
+    def test_resolve_log_time_axis_thins_labels_for_phone_spacing(self):
+        index = pd.to_datetime(["2011-06-01", "2020-06-01", "2026-06-01"])
+        df_display = pd.DataFrame({"Days": [900.0, 4200.0, 6400.0]}, index=index)
+        current_gen_date = pd.Timestamp("2009-01-03")
+        m_dates = [pd.Timestamp("2036-01-01")]
+
+        _, _, desktop_labels = _resolve_log_time_axis(
+            df_display=df_display,
+            current_gen_date=current_gen_date,
+            view_max=10000,
+            m_dates=m_dates,
+        )
+        _, _, phone_labels = _resolve_log_time_axis(
+            df_display=df_display,
+            current_gen_date=current_gen_date,
+            view_max=10000,
+            m_dates=m_dates,
+            min_label_spacing=MOBILE_TICK_LABEL_MIN_SPACING,
+        )
+
+        self.assertEqual(len(phone_labels), len(desktop_labels))
+        self.assertNotIn("", desktop_labels)
+        self.assertIn("", phone_labels)
+        # Blanking only hides labels; every tick mark stays on the axis.
+        self.assertLess(
+            len([label for label in phone_labels if label]),
+            len(desktop_labels),
+        )
 
 
 if __name__ == "__main__":

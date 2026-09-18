@@ -104,6 +104,7 @@ POWERLAW_EXPONENT_MIN = -300.0
 POWERLAW_EXPONENT_MAX = 300.0
 
 # Session-state keys
+KEY_CLIENT_IS_MOBILE = "client_is_mobile"
 KEY_LAST_MODE = "last_mode"
 KEY_CHART_REVISION = "chart_revision"
 KEY_MODE_SELECTOR = "mode_selector"

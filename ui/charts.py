@@ -11,6 +11,7 @@ from core.constants import (
     TIME_LOG,
 )
 from core.utils import evaluate_powerlaw_values
+from ui.viewport import is_mobile_client
 
 HALVING_DATES = [
     pd.Timestamp("2012-11-28"),
@@ -21,6 +22,12 @@ HALVING_DATES = [
 TIME_AXIS_LEADING_PADDING_DAYS = 90
 MODEL_FORWARD_YEARS = 10
 MAX_RENDERED_MODEL_POINTS = 2500
+MAIN_CHART_HEIGHT = 600
+MAIN_CHART_HEIGHT_MOBILE = 430
+# A rotated year label needs roughly this much of the plot width before the next one
+# starts touching it; the log time axis packs recent years together, so the labels are
+# thinned by spacing rather than by count.
+MOBILE_TICK_LABEL_MIN_SPACING = 0.07
 OPTIONAL_SIGMA_LEVELS = (-1.5, -0.5, 0.5, 1.5)
 SEGMENTED_SIGMA_STEP = 0.5
 SEGMENTED_SIGMA_HALF_STEP = SEGMENTED_SIGMA_STEP / 2.0
@@ -51,7 +58,18 @@ MOVING_AVERAGE_LINE_STYLES = (
 )
 
 
-def _main_chart_plotly_config():
+def _main_chart_plotly_config(is_mobile=False):
+    if is_mobile:
+        # A phone has no hover, and eight buttons crowd the top-right corner of the plot,
+        # so only the ones a touch user can actually act on are kept. "responsive" lets
+        # the figure re-lay out when the phone is rotated.
+        return {
+            "displayModeBar": True,
+            "displaylogo": False,
+            "responsive": True,
+            "modeBarButtons": [["autoScale2d", "resetScale2d"]],
+        }
+
     return {
         "displayModeBar": True,
         "modeBarButtons": [
@@ -60,6 +78,32 @@ def _main_chart_plotly_config():
             ["zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"],
         ],
     }
+
+
+def _main_chart_layout(is_mobile=False):
+    """Figure sizing that CSS cannot reach: Plotly bakes height and margins into the payload."""
+    if is_mobile:
+        return dict(
+            height=MAIN_CHART_HEIGHT_MOBILE,
+            margin=dict(t=28, b=40, l=40, r=8),
+            legend_font_size=11,
+            legend_y=-0.16,
+        )
+
+    return dict(
+        height=MAIN_CHART_HEIGHT,
+        margin=dict(t=40, b=72, l=50, r=20),
+        legend_font_size=13,
+        legend_y=-0.12,
+    )
+
+
+def _main_chart_tick_font(pl_text_color, is_mobile=False):
+    return dict(
+        color=pl_text_color,
+        size=11 if is_mobile else 14,
+        family="Arial Black, sans-serif",
+    )
 
 
 def _resolve_time_axis_start_date(df_display, padding_days=TIME_AXIS_LEADING_PADDING_DAYS):
@@ -132,7 +176,30 @@ def _resolve_powerlaw_y_range(
     return [max(0.0, y_min - pad), y_max + pad]
 
 
-def _resolve_log_time_axis(df_display, current_gen_date, view_max, m_dates):
+def _thin_log_axis_tick_labels(tick_days, tick_labels, log_start, log_end, min_spacing):
+    """Blank year labels that would collide, keeping the tick marks themselves.
+
+    A log time axis packs recent years ever closer together, so the walk runs from the
+    newest tick backwards: the years a reader cares about most survive, and the early
+    years are far enough apart to survive anyway.
+    """
+    span = float(log_end) - float(log_start)
+    if min_spacing <= 0.0 or span <= 0.0 or not tick_days:
+        return tick_labels
+
+    thinned = list(tick_labels)
+    last_kept_position = None
+    for index in range(len(tick_days) - 1, -1, -1):
+        position = (np.log10(float(tick_days[index])) - float(log_start)) / span
+        if last_kept_position is not None and last_kept_position - position < min_spacing:
+            thinned[index] = ""
+            continue
+        last_kept_position = position
+
+    return thinned
+
+
+def _resolve_log_time_axis(df_display, current_gen_date, view_max, m_dates, min_label_spacing=0.0):
     padded_start_date = _resolve_time_axis_start_date(df_display)
     range_start_day = max(1.0, float((padded_start_date - current_gen_date).days))
     range_end_day = max(float(view_max), range_start_day + 1.0)
@@ -147,7 +214,13 @@ def _resolve_log_time_axis(df_display, current_gen_date, view_max, m_dates):
             tick_days.append(delta_days)
             tick_labels.append(str(year))
 
-    return [np.log10(range_start_day), np.log10(range_end_day)], tick_days, tick_labels
+    log_start = np.log10(range_start_day)
+    log_end = np.log10(range_end_day)
+    tick_labels = _thin_log_axis_tick_labels(
+        tick_days, tick_labels, log_start, log_end, min_label_spacing
+    )
+
+    return [log_start, log_end], tick_days, tick_labels
 
 
 def _resolve_optional_sigma_offsets(p2_5, p16_5, p83_5, p97_5):
@@ -487,7 +560,9 @@ def render_powerlaw_oscillator_chart(
 ):
     fig = go.Figure()
     is_log_time = time_scale == TIME_LOG
-    tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
+    is_mobile = is_mobile_client()
+    responsive_layout = _main_chart_layout(is_mobile)
+    tick_font = _main_chart_tick_font(pl_text_color, is_mobile)
     hover_label = dict(
         bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
     )
@@ -652,7 +727,11 @@ def render_powerlaw_oscillator_chart(
     )
     if is_log_time:
         x_range, tick_values, tick_text = _resolve_log_time_axis(
-            df_display, current_gen_date, view_max, m_dates
+            df_display,
+            current_gen_date,
+            view_max,
+            m_dates,
+            min_label_spacing=MOBILE_TICK_LABEL_MIN_SPACING if is_mobile else 0.0,
         )
         fig.update_xaxes(
             type="log",
@@ -671,17 +750,17 @@ def render_powerlaw_oscillator_chart(
             hoverformat="%d.%m.%Y",
         )
     fig.update_layout(
-        height=600,
-        margin=dict(t=40, b=72, l=50, r=20),
+        height=responsive_layout["height"],
+        margin=responsive_layout["margin"],
         template=pl_template,
         font=dict(color=pl_text_color),
         legend=dict(
             orientation="h",
-            y=-0.12,
+            y=responsive_layout["legend_y"],
             yanchor="top",
             x=0,
             xanchor="left",
-            font=dict(size=13, color=pl_legend_color),
+            font=dict(size=responsive_layout["legend_font_size"], color=pl_legend_color),
             bgcolor="rgba(0,0,0,0)",
             groupclick="togglegroup",
         ),
@@ -690,7 +769,9 @@ def render_powerlaw_oscillator_chart(
         hovermode="x unified",
         hoverlabel=hover_label,
     )
-    st.plotly_chart(fig, width="stretch", config=_main_chart_plotly_config(), key=chart_key)
+    st.plotly_chart(
+        fig, width="stretch", config=_main_chart_plotly_config(is_mobile), key=chart_key
+    )
 
 
 def render_main_model_chart(
@@ -738,7 +819,9 @@ def render_main_model_chart(
     **_removed_options,
 ):
     fig = go.Figure()
-    tick_font = dict(color=pl_text_color, size=14, family="Arial Black, sans-serif")
+    is_mobile = is_mobile_client()
+    responsive_layout = _main_chart_layout(is_mobile)
+    tick_font = _main_chart_tick_font(pl_text_color, is_mobile)
     hover_label = dict(
         bgcolor=c_hover_bg, bordercolor=c_border, font=dict(color=c_hover_text, size=13)
     )
@@ -1223,7 +1306,11 @@ def render_main_model_chart(
 
     if is_log_time:
         x_range, t_vals, t_text = _resolve_log_time_axis(
-            df_display, current_gen_date, view_max, m_dates
+            df_display,
+            current_gen_date,
+            view_max,
+            m_dates,
+            min_label_spacing=MOBILE_TICK_LABEL_MIN_SPACING if is_mobile else 0.0,
         )
         fig.update_xaxes(
             type="log",
@@ -1255,17 +1342,17 @@ def render_main_model_chart(
     fig.update_yaxes(**spike_axis_style)
 
     fig.update_layout(
-        height=600,
-        margin=dict(t=40, b=72, l=50, r=20),
+        height=responsive_layout["height"],
+        margin=responsive_layout["margin"],
         template=pl_template,
         font=dict(color=pl_text_color),
         legend=dict(
             orientation="h",
-            y=-0.12,
+            y=responsive_layout["legend_y"],
             yanchor="top",
             x=0,
             xanchor="left",
-            font=dict(size=13, color=pl_legend_color),
+            font=dict(size=responsive_layout["legend_font_size"], color=pl_legend_color),
             bgcolor="rgba(0,0,0,0)",
             groupclick="togglegroup",
             traceorder="normal",
@@ -1279,6 +1366,6 @@ def render_main_model_chart(
         fig,
         width="stretch",
         theme=None,
-        config=_main_chart_plotly_config(),
+        config=_main_chart_plotly_config(is_mobile),
         key=chart_key,
     )
