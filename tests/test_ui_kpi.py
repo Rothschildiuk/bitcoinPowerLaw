@@ -12,6 +12,7 @@ from ui.kpi import (
     calculate_powerlaw_band_shares,
     filter_sigma_band_history,
     filter_sigma_band_history_percent_range,
+    format_fair_value_label,
     format_sigma_band_history_percent_range,
     resolve_sigma_band_history_percent_range,
     _render_sigma_band_chart,
@@ -301,6 +302,11 @@ class TestUIKpi(unittest.TestCase):
 
         _kpi_card(Column(), "FAIR VALUE", "€1")
         self.assertIn("<div class='metric-card'><div class='metric-label'>", rendered["html"])
+
+    def test_format_fair_value_label_names_the_date_it_is_valued_on(self):
+        self.assertEqual(format_fair_value_label(pd.Timestamp("2026-09-22")), "FAIR VALUE · 22 SEP")
+        self.assertEqual(format_fair_value_label("2026-01-05"), "FAIR VALUE · 05 JAN")
+        self.assertEqual(format_fair_value_label(None), "FAIR VALUE")
 
 
 if __name__ == "__main__":

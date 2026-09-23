@@ -43,6 +43,15 @@ def _kpi_card(col, label, value, delta=None, d_color=None, tooltip=None):
     )
 
 
+def format_fair_value_label(data_date):
+    # The card compares the latest price with the model on that same day, which can be a
+    # day or two before today while the projection tables start from today.
+    data_date = pd.to_datetime(data_date, errors="coerce")
+    if pd.isna(data_date):
+        return "FAIR VALUE"
+    return f"FAIR VALUE · {data_date:%d %b}".upper()
+
+
 def _format_money(value, currency_prefix, currency_suffix, currency_decimals):
     return f"{currency_prefix}{value:,.{currency_decimals}f}{currency_suffix}"
 
@@ -594,7 +603,7 @@ def render_model_kpis(
     )
     _kpi_card(
         k3,
-        "FAIR VALUE",
+        format_fair_value_label(df_display.index[-1]),
         _format_money(l_f_display, currency_prefix, currency_suffix, currency_decimals),
         model_comparison_display,
         "#9ba3af",
