@@ -164,13 +164,14 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     )
     if selected_portfolio_view not in portfolio_view_options:
         selected_portfolio_view = PORTFOLIO_VIEW_ACCUMULATION
-        st.session_state[KEY_PORTFOLIO_STRATEGY_VIEW] = selected_portfolio_view
+    # The keyed widget reads its value from Session State; passing index= as well makes
+    # Streamlit warn that the widget has two sources for its value.
+    st.session_state[KEY_PORTFOLIO_STRATEGY_VIEW] = selected_portfolio_view
 
     st.markdown("**Portfolio strategy**")
     selected_portfolio_view = st.radio(
         "Portfolio strategy",
         portfolio_view_options,
-        index=portfolio_view_options.index(selected_portfolio_view),
         horizontal=False,
         key=KEY_PORTFOLIO_STRATEGY_VIEW,
         label_visibility="collapsed",
@@ -251,7 +252,7 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
         selected_sigma = st.session_state.get(KEY_PORTFOLIO_SIGMA_LEVEL, 0.0)
         if selected_sigma not in sigma_options:
             selected_sigma = -2.0 if selected_portfolio_view == PORTFOLIO_VIEW_PENSION else 0.0
-            st.session_state[KEY_PORTFOLIO_SIGMA_LEVEL] = selected_sigma
+        st.session_state[KEY_PORTFOLIO_SIGMA_LEVEL] = selected_sigma
 
         st.radio(
             (
@@ -260,7 +261,6 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
                 else "Pension sigma"
             ),
             sigma_options,
-            index=sigma_options.index(selected_sigma),
             format_func=format_sigma_option,
             horizontal=True,
             key=KEY_PORTFOLIO_SIGMA_LEVEL,

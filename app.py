@@ -307,6 +307,19 @@ def prepare_model_grid(current_gen_date, a_active, b_active, view_max):
     return m_x, m_dates, m_log_d, m_fair_usd, m_dates_str
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def prepare_causal_floor_prices(daily_prices, monthly_dates, current_gen_date, floor_model):
+    # The walk-forward refit takes about a second for the trough envelope, and once the
+    # strategy tester has run it would otherwise repeat on every widget interaction.
+    # Dates arrive as a plain datetime64 array because Streamlit cannot hash an Index.
+    return power_law.build_causal_powerlaw_floor_prices(
+        daily_prices,
+        pd.DatetimeIndex(monthly_dates),
+        current_gen_date,
+        floor_model=floor_model,
+    )
+
+
 @st.cache_data(ttl=3600)
 def prepare_portfolio_projection(
     _df_index,
@@ -689,11 +702,13 @@ def render_portfolio_view(
                     ),
                 )
             )
+            # Snap the stored value to an offered option; the keyed radio reads it from
+            # Session State, so it takes no index= of its own.
+            st.session_state[KEY_PORTFOLIO_PENSION_PAYOUT_PCT] = current_payout_pct
             with st.container(key="portfolio_pension_payout_radio"):
                 st.radio(
                     "Conservative payout (%)",
                     options=payout_options,
-                    index=payout_options.index(current_payout_pct),
                     horizontal=True,
                     key=KEY_PORTFOLIO_PENSION_PAYOUT_PCT,
                 )
@@ -908,11 +923,11 @@ def render_portfolio_view(
         floor_prices = None
         if backtest_monthly_prices is not None:
             # Refit the floor month by month so no month is sized by its own future.
-            floor_prices = power_law.build_causal_powerlaw_floor_prices(
+            floor_prices = prepare_causal_floor_prices(
                 df_display["CloseDisplay"],
-                backtest_monthly_prices.index,
+                backtest_monthly_prices.index.to_numpy(dtype="datetime64[ns]"),
                 current_gen_date,
-                floor_model=(
+                (
                     FLOOR_MODEL_TROUGH_ENVELOPE
                     if selected_floor_model == "trough_envelope_sigma_1"
                     else FLOOR_MODEL_SIGMA
