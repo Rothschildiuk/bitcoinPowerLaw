@@ -587,12 +587,16 @@ def render_model_kpis(
     _kpi_card(
         k1,
         "POWERLAW MODEL",
+        # R² sits in the delta row: stacked under A and B it overflowed the fixed-height
+        # card onto the title whenever a narrow card also wrapped A and B apart.
         (
-            f"<span style='color:#f0b90b; font-size:0.75em;'>A = {a_active:.3f}</span>"
-            "&nbsp;&nbsp;"
-            f"<span style='color:#38bdf8; font-size:0.75em;'>B = {b_active:.3f}</span>"
-            f"<br><span style='color:#0ecb81; font-size:0.75em;'>R² = {current_r2 * 100:.4f}%</span>"
+            "<span class='metric-model-params'>"
+            f"<span style='color:#f0b90b;'>A = {a_active:.3f}</span>"
+            f"<span style='color:#38bdf8;'>B = {b_active:.3f}</span>"
+            "</span>"
         ),
+        f"R² = {current_r2 * 100:.4f}%",
+        "#0ecb81",
     )
     _kpi_card(
         k2,

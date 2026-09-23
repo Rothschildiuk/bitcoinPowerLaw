@@ -50,6 +50,8 @@ footer {visibility: hidden; display: none;}
 .metric-model-separator { color: __C_TEXT_MAIN__; opacity: 0.45; }
 .metric-model-comparison { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; font-size: 0.92em; }
 .metric-model-separator { color: __C_TEXT_MAIN__; opacity: 0.55; }
+.metric-model-params { display: inline-flex; flex-wrap: wrap; justify-content: center; column-gap: 0.7em; row-gap: 2px; font-size: 0.75em; line-height: 1.15; }
+.metric-model-params > span { white-space: nowrap; }
 .pension-rating {
     display: inline-flex; align-items: center; justify-content: center; border: 1px solid; border-radius: 999px;
     padding: 3px 9px; font-size: 12px; font-weight: 800; margin-top: -6px; margin-bottom: 6px;
