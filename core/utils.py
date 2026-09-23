@@ -406,8 +406,11 @@ def estimate_current_monthly_pension(
     current_date = pd.Timestamp(current_date)
     if current_date.tzinfo is not None:
         current_date = current_date.tz_localize(None)
-    next_month_date = current_date + pd.DateOffset(months=1)
-    next_month_days = max(1.0, float((next_month_date - pd.Timestamp(current_gen_date)).days))
+    # One average month ahead rather than one calendar month, so the estimate does not
+    # dip whenever the next month is February.
+    next_month_date = current_date + pd.Timedelta(days=AVERAGE_MONTH_DAYS)
+    current_days = float((current_date - pd.Timestamp(current_gen_date)).days)
+    next_month_days = max(1.0, current_days + AVERAGE_MONTH_DAYS)
     next_month_fair_price, _, _ = evaluate_powerlaw_values(
         np.array([np.log10(next_month_days)]),
         intercept_a,

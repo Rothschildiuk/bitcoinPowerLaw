@@ -74,24 +74,27 @@ class TestPortfolioHelpers(unittest.TestCase):
             percentile_offsets=(-0.5, -0.25, 0.25, 0.5),
         )
 
+        # 30 days since the origin plus one average month: 100 * (30 + 30.44).
+        next_price = 100.0 * (30.0 + 30.44)
+
         self.assertTrue(np.isclose(estimate.current_sigma_level, 0.0))
         self.assertTrue(np.isclose(estimate.current_floor_price, 3000.0 * 10**-0.5))
-        self.assertTrue(np.isclose(estimate.next_month_floor_price, 5800.0 * 10**-0.5))
+        self.assertTrue(np.isclose(estimate.next_month_floor_price, next_price * 10**-0.5))
         self.assertTrue(
             np.isclose(
                 estimate.floor_monthly_growth_per_btc,
-                (5800.0 - 3000.0) * 10**-0.5,
+                (next_price - 3000.0) * 10**-0.5,
             )
         )
         self.assertTrue(
             np.isclose(
                 estimate.minimum_monthly_withdrawal,
-                (5800.0 - 3000.0) * 10**-0.5 * 0.8,
+                (next_price - 3000.0) * 10**-0.5 * 0.8,
             )
         )
-        self.assertTrue(np.isclose(estimate.next_month_price, 5800.0))
-        self.assertTrue(np.isclose(estimate.monthly_growth_per_btc, 2800.0))
-        self.assertTrue(np.isclose(estimate.max_monthly_withdrawal, 2240.0))
+        self.assertTrue(np.isclose(estimate.next_month_price, next_price))
+        self.assertTrue(np.isclose(estimate.monthly_growth_per_btc, next_price - 3000.0))
+        self.assertTrue(np.isclose(estimate.max_monthly_withdrawal, (next_price - 3000.0) * 0.8))
         self.assertTrue(
             np.isclose(
                 estimate.minimum_btc_to_sell,
@@ -110,9 +113,35 @@ class TestPortfolioHelpers(unittest.TestCase):
                 (1.0 - (estimate.minimum_btc_to_sell_today / estimate.minimum_btc_to_sell)) * 100.0,
             )
         )
-        self.assertTrue(np.isclose(estimate.model_btc_to_sell, 2240.0 / 5800.0))
-        self.assertTrue(np.isclose(estimate.selected_monthly_withdrawal, 1120.0))
+        self.assertTrue(
+            np.isclose(estimate.model_btc_to_sell, (next_price - 3000.0) * 0.8 / next_price)
+        )
+        self.assertTrue(
+            np.isclose(estimate.selected_monthly_withdrawal, (next_price - 3000.0) * 0.4)
+        )
         self.assertEqual(estimate.withdrawal_rating, "Attractive")
+
+    def test_estimate_current_monthly_pension_ignores_calendar_month_length(self):
+        gen_date = pd.Timestamp("2009-01-03")
+        estimates = [
+            estimate_current_monthly_pension(
+                current_price=float((pd.Timestamp(current_date) - gen_date).days),
+                current_model_log=np.log10((pd.Timestamp(current_date) - gen_date).days),
+                current_date=pd.Timestamp(current_date),
+                current_gen_date=gen_date,
+                intercept_a=0.0,
+                slope_b=1.0,
+                btc_amount=1.0,
+                sell_mom_change_pct=100.0,
+                percentile_offsets=(-0.5, -0.25, 0.25, 0.5),
+            )
+            for current_date in ("2026-01-31", "2026-02-01")
+        ]
+
+        # A calendar month from 31 January reaches only 28 February, but the price grows by
+        # 1 per day, so both dates should see the same average-month growth.
+        self.assertTrue(np.isclose(estimates[0].monthly_growth_per_btc, 30.44))
+        self.assertTrue(np.isclose(estimates[1].monthly_growth_per_btc, 30.44))
 
     def test_rate_withdrawal_attractiveness_uses_sigma_bands(self):
         self.assertEqual(rate_withdrawal_attractiveness(-1.2)[0], "Not attractive")
