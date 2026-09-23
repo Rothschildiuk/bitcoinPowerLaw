@@ -7,4 +7,4 @@ plotly==6.7.0
 yfinance==1.7.0
 openpyxl==3.1.5
 pytest==9.1.1
-black==26.3.1
+black==26.5.1

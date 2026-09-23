@@ -2,7 +2,7 @@ altair==6.0.0
 anyio==4.15.1
 attrs==25.4.0
 beautifulsoup4==4.14.3
-black==26.3.1
+black==26.5.1
 certifi==2026.7.22
 cffi==2.0.0
 charset-normalizer==3.4.4
