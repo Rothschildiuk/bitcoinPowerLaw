@@ -48,6 +48,10 @@ def build_daily_powerlaw_prices(
     return pd.DataFrame({"CloseDisplay": prices}, index=dates)
 
 
+def average_month_growth(current_price, previous_price, elapsed_days):
+    return previous_price * ((current_price / previous_price) ** (30.44 / elapsed_days) - 1.0)
+
+
 class TestPortfolioHelpers(unittest.TestCase):
     def test_interpolate_sigma_level_from_log_offset_returns_exact_fractional_sigma(self):
         sigma_level = interpolate_sigma_level_from_log_offset(
@@ -256,6 +260,31 @@ class TestPortfolioHelpers(unittest.TestCase):
             )
         )
 
+    def test_build_portfolio_projection_month_change_ignores_calendar_month_length(self):
+        settings = PortfolioSettings(
+            btc_amount=1.0,
+            monthly_buy_amount=0.0,
+            forecast_unit="Month",
+            forecast_horizon=6,
+        )
+
+        # With B = 1 the price grows by exactly 1 per day, so a raw diff would follow
+        # the 28-31 day month lengths while the normalised change stays flat.
+        result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-01-15"]),
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            intercept_a=0.0,
+            slope_b=1.0,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-01-15"),
+        )
+
+        elapsed_days = result.portfolio_df["Date"].diff().dt.days.to_numpy(dtype=float)[1:]
+        monthly_change = result.portfolio_df["MoM_USD"].to_numpy(dtype=float)[1:]
+        self.assertIn(28.0, elapsed_days)
+        self.assertIn(31.0, elapsed_days)
+        self.assertTrue(np.allclose(monthly_change, 30.44, rtol=1e-3))
+
     def test_build_portfolio_projection_applies_sigma_scenario_multiplier(self):
         settings = PortfolioSettings(
             btc_amount=1.5,
@@ -365,7 +394,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-03-15"),
         )
 
-        expected_cash_flow = -(((90.0 - 59.0) * 1.0) * 0.5)
+        expected_cash_flow = -(average_month_growth(90.0, 59.0, 31.0) * 1.0 * 0.5)
         expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
 
         dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
@@ -419,7 +448,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-03-15"),
         )
 
-        expected_cash_flow = -(90.0 - 59.0)
+        expected_cash_flow = -average_month_growth(90.0, 59.0, 31.0)
         expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
 
         dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
@@ -430,31 +459,37 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertTrue(np.allclose(invested_capital[:-1], 0.0))
         self.assertTrue(np.isclose(invested_capital[-1], expected_cash_flow))
 
-    def test_build_portfolio_projection_keeps_capital_flat_when_selling_full_monthly_growth(self):
+    def test_build_portfolio_projection_sells_even_amounts_across_month_lengths(self):
         settings = PortfolioSettings(
             btc_amount=1.0,
             monthly_buy_amount=0.0,
             monthly_mom_change_pct=100.0,
             forecast_unit="Month",
-            forecast_horizon=4,
+            forecast_horizon=6,
         )
 
+        # With B = 1 the price grows by exactly 1 per day, so calendar withdrawals would
+        # follow the 28-31 day month lengths.
         result = build_portfolio_projection(
-            df_index=pd.to_datetime(["2026-03-15"]),
-            current_gen_date=pd.Timestamp("2026-01-01"),
+            df_index=pd.to_datetime(["2026-01-15"]),
+            current_gen_date=pd.Timestamp("2009-01-03"),
             intercept_a=0.0,
             slope_b=1.0,
             settings=settings,
-            anchor_day=pd.Timestamp("2026-03-15"),
+            anchor_day=pd.Timestamp("2026-01-15"),
         )
 
+        withdrawals = -np.diff(result.portfolio_df["DcaInvestedCapitalUSD"].to_numpy(dtype=float))
+        btc_before_sale = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)[:-1]
+        selling = withdrawals > 0.0
+        self.assertGreaterEqual(np.count_nonzero(selling), 5)
         self.assertTrue(
-            np.allclose(
-                result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)[-3:],
-                np.array([59.0, 59.0, 59.0]),
-                atol=1e-9,
-            )
+            np.allclose(withdrawals[selling] / btc_before_sale[selling], 30.44, rtol=1e-3)
         )
+
+        # Selling the whole growth still leaves the remaining BTC value close to flat.
+        dca_value = result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)[1:][selling]
+        self.assertTrue(np.allclose(dca_value, dca_value[0], rtol=1e-3))
 
     def test_build_portfolio_view_model_excludes_baseline_and_adds_dca_columns(self):
         projection_result = PortfolioProjectionResult(

@@ -12,6 +12,10 @@ from core.constants import (
     POWERLAW_EXPONENT_MIN,
 )
 
+# Average Gregorian month; monthly figures are reported over this span so that 28-31 day
+# calendar months do not make them zigzag.
+AVERAGE_MONTH_DAYS = 30.44
+
 
 @dataclass(frozen=True)
 class PortfolioSettings:
@@ -522,10 +526,12 @@ def calculate_monthly_buy_portfolio_values(
     )
     price_multiplier = np.power(10.0, float(log_price_offset))
     purchase_prices = purchase_prices * price_multiplier
+    previous_purchase_dates = purchase_dates - pd.offsets.MonthBegin(1)
     previous_purchase_days = np.maximum(
-        (purchase_dates - pd.offsets.MonthBegin(1) - current_gen_date).days.astype(float),
+        (previous_purchase_dates - current_gen_date).days.astype(float),
         1.0,
     )
+    purchase_elapsed_days = (purchase_dates - previous_purchase_dates).days.astype(float)
     previous_purchase_prices, _, _ = evaluate_powerlaw_values(
         np.log10(previous_purchase_days),
         intercept_a,
@@ -539,6 +545,14 @@ def calculate_monthly_buy_portfolio_values(
     valid_purchase_dates = purchase_dates[valid_purchase_mask]
     valid_purchase_prices = purchase_prices[valid_purchase_mask]
     valid_previous_purchase_prices = previous_purchase_prices[valid_purchase_mask]
+    # Growth per average month, so the withdrawal does not shrink in February and swell
+    # in 31-day months. Over a year it still sums to about the calendar growth.
+    valid_average_month_growth_pct = normalize_periodic_growth_rate(
+        valid_purchase_prices,
+        valid_previous_purchase_prices,
+        purchase_elapsed_days[valid_purchase_mask],
+        AVERAGE_MONTH_DAYS,
+    )
     purchased_btc = np.zeros(valid_purchase_dates.shape, dtype=float)
     realized_cash_flow = np.zeros(valid_purchase_dates.shape, dtype=float)
     running_btc = float(initial_btc_amount)
@@ -550,9 +564,10 @@ def calculate_monthly_buy_portfolio_values(
             else 0.0
         )
         previous_purchase_price = float(valid_previous_purchase_prices[index])
-        if np.isfinite(previous_purchase_price) and previous_purchase_price > 0.0:
-            current_position_mom_change = (float(purchase_price) - previous_purchase_price) * float(
-                running_btc
+        average_month_growth_pct = float(valid_average_month_growth_pct[index])
+        if np.isfinite(average_month_growth_pct):
+            current_position_mom_change = (
+                previous_purchase_price * average_month_growth_pct / 100.0 * float(running_btc)
             )
             mom_change_cash_flow = -(
                 max(current_position_mom_change, 0.0) * monthly_mom_change_ratio
@@ -598,7 +613,6 @@ def build_portfolio_projection(
     settings,
     anchor_day=None,
 ):
-    average_month_days = 30.44
     anchor_day = resolve_projection_anchor_day(df_index, today=anchor_day)
     history_periods = min(
         max(int(settings.history_periods), PORTFOLIO_HISTORY_PERIODS_MIN),
@@ -682,7 +696,15 @@ def build_portfolio_projection(
             current_values,
             previous_values,
             elapsed_days,
-            average_month_days,
+            AVERAGE_MONTH_DAYS,
+        )
+        # Calendar months run 28-31 days, so a raw diff zigzags month to month. Report the
+        # money change over the same average month the percentage is normalised to.
+        normalized_pct = portfolio_df[change_pct_col].to_numpy(dtype=float)
+        portfolio_df[change_usd_col] = np.where(
+            np.isfinite(normalized_pct),
+            previous_values * normalized_pct / 100.0,
+            portfolio_df[change_usd_col].to_numpy(dtype=float),
         )
     else:
         portfolio_df[change_pct_col] = portfolio_df["PortfolioUSD"].pct_change() * 100
