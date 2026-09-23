@@ -36,6 +36,7 @@ Read this file only when changing loaders, cache behavior, snapshot refreshes, o
 - Refresh model defaults: `make update-defaults`.
 - Refresh both in the correct order: `make update-all-data`.
 - GitHub Actions runs `.github/workflows/refresh-data.yml` at `00:00`, `06:00`, `12:00`, and `18:00` Europe/Vienna to refresh snapshots and recompute checked-in constants. It can also be started manually with `workflow_dispatch`. Snapshot refresh commits skip app version bumps and squash consecutive `Update daily data snapshots` commits before pushing.
-- The sidebar `Last update` value comes from committed `data/snapshots/refresh_metadata.json`, not local file modification times.
+- Each snapshot refreshes on its own. A source that errors, returns no rows, or would move a snapshot backwards (fewer rows, or an earlier last date) keeps the stored file and prints a `::warning::` annotation on the Actions run; the other snapshots still update.
+- The sidebar `Last update` value comes from committed `data/snapshots/refresh_metadata.json`, not local file modification times. It is rewritten only when some snapshot content changed, so it marks the last data change and a run without new data commits nothing.
 - Preview defaults: `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`.
 - Default refresh rewrites PowerLaw `A/B` defaults in `core/constants.py`.

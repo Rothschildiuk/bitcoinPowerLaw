@@ -186,6 +186,19 @@ class TestPriceService(unittest.TestCase):
             ["2024-01-01", "2024-01-02"],
         )
 
+    def test_write_snapshot_dataframe_reports_whether_contents_changed(self):
+        snapshot_df = pd.DataFrame(
+            {"Close": [100.0, 101.0]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-02"]),
+        )
+
+        self.assertTrue(price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df))
+        self.assertFalse(
+            price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df.copy())
+        )
+        snapshot_df.loc[pd.Timestamp("2024-01-03"), "Close"] = 102.0
+        self.assertTrue(price_service.write_snapshot_dataframe("prepared_price_data", snapshot_df))
+
     def test_get_snapshot_data_date_returns_refresh_metadata_timestamp(self):
         price_service.get_snapshot_data_date.clear()
         snapshot_df = pd.DataFrame(

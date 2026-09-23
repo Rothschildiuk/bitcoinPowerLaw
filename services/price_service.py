@@ -254,17 +254,25 @@ def _read_snapshot_dataframe(snapshot_key):
     return snapshot_df
 
 
+def read_snapshot_dataframe(snapshot_key):
+    return _read_snapshot_dataframe(snapshot_key)
+
+
 def write_snapshot_dataframe(snapshot_key, data_df):
+    """Write a snapshot CSV and report whether its contents actually changed."""
     if data_df is None or data_df.empty:
-        return
+        return False
 
     _ensure_snapshot_data_dir()
     frame_path = _get_snapshot_frame_path(snapshot_key)
-    data_to_store = data_df.copy()
-    if isinstance(data_to_store.index, pd.DatetimeIndex):
-        data_to_store.to_csv(frame_path, index_label="Date")
+    if isinstance(data_df.index, pd.DatetimeIndex):
+        csv_text = data_df.to_csv(index_label="Date")
     else:
-        data_to_store.to_csv(frame_path, index=False)
+        csv_text = data_df.to_csv(index=False)
+    if frame_path.exists() and frame_path.read_text(encoding="utf-8") == csv_text:
+        return False
+    frame_path.write_text(csv_text, encoding="utf-8")
+    return True
 
 
 def _coerce_utc_timestamp(value):
