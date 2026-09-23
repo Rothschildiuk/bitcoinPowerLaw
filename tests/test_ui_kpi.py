@@ -230,6 +230,24 @@ class TestUIKpi(unittest.TestCase):
         expected_growth = (10**1.6) * ((1015.0**0.5) - (985.0**0.5))
         self.assertTrue(np.isclose(growth, expected_growth))
 
+    def test_calculate_negative_two_sigma_monthly_growth_counts_days_from_model_origin(self):
+        # A series whose model starts 700 days after genesis is fitted on Days, not AbsDays.
+        df_display = pd.DataFrame(
+            {"AbsDays": [1000.0], "Days": [300.0]},
+            index=pd.to_datetime(["2024-01-16"]),
+        )
+
+        growth = calculate_negative_two_sigma_monthly_growth(
+            df_display,
+            a_active=2.0,
+            b_active=0.5,
+            p2_5=-0.4,
+            today="2024-01-16",
+        )
+
+        expected_growth = (10**1.6) * ((315.0**0.5) - (285.0**0.5))
+        self.assertTrue(np.isclose(growth, expected_growth))
+
     def test_resolve_display_conversion_rate_uses_fair_display_ratio(self):
         df_display = pd.DataFrame({"Fair": [100.0], "FairDisplay": [90.0]})
 

@@ -392,12 +392,15 @@ def calculate_negative_two_sigma_monthly_growth(
     p2_5,
     today=None,
 ):
-    if df_display.empty or "AbsDays" not in df_display:
+    # The model is fitted on days since its own origin, which only matches AbsDays for
+    # series whose origin is the Bitcoin genesis block.
+    day_column = "Days" if "Days" in df_display else "AbsDays"
+    if df_display.empty or day_column not in df_display:
         return 0.0
 
     date_index = pd.to_datetime(df_display.index, errors="coerce")
     valid_dates = date_index[~pd.isna(date_index)]
-    valid_abs_days = np.asarray(df_display["AbsDays"], dtype=float)
+    valid_abs_days = np.asarray(df_display[day_column], dtype=float)
     valid_abs_days = valid_abs_days[np.isfinite(valid_abs_days)]
     if len(valid_dates) == 0 or valid_abs_days.size == 0:
         return 0.0
