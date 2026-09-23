@@ -12,7 +12,7 @@ Each series config owns its session keys, defaults, display label/unit, currency
 - Fiat money: USDT supply.
 
 ## Special Behavior
-- Bitcoin is the only series with currency switching (`EUR`, `USD`, `UAH`, `RUB`, `OIL`, `IRON`, `ALUMINUM`, `COPPER`, `US_HOUSING`, `SILVER`, `SP500`, `GOLD`, `NDAQ`).
+- Bitcoin is the only series with currency switching (`EUR`, `USD`, `UAH`, `OIL`, `IRON`, `ALUMINUM`, `COPPER`, `US_HOUSING`, `SILVER`, `SP500`, `GOLD`, `NDAQ`).
 - Difficulty and Hashrate force log scale and start analysis at `2010-01-01`.
 - Bitcoin volatility is PowerLaw-only, log scale, and derived from 30-day daily BTC/USD log-return volatility.
 - Bitcoin market cap is PowerLaw-only, log scale, and derived from BTC/USD multiplied by circulating BTC supply.

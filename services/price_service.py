@@ -23,7 +23,6 @@ from core.constants import (
     CURRENCY_IRON,
     CURRENCY_NDAQ,
     CURRENCY_OIL,
-    CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_SP500,
     CURRENCY_UAH,
@@ -68,7 +67,6 @@ REFERENCE_SERIES_COLUMNS = (
     "EURUSD",
     "USDCHF",
     "USDUAH",
-    "USDRUB",
     "XAUUSD",
     "XAGUSD",
     "COPPERUSD",
@@ -814,9 +812,6 @@ def fetch_reference_series_frame(start_date):
     if usd_chf.empty:
         usd_chf = _safe_download_close_series("USDCHF=X", start_date)
     usd_uah = _safe_download_close_series("UAH=X", start_date)
-    usd_rub = _safe_download_close_series("RUB=X", start_date)
-    if usd_rub.empty:
-        usd_rub = _safe_download_close_series("USDRUB=X", start_date)
     # GC=F is usually more stable than XAUUSD=X on hosted environments.
     xau_usd = _safe_download_close_series("GC=F", start_date)
     if xau_usd.empty:
@@ -836,7 +831,6 @@ def fetch_reference_series_frame(start_date):
             eur_usd.rename("EURUSD"),
             usd_chf.rename("USDCHF"),
             usd_uah.rename("USDUAH"),
-            usd_rub.rename("USDRUB"),
             xau_usd.rename("XAUUSD"),
             xag_usd.rename("XAGUSD"),
             copper_usd.rename("COPPERUSD"),
@@ -856,6 +850,7 @@ def build_incremental_reference_series_snapshot(start_date="2010-01-01"):
     if snapshot_df is None or not _validate_reference_frame(snapshot_df):
         return fetch_reference_series_frame(start_date)
 
+    snapshot_df = snapshot_df[list(REFERENCE_SERIES_COLUMNS)]
     latest_snapshot_date = snapshot_df.index.max()
     if pd.isna(latest_snapshot_date):
         return fetch_reference_series_frame(start_date)
@@ -966,15 +961,9 @@ def load_reference_series(start_date, source="auto"):
         if "USDUAH" in reference_df.columns
         else pd.Series(dtype=float)
     )
-    usd_rub = (
-        pd.to_numeric(reference_df["USDRUB"], errors="coerce").dropna()
-        if "USDRUB" in reference_df.columns
-        else pd.Series(dtype=float)
-    )
     eur_usd.index = pd.to_datetime(eur_usd.index)
     usd_chf.index = pd.to_datetime(usd_chf.index)
     usd_uah.index = pd.to_datetime(usd_uah.index)
-    usd_rub.index = pd.to_datetime(usd_rub.index)
     xau_usd.index = pd.to_datetime(xau_usd.index)
     xag_usd.index = pd.to_datetime(xag_usd.index)
     copper_usd.index = pd.to_datetime(copper_usd.index)
@@ -988,7 +977,6 @@ def load_reference_series(start_date, source="auto"):
         eur_usd,
         usd_chf,
         usd_uah,
-        usd_rub,
         xau_usd,
         xag_usd,
         copper_usd,
@@ -1009,32 +997,30 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     start_date = str(raw_df.index.min().date())
     reference_series = load_reference_series(start_date, source=source)
     eur_usd = reference_series[0] if len(reference_series) > 0 else pd.Series(dtype=float)
-    if len(reference_series) >= 13:
+    if len(reference_series) >= 12:
         usd_chf = reference_series[1]
         usd_uah = reference_series[2]
-        usd_rub = reference_series[3]
-        xau_usd = reference_series[4]
-        xag_usd = reference_series[5]
-        copper_usd = reference_series[6]
-        iron_ore_usd = reference_series[7]
-        aluminum_usd = reference_series[8]
-        oil_usd = reference_series[9]
-        us_housing = reference_series[10]
-        sp500 = reference_series[11]
-        ndaq = reference_series[12]
+        xau_usd = reference_series[3]
+        xag_usd = reference_series[4]
+        copper_usd = reference_series[5]
+        iron_ore_usd = reference_series[6]
+        aluminum_usd = reference_series[7]
+        oil_usd = reference_series[8]
+        us_housing = reference_series[9]
+        sp500 = reference_series[10]
+        ndaq = reference_series[11]
     else:
         usd_chf = pd.Series(dtype=float)
         usd_uah = reference_series[1] if len(reference_series) > 1 else pd.Series(dtype=float)
-        usd_rub = reference_series[2] if len(reference_series) > 2 else pd.Series(dtype=float)
-        xau_usd = reference_series[3] if len(reference_series) > 3 else pd.Series(dtype=float)
-        xag_usd = reference_series[4] if len(reference_series) > 4 else pd.Series(dtype=float)
-        copper_usd = reference_series[5] if len(reference_series) > 5 else pd.Series(dtype=float)
-        iron_ore_usd = reference_series[6] if len(reference_series) > 6 else pd.Series(dtype=float)
-        aluminum_usd = reference_series[7] if len(reference_series) > 7 else pd.Series(dtype=float)
-        oil_usd = reference_series[8] if len(reference_series) > 8 else pd.Series(dtype=float)
-        us_housing = reference_series[9] if len(reference_series) > 9 else pd.Series(dtype=float)
-        sp500 = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
-        ndaq = reference_series[11] if len(reference_series) > 11 else pd.Series(dtype=float)
+        xau_usd = reference_series[2] if len(reference_series) > 2 else pd.Series(dtype=float)
+        xag_usd = reference_series[3] if len(reference_series) > 3 else pd.Series(dtype=float)
+        copper_usd = reference_series[4] if len(reference_series) > 4 else pd.Series(dtype=float)
+        iron_ore_usd = reference_series[5] if len(reference_series) > 5 else pd.Series(dtype=float)
+        aluminum_usd = reference_series[6] if len(reference_series) > 6 else pd.Series(dtype=float)
+        oil_usd = reference_series[7] if len(reference_series) > 7 else pd.Series(dtype=float)
+        us_housing = reference_series[8] if len(reference_series) > 8 else pd.Series(dtype=float)
+        sp500 = reference_series[9] if len(reference_series) > 9 else pd.Series(dtype=float)
+        ndaq = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
@@ -1060,10 +1046,6 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     if selected_currency == CURRENCY_UAH and not usd_uah.empty:
         usd_uah_aligned = align_reference_to_close(usd_uah)
         return close_usd * usd_uah_aligned
-
-    if selected_currency == CURRENCY_RUB and not usd_rub.empty:
-        usd_rub_aligned = align_reference_to_close(usd_rub)
-        return close_usd * usd_rub_aligned
 
     if selected_currency == CURRENCY_GOLD and not xau_usd.empty:
         xau_usd_aligned = align_reference_to_close(xau_usd)

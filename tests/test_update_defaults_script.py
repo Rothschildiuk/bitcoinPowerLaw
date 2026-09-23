@@ -9,7 +9,6 @@ from core.constants import (
     CURRENCY_IRON,
     CURRENCY_NDAQ,
     CURRENCY_OIL,
-    CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_SP500,
     CURRENCY_UAH,
@@ -52,12 +51,6 @@ class TestUpdateDefaultsScript(unittest.TestCase):
     def test_default_cases_include_chf_price_model(self):
         self.assertIn(
             (POWERLAW_SERIES_PRICE, CURRENCY_CHF, "DEFAULT_CHF_A", "DEFAULT_CHF_B"),
-            DEFAULT_CASES,
-        )
-
-    def test_default_cases_include_rub_price_model(self):
-        self.assertIn(
-            (POWERLAW_SERIES_PRICE, CURRENCY_RUB, "DEFAULT_RUB_A", "DEFAULT_RUB_B"),
             DEFAULT_CASES,
         )
 

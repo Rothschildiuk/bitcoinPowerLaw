@@ -9,7 +9,6 @@ from core.constants import (
     CURRENCY_IRON,
     CURRENCY_NDAQ,
     CURRENCY_OIL,
-    CURRENCY_RUB,
     CURRENCY_SILVER,
     CURRENCY_SP500,
     CURRENCY_UAH,
@@ -149,17 +148,6 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(uah_config.currency_decimals, 0)
         self.assertEqual(uah_config.target_series_unit, CURRENCY_UAH)
         self.assertTrue(uah_config.supports_currency_selector)
-
-        rub_config = get_active_model_config(
-            MODE_POWERLAW,
-            POWERLAW_SERIES_PRICE,
-            CURRENCY_RUB,
-        )
-
-        self.assertEqual(rub_config.currency_prefix, "₽")
-        self.assertEqual(rub_config.currency_decimals, 0)
-        self.assertEqual(rub_config.target_series_unit, CURRENCY_RUB)
-        self.assertTrue(rub_config.supports_currency_selector)
 
         silver_config = get_active_model_config(
             MODE_POWERLAW,
