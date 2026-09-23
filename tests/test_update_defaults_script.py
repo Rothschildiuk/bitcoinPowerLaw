@@ -148,11 +148,6 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             "load_prepared_lightning_capacity_data",
             "load_prepared_liquid_btc_data",
             "load_prepared_liquid_transactions_data",
-            "load_prepared_filecoin_btc_data",
-            "load_prepared_monero_btc_data",
-            "load_prepared_litecoin_btc_data",
-            "load_prepared_dogecoin_btc_data",
-            "load_prepared_us_m2_data",
             "load_prepared_usdt_supply_data",
         ]
         with ExitStack() as stack:

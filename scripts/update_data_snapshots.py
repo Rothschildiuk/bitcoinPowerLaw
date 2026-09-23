@@ -15,19 +15,14 @@ from services.price_service import (  # noqa: E402
     load_bitcoin_visuals_daily_data,
     load_prepared_difficulty_data,
     load_prepared_bitcoin_supply_data,
-    load_prepared_dogecoin_btc_data,
-    load_prepared_filecoin_btc_data,
     load_prepared_hashrate_data,
     load_prepared_lightning_capacity_data,
     load_prepared_lightning_nodes_data,
     load_prepared_liquid_btc_data,
     load_prepared_liquid_transactions_data,
-    load_prepared_litecoin_btc_data,
     load_prepared_miner_revenue_data,
-    load_prepared_monero_btc_data,
     load_prepared_price_data,
     load_prepared_usdt_supply_data,
-    load_prepared_us_m2_data,
     read_snapshot_dataframe,
     write_snapshot_refresh_metadata,
     write_snapshot_dataframe,
@@ -51,11 +46,6 @@ def _build_snapshot_jobs():
         "prepared_liquid_transactions_data": lambda: load_prepared_liquid_transactions_data(
             source="live"
         ),
-        "prepared_filecoin_btc_data": lambda: load_prepared_filecoin_btc_data(source="live"),
-        "prepared_monero_btc_data": lambda: load_prepared_monero_btc_data(source="live"),
-        "prepared_litecoin_btc_data": lambda: load_prepared_litecoin_btc_data(source="live"),
-        "prepared_dogecoin_btc_data": lambda: load_prepared_dogecoin_btc_data(source="live"),
-        "prepared_us_m2_data": lambda: load_prepared_us_m2_data(source="live"),
         "prepared_usdt_supply_data": lambda: load_prepared_usdt_supply_data(source="live"),
     }
 

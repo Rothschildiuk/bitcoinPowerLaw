@@ -152,12 +152,12 @@ class TestUpdateDataSnapshotsScript(unittest.TestCase):
 
         kept, mock_write, mock_metadata = self._run_update(
             {
-                "prepared_us_m2_data": failing_job,
+                "prepared_usdt_supply_data": failing_job,
                 "prepared_price_data": lambda: price_frame(["2024-01-01", "2024-01-02"]),
             }
         )
 
-        self.assertEqual(kept, ["prepared_us_m2_data"])
+        self.assertEqual(kept, ["prepared_usdt_supply_data"])
         mock_write.assert_called_once()
         self.assertEqual(mock_write.call_args.args[0], "prepared_price_data")
         mock_metadata.assert_called_once_with()

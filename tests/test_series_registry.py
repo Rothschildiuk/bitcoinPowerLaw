@@ -15,34 +15,24 @@ from core.constants import (
     CURRENCY_UAH,
     CURRENCY_US_HOUSING,
     DIFFICULTY_HASHRATE_ANALYSIS_START_ABS_DAYS,
-    DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
-    FILECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIGHTNING_MODEL_ORIGIN_ABS_DAYS,
-    LITECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_BTC_MODEL_ORIGIN_ABS_DAYS,
     LIQUID_TRANSACTIONS_MODEL_ORIGIN_ABS_DAYS,
     MODE_PORTFOLIO,
     MODE_POWERLAW,
-    POWERLAW_SERIES_DOGECOIN_BTC,
     POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION,
     POWERLAW_SERIES_BITCOIN_MARKET_CAP,
     POWERLAW_SERIES_BITCOIN_VOLATILITY,
     POWERLAW_SERIES_DIFFICULTY,
-    POWERLAW_SERIES_FILECOIN_BTC,
     POWERLAW_SERIES_HASHRATE,
-    POWERLAW_SERIES_LITECOIN_BTC,
     POWERLAW_SERIES_LIGHTNING_CAPACITY,
     POWERLAW_SERIES_LIGHTNING_NODES,
     POWERLAW_SERIES_LIQUID_BTC,
     POWERLAW_SERIES_LIQUID_TRANSACTIONS,
-    POWERLAW_SERIES_MONERO_BTC,
     POWERLAW_SERIES_PRICE,
     POWERLAW_SERIES_REVENUE,
     POWERLAW_SERIES_USDT_SUPPLY,
-    POWERLAW_SERIES_US_M2,
-    MONERO_BTC_MODEL_ORIGIN_ABS_DAYS,
     USDT_SUPPLY_MODEL_ORIGIN_ABS_DAYS,
-    US_M2_MODEL_ORIGIN_ABS_DAYS,
 )
 from core.series_registry import (
     get_active_model_config,
@@ -90,23 +80,6 @@ class TestSeriesRegistry(unittest.TestCase):
             "Liquid Network",
         )
         self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_FILECOIN_BTC),
-            "Shitcoins",
-        )
-        self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_MONERO_BTC),
-            "Shitcoins",
-        )
-        self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_LITECOIN_BTC),
-            "Shitcoins",
-        )
-        self.assertEqual(
-            get_powerlaw_series_group_for_series(POWERLAW_SERIES_DOGECOIN_BTC),
-            "Shitcoins",
-        )
-        self.assertEqual(get_powerlaw_series_group_for_series(POWERLAW_SERIES_US_M2), "Fiat Money")
-        self.assertEqual(
             get_powerlaw_series_group_for_series(POWERLAW_SERIES_USDT_SUPPLY),
             "Fiat Money",
         )
@@ -114,8 +87,8 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn(POWERLAW_SERIES_BITCOIN_MARKET_CAP, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_NETWORK_SIMULATION, group_map["Bitcoin Network"])
         self.assertIn(POWERLAW_SERIES_BITCOIN_VOLATILITY, group_map["Bitcoin Network"])
-        self.assertIn(POWERLAW_SERIES_US_M2, group_map["Fiat Money"])
-        self.assertIn(POWERLAW_SERIES_USDT_SUPPLY, group_map["Fiat Money"])
+        self.assertEqual(group_map["Fiat Money"], [POWERLAW_SERIES_USDT_SUPPLY])
+        self.assertNotIn("Shitcoins", group_map)
 
     def test_bitcoin_volatility_config_uses_percent_units(self):
         volatility_config = get_active_model_config(
@@ -142,35 +115,6 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertFalse(market_cap_config.supports_currency_selector)
         self.assertTrue(market_cap_config.lock_price_scale_to_log)
         self.assert_default_params_are_within_powerlaw_bounds(market_cap_config)
-
-    def test_filecoin_btc_config_uses_btc_units(self):
-        filecoin_config = get_active_model_config(
-            MODE_POWERLAW,
-            POWERLAW_SERIES_FILECOIN_BTC,
-            CURRENCY_DOLLAR,
-        )
-
-        self.assertEqual(filecoin_config.currency_unit, "BTC")
-        self.assertFalse(filecoin_config.supports_currency_selector)
-
-    def test_shitcoins_use_own_model_origins(self):
-        expected_origin_by_series = {
-            POWERLAW_SERIES_FILECOIN_BTC: FILECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
-            POWERLAW_SERIES_MONERO_BTC: MONERO_BTC_MODEL_ORIGIN_ABS_DAYS,
-            POWERLAW_SERIES_LITECOIN_BTC: LITECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
-            POWERLAW_SERIES_DOGECOIN_BTC: DOGECOIN_BTC_MODEL_ORIGIN_ABS_DAYS,
-        }
-
-        for series_name, expected_origin in expected_origin_by_series.items():
-            with self.subTest(series_name=series_name):
-                series_config = get_active_model_config(
-                    MODE_POWERLAW,
-                    series_name,
-                    CURRENCY_DOLLAR,
-                )
-
-                self.assertEqual(series_config.model_origin_abs_day, expected_origin)
-                self.assert_default_params_are_within_powerlaw_bounds(series_config)
 
     def test_price_series_config_tracks_selected_currency(self):
         euro_config = get_active_model_config(
@@ -422,21 +366,6 @@ class TestSeriesRegistry(unittest.TestCase):
             group_map["Lightning Network"].index(POWERLAW_SERIES_LIGHTNING_NODES),
         )
 
-    def test_us_m2_config_uses_fred_billions_units(self):
-        m2_config = get_active_model_config(
-            MODE_POWERLAW,
-            POWERLAW_SERIES_US_M2,
-            CURRENCY_DOLLAR,
-        )
-
-        self.assertEqual(m2_config.target_series_name, "U.S. M2 money supply")
-        self.assertEqual(m2_config.target_series_unit, "Billions USD")
-        self.assertEqual(m2_config.currency_suffix, "B")
-        self.assertFalse(m2_config.supports_currency_selector)
-        self.assertTrue(m2_config.lock_price_scale_to_log)
-        self.assertEqual(m2_config.model_origin_abs_day, US_M2_MODEL_ORIGIN_ABS_DAYS)
-        self.assert_default_params_are_within_powerlaw_bounds(m2_config)
-
     def test_usdt_supply_config_uses_billion_usdt_units(self):
         m2_config = get_active_model_config(
             MODE_POWERLAW,
@@ -464,8 +393,6 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertIn("B_uah", defaults)
         self.assertIn("A_liquid_transactions", defaults)
         self.assertIn("B_liquid_transactions", defaults)
-        self.assertIn("A_us_m2", defaults)
-        self.assertIn("B_us_m2", defaults)
         self.assertIn("A_usdt_supply", defaults)
         self.assertIn("B_usdt_supply", defaults)
         self.assertIn("A_bitcoin_network_simulation", defaults)
