@@ -2,7 +2,7 @@
 
 streamlit==1.64.0
 pandas==2.3.3
-numpy==2.5.3
+numpy==2.4.4
 plotly==6.7.0
 yfinance==1.7.0
 openpyxl==3.1.5
