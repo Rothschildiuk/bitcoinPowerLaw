@@ -4,13 +4,20 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from core.constants import KEY_SIGMA_BAND_HISTORY_RANGE_PCT
+from core.constants import GAUSSIAN_SIGMA_PERCENTILES, KEY_SIGMA_BAND_HISTORY_RANGE_PCT
 from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_log_offset
 
 SIGMA_STEP = 0.25
 SIGMA_HALF_STEP = SIGMA_STEP / 2.0
 SIGMA_LEVELS = tuple(float(value) for value in np.arange(-2.25, 2.25 + SIGMA_STEP, SIGMA_STEP))
 SIGMA_BAND_HISTORY_ALL = 0
+# The σ levels are read off the empirical residual distribution, not from its standard
+# deviation, so -2σ sits where 2.3% of days fell below the trend.
+SIGMA_PERCENTILE_NOTE = (
+    "σ levels are residual percentiles ("
+    + " / ".join(f"{value:.1f}%" for value in GAUSSIAN_SIGMA_PERCENTILES)
+    + "), not standard deviations."
+)
 SIGMA_BAND_HISTORY_PERCENT_MIN = 0
 SIGMA_BAND_HISTORY_PERCENT_MAX = 100
 SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT = (
@@ -19,14 +26,15 @@ SIGMA_BAND_HISTORY_PERCENT_RANGE_DEFAULT = (
 )
 
 
-def _kpi_card(col, label, value, delta=None, d_color=None):
+def _kpi_card(col, label, value, delta=None, d_color=None, tooltip=None):
     delta_html = (
         f"<div class='metric-delta' style='color:{d_color}'>{delta}</div>"
         if delta
         else "<div class='metric-delta' style='visibility:hidden;'>-</div>"
     )
+    title_attr = f" title='{escape(tooltip, quote=True)}'" if tooltip else ""
     col.markdown(
-        f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div>{delta_html}</div>",
+        f"<div class='metric-card'{title_attr}><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div>{delta_html}</div>",
         unsafe_allow_html=True,
     )
 
@@ -487,7 +495,7 @@ def _render_sigma_band_chart(
     st.markdown(
         (
             "<div class='sigma-chart-card'>"
-            "<div class='sigma-chart-header'>"
+            f"<div class='sigma-chart-header' title='{escape(SIGMA_PERCENTILE_NOTE, quote=True)}'>"
             "<span>Sigma band</span>"
             f"<span>{history_label}</span>"
             "</div>"
@@ -595,13 +603,15 @@ def render_model_kpis(
         ),
         "per 1 BTC",
         "#f0b90b",
+        tooltip=SIGMA_PERCENTILE_NOTE,
     )
     _kpi_card(
         k5,
         "CURRENT SIGMA",
         current_sigma_display,
-        "from PowerLaw",
+        "residual percentile",
         "#9ba3af",
+        tooltip=SIGMA_PERCENTILE_NOTE,
     )
 
     selected_history_range = resolve_sigma_band_history_percent_range(

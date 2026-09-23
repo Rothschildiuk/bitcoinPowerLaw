@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 
 from ui.kpi import (
+    SIGMA_PERCENTILE_NOTE,
     _calculate_return_to_model_pct,
+    _kpi_card,
     calculate_current_powerlaw_sigma_level,
     calculate_negative_two_sigma_monthly_growth,
     calculate_powerlaw_band_shares,
@@ -263,6 +265,24 @@ class TestUIKpi(unittest.TestCase):
             "<div class='sigma-bar-item' title='-0.125σ to +0.125σ'>",
             rendered["html"],
         )
+        self.assertIn(f"title='{SIGMA_PERCENTILE_NOTE}'", rendered["html"])
+
+    def test_sigma_percentile_note_names_the_gaussian_percentiles(self):
+        self.assertIn("2.3% / 15.9% / 84.1% / 97.7%", SIGMA_PERCENTILE_NOTE)
+        self.assertIn("not standard deviations", SIGMA_PERCENTILE_NOTE)
+
+    def test_kpi_card_renders_tooltip_as_escaped_title(self):
+        rendered = {}
+
+        class Column:
+            def markdown(self, html, unsafe_allow_html=False):
+                rendered["html"] = html
+
+        _kpi_card(Column(), "CURRENT SIGMA", "-0.74σ", tooltip="it's <σ>")
+        self.assertIn("<div class='metric-card' title='it&#x27;s &lt;σ&gt;'>", rendered["html"])
+
+        _kpi_card(Column(), "FAIR VALUE", "€1")
+        self.assertIn("<div class='metric-card'><div class='metric-label'>", rendered["html"])
 
 
 if __name__ == "__main__":
