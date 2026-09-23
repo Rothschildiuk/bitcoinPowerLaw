@@ -10,7 +10,7 @@
 - Before running the app, check `http://localhost:8501/` because the user usually runs it there.
 - Format/check/test: `make format`, `make check`, `make test`.
 - JS tests: `npm test` is a placeholder and exits 0 with "No JS tests configured".
-- CI: `.github/workflows/ci.yml` runs `make check`, `make compile`, and `make test` on pushes to `main` and on pull requests, against Python 3.11 and 3.12.
+- CI: `.github/workflows/ci.yml` runs `make check`, `make compile`, and `make test` on pushes to `main` and on pull requests, against Python 3.12 (local venv) and 3.13 (Streamlit Cloud). The data refresh workflow also runs on 3.13.
 - Refresh defaults: `make update-defaults`; preview with `venv/bin/python scripts/update_powerlaw_defaults.py --dry-run`.
 - Cleanup: `make clean`.
 

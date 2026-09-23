@@ -23,10 +23,10 @@ jobs:
       fail-fast: false
       matrix:
         # Every Python this project actually runs on:
-        #   3.11 - refresh-data.yml, which regenerates core/constants.py
         #   3.12 - the local development venv
-        #   3.13 - Streamlit Cloud, where the app is served
-        python-version: ["3.11", "3.12", "3.13"]
+        #   3.13 - Streamlit Cloud, where the app is served, and refresh-data.yml,
+        #          which regenerates core/constants.py on the same version
+        python-version: ["3.12", "3.13"]
 
     steps:
       - name: Check out repository
