@@ -227,7 +227,7 @@ class TestUIKpi(unittest.TestCase):
             today="2024-01-16",
         )
 
-        expected_growth = (10**1.6) * ((1015.0**0.5) - (985.0**0.5))
+        expected_growth = (10**1.6) * ((1015.22**0.5) - (984.78**0.5))
         self.assertTrue(np.isclose(growth, expected_growth))
 
     def test_calculate_negative_two_sigma_monthly_growth_counts_days_from_model_origin(self):
@@ -245,7 +245,7 @@ class TestUIKpi(unittest.TestCase):
             today="2024-01-16",
         )
 
-        expected_growth = (10**1.6) * ((315.0**0.5) - (285.0**0.5))
+        expected_growth = (10**1.6) * ((315.22**0.5) - (284.78**0.5))
         self.assertTrue(np.isclose(growth, expected_growth))
 
     def test_resolve_display_conversion_rate_uses_fair_display_ratio(self):

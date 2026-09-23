@@ -5,7 +5,11 @@ import pandas as pd
 import streamlit as st
 
 from core.constants import GAUSSIAN_SIGMA_PERCENTILES, KEY_SIGMA_BAND_HISTORY_RANGE_PCT
-from core.utils import evaluate_powerlaw_values, interpolate_sigma_level_from_log_offset
+from core.utils import (
+    AVERAGE_MONTH_DAYS,
+    evaluate_powerlaw_values,
+    interpolate_sigma_level_from_log_offset,
+)
 
 SIGMA_STEP = 0.25
 SIGMA_HALF_STEP = SIGMA_STEP / 2.0
@@ -415,10 +419,10 @@ def calculate_negative_two_sigma_monthly_growth(
 
     first_date = pd.Timestamp(valid_dates.min()).normalize()
     first_abs_day = float(valid_abs_days[0])
-    start_date = today_date - pd.Timedelta(days=15)
-    end_date = today_date + pd.Timedelta(days=15)
-    start_days = first_abs_day + float((start_date - first_date).days)
-    end_days = first_abs_day + float((end_date - first_date).days)
+    # One average month centred on today, the same span the pension estimate uses.
+    today_days = first_abs_day + float((today_date - first_date).days)
+    start_days = today_days - AVERAGE_MONTH_DAYS / 2.0
+    end_days = today_days + AVERAGE_MONTH_DAYS / 2.0
     if not np.isfinite(start_days) or not np.isfinite(end_days) or start_days <= 0.0:
         return 0.0
     end_days = max(end_days, start_days + 1.0)
