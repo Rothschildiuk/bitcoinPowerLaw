@@ -1026,22 +1026,24 @@ def build_portfolio_real_data_backtest(
         }
     )
 
+    table_columns = [
+        "Date",
+        f"Actual BTC price ({currency_unit})",
+        f"Hold-only value ({currency_unit})",
+        f"Strategy value ({currency_unit})",
+        monthly_withdrawal_label,
+        f"Net cash flow ({currency_unit})",
+        "BTC after strategy",
+    ]
+    # The tester runs without monthly buys, so the column would only hold zeros.
+    if (backtest_df["MonthlyBuy"] > 0.0).any():
+        table_columns.insert(4, f"Monthly buy ({currency_unit})")
+
     return PortfolioBacktestResult(
         strategy_name=strategy_name or f"Sell {sell_pct:.0f}% of monthly growth",
         sell_mom_change_pct=float(sell_pct),
         backtest_df=backtest_df,
-        table_df=table_df[
-            [
-                "Date",
-                f"Actual BTC price ({currency_unit})",
-                f"Hold-only value ({currency_unit})",
-                f"Strategy value ({currency_unit})",
-                f"Monthly buy ({currency_unit})",
-                monthly_withdrawal_label,
-                f"Net cash flow ({currency_unit})",
-                "BTC after strategy",
-            ]
-        ],
+        table_df=table_df[table_columns],
         start_value=start_value,
         hold_last_value=hold_last_value,
         strategy_last_value=strategy_last_value,
