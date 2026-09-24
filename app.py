@@ -658,6 +658,8 @@ def render_portfolio_view(
             ),
             width="stretch",
             hide_index=True,
+            # Wide enough for a full daily date, which the auto width cuts short.
+            column_config={"Date": st.column_config.TextColumn(width=100)},
         )
 
     elif portfolio_strategy_view == PORTFOLIO_VIEW_PENSION:
