@@ -508,7 +508,7 @@ def render_portfolio_view(
                 f"Net cash flow by horizon: {format_portfolio_money(portfolio_view.last_dca_invested_capital)}"
             )
             st.caption(
-                "Monthly buy/sell starts from the next calendar month. MoM sell compares the current month start with the previous month start."
+                "Monthly buy/sell runs on each month's last day, from the current month (January in the yearly view). MoM sell takes that month's growth."
             )
         else:
             g2.metric(

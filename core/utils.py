@@ -489,6 +489,7 @@ def calculate_monthly_buy_portfolio_values(
     purchase_anchor_day,
     log_price_offset=0.0,
     monthly_mom_change_pct=0.0,
+    cash_flow_start=None,
 ):
     projection_dates = pd.to_datetime(date_index)
     fair_price_arr = np.asarray(fair_prices, dtype=float)
@@ -510,15 +511,14 @@ def calculate_monthly_buy_portfolio_values(
     ):
         return total_btc, fair_price_arr * total_btc, invested_capital
 
-    anchor_date = pd.Timestamp(purchase_anchor_day).normalize()
-    current_month_start = anchor_date.to_period("M").to_timestamp()
-    cash_flow_start = current_month_start
-    if cash_flow_start < anchor_date:
-        cash_flow_start += pd.offsets.MonthBegin(1)
-    purchase_start = cash_flow_start
+    # Each month trades on its last day, on the growth of that month, starting with the
+    # anchor's month unless the caller starts earlier.
+    if cash_flow_start is None:
+        cash_flow_start = purchase_anchor_day
+    purchase_start = pd.Timestamp(cash_flow_start).normalize() + pd.offsets.MonthEnd(0)
 
     purchase_end = pd.Timestamp(projection_dates.max()).normalize()
-    purchase_dates = pd.date_range(start=purchase_start, end=purchase_end, freq="MS")
+    purchase_dates = pd.date_range(start=purchase_start, end=purchase_end, freq="ME")
     if purchase_dates.empty:
         return total_btc, fair_price_arr * total_btc, invested_capital
 
@@ -530,7 +530,7 @@ def calculate_monthly_buy_portfolio_values(
     )
     price_multiplier = np.power(10.0, float(log_price_offset))
     purchase_prices = purchase_prices * price_multiplier
-    previous_purchase_dates = purchase_dates - pd.offsets.MonthBegin(1)
+    previous_purchase_dates = purchase_dates - pd.offsets.MonthEnd(1)
     previous_purchase_days = np.maximum(
         (previous_purchase_dates - current_gen_date).days.astype(float),
         1.0,
@@ -562,11 +562,7 @@ def calculate_monthly_buy_portfolio_values(
     running_btc = float(initial_btc_amount)
     for index, purchase_price in enumerate(valid_purchase_prices):
         mom_change_cash_flow = 0.0
-        scheduled_cash_flow = (
-            monthly_cash_flow
-            if pd.Timestamp(valid_purchase_dates[index]) >= cash_flow_start
-            else 0.0
-        )
+        scheduled_cash_flow = monthly_cash_flow
         previous_purchase_price = float(valid_previous_purchase_prices[index])
         average_month_growth_pct = float(valid_average_month_growth_pct[index])
         if np.isfinite(average_month_growth_pct):
@@ -625,14 +621,18 @@ def build_portfolio_projection(
     # Row 0 is the pre-display row the view model drops; the anchor follows the history.
     projection_lookback = history_periods + 1
 
+    cash_flow_start = None
     if settings.forecast_unit == "Year":
+        # A yearly row covers its whole calendar year: valued on 31 December, with the
+        # cash flows from January through December of that year.
         latest_year = int(anchor_day.year)
-        start_period = pd.Timestamp(f"{latest_year - projection_lookback}-01-01")
+        start_period = pd.Timestamp(f"{latest_year - projection_lookback}-12-31")
         date_index = pd.date_range(
             start=start_period,
             periods=settings.forecast_horizon + projection_lookback,
-            freq="YS",
+            freq="YE",
         )
+        cash_flow_start = pd.Timestamp(f"{latest_year}-01-01")
         change_usd_col, change_pct_col = "YoY_USD", "YoY_pct"
         table_title = "Yearly growth table"
     elif settings.forecast_unit == "Day":
@@ -646,13 +646,16 @@ def build_portfolio_projection(
         change_usd_col, change_pct_col = "DoD_USD", "DoD_pct"
         table_title = "Daily growth table"
     else:
+        # Like a yearly row, a monthly row covers its whole month: valued on the last
+        # day, with the cash flow from that month's start.
         latest_month_start = anchor_day.to_period("M").to_timestamp()
         start_period = latest_month_start - pd.offsets.MonthBegin(projection_lookback)
         date_index = pd.date_range(
-            start=start_period,
+            start=start_period + pd.offsets.MonthEnd(0),
             periods=settings.forecast_horizon + projection_lookback,
-            freq="MS",
+            freq="ME",
         )
+        cash_flow_start = latest_month_start
         change_usd_col, change_pct_col = "MoM_USD", "MoM_pct"
         table_title = "Monthly growth table"
 
@@ -678,6 +681,7 @@ def build_portfolio_projection(
             purchase_anchor_day=anchor_day,
             log_price_offset=log_price_offset,
             monthly_mom_change_pct=settings.monthly_mom_change_pct,
+            cash_flow_start=cash_flow_start,
         )
     )
 

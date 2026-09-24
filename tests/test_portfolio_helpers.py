@@ -185,12 +185,12 @@ class TestPortfolioHelpers(unittest.TestCase):
         for forecast_unit, history_periods, expected_first_date in (
             # Default: nothing ahead of the anchor but the row the view model drops.
             ("Day", 0, pd.Timestamp("2026-03-14")),
-            ("Month", 0, pd.Timestamp("2026-02-01")),
-            ("Year", 0, pd.Timestamp("2025-01-01")),
+            ("Month", 0, pd.Timestamp("2026-02-28")),
+            ("Year", 0, pd.Timestamp("2025-12-31")),
             # A non-zero setting pushes the frame that many periods further back.
             ("Day", 5, pd.Timestamp("2026-03-09")),
-            ("Month", 6, pd.Timestamp("2025-08-01")),
-            ("Year", 3, pd.Timestamp("2022-01-01")),
+            ("Month", 6, pd.Timestamp("2025-08-31")),
+            ("Year", 3, pd.Timestamp("2022-12-31")),
         ):
             with self.subTest(forecast_unit=forecast_unit, history_periods=history_periods):
                 settings = PortfolioSettings(
@@ -213,6 +213,34 @@ class TestPortfolioHelpers(unittest.TestCase):
                 self.assertEqual(result.history_periods, history_periods)
                 self.assertEqual(result.portfolio_df["Date"].iloc[0], expected_first_date)
                 self.assertEqual(len(result.portfolio_df), 3 + history_periods + 1)
+
+    def test_build_portfolio_projection_year_row_covers_the_whole_calendar_year(self):
+        def project(forecast_unit, forecast_horizon):
+            settings = PortfolioSettings(
+                btc_amount=2.0,
+                monthly_buy_amount=0.0,
+                monthly_mom_change_pct=100.0,
+                forecast_unit=forecast_unit,
+                forecast_horizon=forecast_horizon,
+            )
+            return build_portfolio_projection(
+                df_index=pd.to_datetime(["2026-09-24"]),
+                current_gen_date=pd.Timestamp("2009-01-03"),
+                intercept_a=-17.0,
+                slope_b=5.8,
+                settings=settings,
+                anchor_day=pd.Timestamp("2026-09-24"),
+            ).portfolio_df.set_index("Date")
+
+        yearly = project("Year", 2)
+        view_row = yearly.loc[pd.Timestamp("2026-12-31")]
+        previous_row = yearly.loc[pd.Timestamp("2025-12-31")]
+
+        # Sells run from January of the current year, not from next month.
+        self.assertLess(view_row["DcaInvestedCapitalUSD"], 0.0)
+        self.assertEqual(previous_row["DcaInvestedCapitalUSD"], 0.0)
+        self.assertLess(view_row["DcaBTC"], 2.0)
+        self.assertEqual(previous_row["DcaBTC"], 2.0)
 
     def test_build_portfolio_projection_clamps_the_history_periods_setting(self):
         for requested, expected in ((-5, 0), (500, 100)):
@@ -429,11 +457,9 @@ class TestPortfolioHelpers(unittest.TestCase):
         dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
         dca_value = result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)
 
-        # Buying starts in the month after the anchor, so only the final row holds BTC.
-        self.assertTrue(np.allclose(dca_btc[:-1], 0.0))
-        self.assertTrue(np.isclose(dca_btc[-1], 0.5))
-        self.assertTrue(np.allclose(dca_value[:-1], 0.0))
-        self.assertTrue(np.isclose(dca_value[-1], 100.0))
+        # Buying starts at the end of the anchor's month and buys at the +1 sigma price.
+        self.assertTrue(np.allclose(dca_btc, np.array([0.0, 0.5, 1.0])))
+        self.assertTrue(np.allclose(dca_value, np.array([0.0, 100.0, 200.0])))
 
     def test_build_portfolio_projection_sells_percentage_of_positive_monthly_change(self):
         settings = PortfolioSettings(
@@ -453,19 +479,26 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-03-15"),
         )
 
-        expected_cash_flow = -(average_month_growth(90.0, 59.0, 31.0) * 1.0 * 0.5)
-        expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
+        # Rows sit on the month ends, 58, 89 and 119 days after the origin. Each month
+        # end sells half of that month's growth on the BTC still held.
+        march_cash_flow = -(average_month_growth(89.0, 58.0, 31.0) * 1.0 * 0.5)
+        march_btc = 1.0 + march_cash_flow / 89.0
+        april_cash_flow = -(average_month_growth(119.0, 89.0, 30.0) * march_btc * 0.5)
+        april_btc = march_btc + april_cash_flow / 119.0
 
         dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
         invested_capital = result.portfolio_df["DcaInvestedCapitalUSD"].to_numpy(dtype=float)
         dca_value = result.portfolio_df["DcaPortfolioUSD"].to_numpy(dtype=float)
 
-        self.assertTrue(np.allclose(dca_btc[:-1], 1.0))
-        self.assertTrue(np.isclose(dca_btc[-1], expected_april_btc))
-        self.assertTrue(np.allclose(invested_capital[:-1], 0.0))
-        self.assertTrue(np.isclose(invested_capital[-1], expected_cash_flow))
+        self.assertTrue(np.allclose(dca_btc, np.array([1.0, march_btc, april_btc])))
         self.assertTrue(
-            np.allclose(dca_value[-3:], np.array([31.0, 59.0, 90.0 + expected_cash_flow]))
+            np.allclose(
+                invested_capital,
+                np.array([0.0, march_cash_flow, march_cash_flow + april_cash_flow]),
+            )
+        )
+        self.assertTrue(
+            np.allclose(dca_value, np.array([58.0, 89.0 * march_btc, 119.0 * april_btc]))
         )
 
     def test_build_portfolio_projection_does_not_buy_on_negative_monthly_change(self):
@@ -507,16 +540,17 @@ class TestPortfolioHelpers(unittest.TestCase):
             anchor_day=pd.Timestamp("2026-03-15"),
         )
 
-        expected_cash_flow = -average_month_growth(90.0, 59.0, 31.0)
-        expected_april_btc = 1.0 + (expected_cash_flow / 90.0)
+        # Clamped to 100%: the end of March sells all of March's growth.
+        expected_cash_flow = -average_month_growth(89.0, 58.0, 31.0)
+        expected_march_btc = 1.0 + (expected_cash_flow / 89.0)
 
         dca_btc = result.portfolio_df["DcaBTC"].to_numpy(dtype=float)
         invested_capital = result.portfolio_df["DcaInvestedCapitalUSD"].to_numpy(dtype=float)
 
-        self.assertTrue(np.allclose(dca_btc[:-1], 1.0))
-        self.assertTrue(np.isclose(dca_btc[-1], expected_april_btc))
-        self.assertTrue(np.allclose(invested_capital[:-1], 0.0))
-        self.assertTrue(np.isclose(invested_capital[-1], expected_cash_flow))
+        self.assertEqual(dca_btc[0], 1.0)
+        self.assertTrue(np.isclose(dca_btc[1], expected_march_btc))
+        self.assertEqual(invested_capital[0], 0.0)
+        self.assertTrue(np.isclose(invested_capital[1], expected_cash_flow))
 
     def test_build_portfolio_projection_sells_even_amounts_across_month_lengths(self):
         settings = PortfolioSettings(
@@ -617,7 +651,7 @@ class TestPortfolioHelpers(unittest.TestCase):
         )
 
         portfolio_df = projection_result.portfolio_df
-        anchor_rows = portfolio_df.loc[portfolio_df["Date"] == pd.Timestamp("2026-03-01")]
+        anchor_rows = portfolio_df.loc[portfolio_df["Date"] == pd.Timestamp("2026-03-31")]
         self.assertEqual(len(anchor_rows), 1)
         anchor_value = float(anchor_rows["PortfolioUSD"].iloc[0])
         oldest_history_value = float(portfolio_df["PortfolioUSD"].iloc[0])
@@ -632,7 +666,7 @@ class TestPortfolioHelpers(unittest.TestCase):
         # The table highlights exactly the rows that precede the anchor period.
         display_dates = list(view_model.portfolio_display_df["Date"])
         self.assertEqual(
-            display_dates.index(pd.Timestamp("2026-03-01")),
+            display_dates.index(pd.Timestamp("2026-03-31")),
             projection_result.history_periods,
         )
 
