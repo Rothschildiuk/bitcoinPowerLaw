@@ -289,6 +289,36 @@ class TestPortfolioHelpers(unittest.TestCase):
             )
         )
 
+    def test_build_portfolio_view_model_month_change_follows_remaining_btc_when_selling(self):
+        settings = PortfolioSettings(
+            btc_amount=2.0,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=25.0,
+            forecast_unit="Month",
+            forecast_horizon=8,
+        )
+        projection_result = build_portfolio_projection(
+            df_index=pd.to_datetime(["2026-09-24"]),
+            current_gen_date=pd.Timestamp("2009-01-03"),
+            intercept_a=-17.0,
+            slope_b=5.8,
+            settings=settings,
+            anchor_day=pd.Timestamp("2026-09-24"),
+        )
+
+        view_model = build_portfolio_view_model(
+            projection_result,
+            monthly_buy_amount=0.0,
+            monthly_mom_change_pct=25.0,
+            currency_unit="USD",
+        )
+
+        table = view_model.table_df.iloc[-3:]
+        change = table["MoM Change (USD)"].to_numpy(dtype=float)
+        not_selling_change = view_model.portfolio_display_df["MoM_USD"].iloc[-3:]
+        self.assertTrue(np.all(change < not_selling_change.to_numpy(dtype=float)))
+        self.assertTrue(np.allclose(table["Monthly withdrawal (USD)"], change * 0.25))
+
     def test_build_portfolio_projection_month_change_ignores_calendar_month_length(self):
         settings = PortfolioSettings(
             btc_amount=1.0,

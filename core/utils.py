@@ -712,6 +712,29 @@ def build_portfolio_projection(
     else:
         portfolio_df[change_pct_col] = portfolio_df["PortfolioUSD"].pct_change() * 100
 
+    # Market growth of the BTC still held, so buys and sells shrink or grow the change
+    # instead of it tracking the untouched initial holding.
+    previous_dca_values = portfolio_df["DcaPortfolioUSD"].shift(1).to_numpy(dtype=float)
+    if settings.forecast_unit == "Month":
+        price_pct = normalize_periodic_growth_rate(
+            portfolio_df["FairPriceUSD"].to_numpy(dtype=float),
+            portfolio_df["FairPriceUSD"].shift(1).to_numpy(dtype=float),
+            portfolio_df["Date"].diff().dt.days.to_numpy(dtype=float),
+            AVERAGE_MONTH_DAYS,
+        )
+        dca_change = previous_dca_values * price_pct / 100.0
+    else:
+        dca_change = (
+            portfolio_df["DcaPortfolioUSD"].diff() - portfolio_df["DcaInvestedCapitalUSD"].diff()
+        ).to_numpy(dtype=float)
+    portfolio_df["DcaChangeUSD"] = dca_change
+    with np.errstate(divide="ignore", invalid="ignore"):
+        portfolio_df["DcaChangePct"] = np.where(
+            previous_dca_values > 0.0,
+            dca_change / previous_dca_values * 100.0,
+            np.nan,
+        )
+
     return PortfolioProjectionResult(
         portfolio_df=portfolio_df,
         table_title=table_title,
@@ -758,6 +781,10 @@ def build_portfolio_view_model(
     )
     portfolio_display_df["ChangeDisplay"] = portfolio_display_df[projection_result.change_usd_col]
     dca_enabled = monthly_buy_amount != 0.0 or monthly_mom_change_pct != 0.0
+    change_pct_source_col = projection_result.change_pct_col
+    if dca_enabled and "DcaChangeUSD" in portfolio_display_df.columns:
+        portfolio_display_df["ChangeDisplay"] = portfolio_display_df["DcaChangeUSD"]
+        change_pct_source_col = "DcaChangePct"
 
     # Growth is reported from the anchor period (today), not from the historical
     # context rows that build_portfolio_projection prepends ahead of it. Row 0 is the
@@ -798,7 +825,7 @@ def build_portfolio_view_model(
             "DcaInvestedCapitalDisplay": f"Net cash flow ({currency_unit})",
             "DcaBTCDisplay": "BTC after monthly cash flow",
             "ChangeDisplay": period_change_usd_label,
-            projection_result.change_pct_col: period_change_pct_label,
+            change_pct_source_col: period_change_pct_label,
         }
     )
     display_columns = [
