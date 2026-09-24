@@ -142,6 +142,11 @@ def _render_sigma_band_history_sidebar_control(_date_index):
     )
 
 
+def _reset_other_cash_flow_input(changed_key, other_key, other_zero):
+    if float(st.session_state.get(changed_key, 0) or 0) != 0.0:
+        st.session_state[other_key] = other_zero
+
+
 def _sync_portfolio_forecast_unit_default(selected_portfolio_view):
     last_portfolio_view = st.session_state.get(KEY_LAST_PORTFOLIO_VIEW)
     entering_accumulation = (
@@ -198,20 +203,28 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
     st.session_state[KEY_PORTFOLIO_BTC_AMOUNT] = float(btc_amount)
 
     if selected_portfolio_view == PORTFOLIO_VIEW_ACCUMULATION:
+        sell_mom_pct = float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0))
+        sell_mom_pct = min(max(sell_mom_pct, 0.0), 100.0)
+        # A fixed cash flow and a growth-based sell are exclusive; the amount wins a tie.
+        if float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0)) != 0.0:
+            sell_mom_pct = 0.0
+        st.session_state[KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT] = sell_mom_pct
+
         st.markdown("**Monthly buy/sell amount**")
         st.number_input(
             "Monthly buy/sell amount",
             step=10,
             format="%d",
             key=KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT,
+            on_change=_reset_other_cash_flow_input,
+            args=(KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0),
             label_visibility="collapsed",
         )
-        st.caption("Adds a second capital-growth line using fixed monthly cash flow.")
+        st.caption(
+            "Adds a second capital-growth line using fixed monthly cash flow. Resets Sell %."
+        )
 
         st.markdown("**Sell % of MoM Change**")
-        sell_mom_pct = float(st.session_state.get(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, 0.0))
-        sell_mom_pct = min(max(sell_mom_pct, 0.0), 100.0)
-        st.session_state[KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT] = sell_mom_pct
         st.number_input(
             "Sell % of MoM Change",
             min_value=0.0,
@@ -219,9 +232,14 @@ def _render_portfolio_sidebar_controls(forecast_horizon_min, forecast_horizon_ma
             step=1.0,
             format="%.1f",
             key=KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT,
+            on_change=_reset_other_cash_flow_input,
+            args=(KEY_PORTFOLIO_MONTHLY_MOM_CHANGE_PCT, KEY_PORTFOLIO_MONTHLY_BUY_AMOUNT, 0),
             label_visibility="collapsed",
         )
-        st.caption("Adds a second capital-growth line using monthly model growth sells.")
+        st.caption(
+            "Adds a second capital-growth line using monthly model growth sells. "
+            "Resets the monthly amount."
+        )
 
     if selected_portfolio_view in [PORTFOLIO_VIEW_ACCUMULATION, PORTFOLIO_VIEW_PENSION]:
         st.markdown(

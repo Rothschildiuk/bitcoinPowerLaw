@@ -46,6 +46,7 @@ class PortfolioViewModel:
     table_df: pd.DataFrame
     table_title: str
     dca_enabled: bool
+    dca_is_buying: bool
     baseline_value: float
     last_value: float
     last_dca_value: float
@@ -750,11 +751,11 @@ def get_growth_change_labels(forecast_unit, currency_unit):
     return f"{prefix} Change ({currency_unit})", f"{prefix} Change (%)"
 
 
-def get_period_cash_flow_label(forecast_unit, currency_unit):
+def get_period_cash_flow_label(forecast_unit, currency_unit, is_buying=False):
     prefix = (
         "Yearly" if forecast_unit == "Year" else ("Daily" if forecast_unit == "Day" else "Monthly")
     )
-    return f"{prefix} withdrawal ({currency_unit})"
+    return f"{prefix} {'buy' if is_buying else 'withdrawal'} ({currency_unit})"
 
 
 def build_portfolio_view_model(
@@ -775,8 +776,11 @@ def build_portfolio_view_model(
     portfolio_display_df["DcaInvestedCapitalDisplay"] = portfolio_display_df[
         "DcaInvestedCapitalUSD"
     ]
+    # Buying and selling are exclusive, so the period flow column shows one direction.
+    dca_is_buying = monthly_buy_amount > 0.0 and monthly_mom_change_pct == 0.0
+    period_flow_sign = 1.0 if dca_is_buying else -1.0
     portfolio_display_df["DcaPeriodCashFlowDisplay"] = np.maximum(
-        -portfolio_display_df["DcaPeriodCashFlowUSD"].to_numpy(dtype=float),
+        period_flow_sign * portfolio_display_df["DcaPeriodCashFlowUSD"].to_numpy(dtype=float),
         0.0,
     )
     portfolio_display_df["ChangeDisplay"] = portfolio_display_df[projection_result.change_usd_col]
@@ -808,6 +812,7 @@ def build_portfolio_view_model(
     period_cash_flow_label = get_period_cash_flow_label(
         projection_result.forecast_unit,
         currency_unit,
+        is_buying=dca_is_buying,
     )
     table_df = portfolio_display_df.copy()
     if projection_result.forecast_unit == "Year":
@@ -849,6 +854,7 @@ def build_portfolio_view_model(
         table_df=table_df[display_columns],
         table_title=projection_result.table_title,
         dca_enabled=dca_enabled,
+        dca_is_buying=dca_is_buying,
         baseline_value=baseline_value,
         last_value=last_value,
         last_dca_value=last_dca_value,

@@ -544,25 +544,29 @@ def render_portfolio_view(
                 f"Portfolio scenario uses {settings.sigma_level:+g} sigma historical log-residual offset."
             )
         if portfolio_view.dca_enabled:
-            cumulative_withdrawals_display = portfolio_view.portfolio_display_df[
+            cumulative_flow_display = portfolio_view.portfolio_display_df[
                 "DcaPeriodCashFlowDisplay"
             ].cumsum()
-            portfolio_fig.add_trace(
-                go.Scatter(
-                    x=portfolio_view.portfolio_display_df["Date"],
-                    y=(
-                        portfolio_view.portfolio_display_df["DcaPortfolioDisplay"]
-                        + cumulative_withdrawals_display
-                    ),
-                    mode="lines+markers",
-                    name="Portfolio + cumulative withdrawals",
-                    line=dict(color="#8b5cf6", width=2, dash="dash"),
-                    hovertemplate=(
-                        "<b>%{x|%d.%m.%Y}</b><br>Portfolio + withdrawals: "
-                        f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
-                    ),
-                )
+            cumulative_flow_label = (
+                "Cumulative buys" if portfolio_view.dca_is_buying else "Cumulative withdrawals"
             )
+            if not portfolio_view.dca_is_buying:
+                portfolio_fig.add_trace(
+                    go.Scatter(
+                        x=portfolio_view.portfolio_display_df["Date"],
+                        y=(
+                            portfolio_view.portfolio_display_df["DcaPortfolioDisplay"]
+                            + cumulative_flow_display
+                        ),
+                        mode="lines+markers",
+                        name="Portfolio + cumulative withdrawals",
+                        line=dict(color="#8b5cf6", width=2, dash="dash"),
+                        hovertemplate=(
+                            "<b>%{x|%d.%m.%Y}</b><br>Portfolio + withdrawals: "
+                            f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
+                        ),
+                    )
+                )
             portfolio_fig.add_trace(
                 go.Scatter(
                     x=portfolio_view.portfolio_display_df["Date"],
@@ -579,12 +583,12 @@ def render_portfolio_view(
             portfolio_fig.add_trace(
                 go.Scatter(
                     x=portfolio_view.portfolio_display_df["Date"],
-                    y=cumulative_withdrawals_display,
+                    y=cumulative_flow_display,
                     mode="lines+markers",
-                    name="Cumulative withdrawals",
+                    name=cumulative_flow_label,
                     line=dict(color="#f97316", width=2, dash="dot"),
                     hovertemplate=(
-                        "<b>%{x|%d.%m.%Y}</b><br>Cumulative withdrawals: "
+                        f"<b>%{{x|%d.%m.%Y}}</b><br>{cumulative_flow_label}: "
                         f"{currency_prefix}%{{y:,.{display_currency_decimals}f}}{currency_suffix}<extra></extra>"
                     ),
                 )

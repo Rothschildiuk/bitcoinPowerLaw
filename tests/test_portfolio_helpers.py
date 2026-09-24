@@ -585,11 +585,12 @@ class TestPortfolioHelpers(unittest.TestCase):
         self.assertEqual(view_model.last_dca_invested_capital, 200.0)
         self.assertAlmostEqual(view_model.total_growth_pct, (240.0 / 220.0 - 1.0) * 100.0)
         self.assertIn("Remaining BTC value (USD)", view_model.table_df.columns)
-        self.assertIn("Monthly withdrawal (USD)", view_model.table_df.columns)
+        self.assertTrue(view_model.dca_is_buying)
+        self.assertNotIn("Monthly withdrawal (USD)", view_model.table_df.columns)
         self.assertIn("Net cash flow (USD)", view_model.table_df.columns)
         self.assertIn("BTC after monthly cash flow", view_model.table_df.columns)
         self.assertTrue(
-            np.allclose(view_model.table_df["Monthly withdrawal (USD)"], np.array([0.0, 0.0]))
+            np.allclose(view_model.table_df["Monthly buy (USD)"], np.array([100.0, 100.0]))
         )
 
     def test_build_portfolio_view_model_measures_growth_from_the_anchor_period(self):
