@@ -13,6 +13,7 @@ from core.power_law import (
 from core.utils import (
     TrendComputationResult,
     calculate_expanding_powerlaw_parameters,
+    calculate_expanding_powerlaw_r2,
     calculate_r2_score,
     calculate_monthly_buy_portfolio_values,
     evaluate_powerlaw_values,
@@ -185,6 +186,18 @@ class TestCoreUtilsAndPowerLaw(unittest.TestCase):
         self.assertTrue(np.isclose(slopes[2], 2.0, atol=1e-12))
         self.assertTrue(np.isclose(intercepts[2], 1.0, atol=1e-12))
         self.assertTrue(np.isclose(slopes[3], expected_last_slope, atol=1e-12))
+
+    def test_calculate_expanding_powerlaw_r2_matches_each_prefix_fit(self):
+        log_days = np.log10(np.arange(1.0, 301.0))
+        log_prices = 2.0 + 5.0 * log_days + 0.3 * np.sin(np.arange(300.0))
+
+        r2_values = calculate_expanding_powerlaw_r2(log_days, log_prices, min_points=100)
+
+        self.assertTrue(np.isnan(r2_values[:99]).all())
+        for count in (100, 300):
+            slope, intercept = np.polyfit(log_days[:count], log_prices[:count], 1)
+            expected = calculate_r2_score(log_prices[:count], intercept + slope * log_days[:count])
+            self.assertTrue(np.isclose(r2_values[count - 1], expected, atol=1e-9))
 
     def test_powerlaw_parameters_are_unstable_for_negative_r2_or_clipping(self):
         self.assertTrue(powerlaw_parameters_are_unstable(-0.01))

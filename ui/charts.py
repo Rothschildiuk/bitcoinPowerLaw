@@ -10,7 +10,7 @@ from core.constants import (
     POWERLAW_SIGMA_MODE_SEGMENTED,
     TIME_LOG,
 )
-from core.utils import evaluate_powerlaw_values
+from core.utils import calculate_expanding_powerlaw_r2, evaluate_powerlaw_values
 from ui.viewport import is_mobile_client
 
 HALVING_DATES = [
@@ -1277,6 +1277,40 @@ def render_main_model_chart(
                 "historical_sigma_1",
                 legendrank=110,
             )
+        # R² of the fit known on each date, on its own 0-100% axis; off until toggled.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            expanding_r2 = calculate_expanding_powerlaw_r2(
+                np.log10(df_display["Days"].to_numpy(dtype=float)),
+                np.log10(df_display["CloseDisplay"].to_numpy(dtype=float)),
+            )
+        fig.add_trace(
+            go.Scatter(
+                x=plot_x_main,
+                y=expanding_r2 * 100.0,
+                mode="lines",
+                name="R²",
+                line=dict(color="#22c55e", width=1.6),
+                yaxis="y2",
+                visible="legendonly",
+                # Past the unranked sigma lines (1000), so it closes the hover too.
+                legendrank=2000,
+                hovertemplate="<b>R²</b>: %{y:.4f}%<extra></extra>",
+            )
+        )
+        fig.update_layout(
+            yaxis2=dict(
+                overlaying="y",
+                side="right",
+                type="linear",
+                range=[0.0, 100.0],
+                tickvals=[0, 25, 50, 75, 100],
+                ticksuffix="%",
+                ticklabelposition="inside",
+                showgrid=False,
+                zeroline=False,
+                tickfont=dict(color="#22c55e", size=tick_font["size"]),
+            )
+        )
         y_range_model_x = plot_x_model if is_log_time else m_dates
         y_range_visible_start = (
             max(1.0, float(df_display["Days"].min())) if is_log_time else df_display.index.min()
@@ -1297,11 +1331,14 @@ def render_main_model_chart(
                 else powerlaw_y_range
             )
             _add_halving_trace(fig, current_gen_date, is_log_time, halving_y_range)
-        fig.update_yaxes(
-            type="log" if price_scale == TIME_LOG else "linear",
-            range=powerlaw_y_range,
-            gridcolor=pl_grid_color,
-            tickfont=tick_font,
+        # Only the price axis: the R² axis keeps its own linear 0-100% scale.
+        fig.update_layout(
+            yaxis=dict(
+                type="log" if price_scale == TIME_LOG else "linear",
+                range=powerlaw_y_range,
+                gridcolor=pl_grid_color,
+                tickfont=tick_font,
+            )
         )
 
     if is_log_time:

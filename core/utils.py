@@ -191,6 +191,28 @@ def calculate_expanding_powerlaw_parameters(log_days, log_prices, min_points=100
     return intercepts, slopes, fitted_log_prices
 
 
+def calculate_expanding_powerlaw_r2(log_days, log_prices, min_points=100):
+    """R² of the PowerLaw fitted on each date's history, as it read on that date."""
+    log_days_arr = np.asarray(log_days, dtype=float)
+    log_prices_arr = np.asarray(log_prices, dtype=float)
+    valid_mask = np.isfinite(log_days_arr) & np.isfinite(log_prices_arr)
+
+    x = np.where(valid_mask, log_days_arr, 0.0)
+    y = np.where(valid_mask, log_prices_arr, 0.0)
+    n = np.cumsum(valid_mask.astype(float))
+    sum_x = np.cumsum(x)
+    sum_y = np.cumsum(y)
+    x_spread = (n * np.cumsum(x * x)) - (sum_x * sum_x)
+    y_spread = (n * np.cumsum(y * y)) - (sum_y * sum_y)
+    covariance = (n * np.cumsum(x * y)) - (sum_x * sum_y)
+
+    # A least-squares line explains the squared correlation of its two variables.
+    r2_values = np.full(log_days_arr.shape, np.nan, dtype=float)
+    fit_mask = valid_mask & (n >= float(min_points)) & (x_spread > 1e-12) & (y_spread > 1e-12)
+    r2_values[fit_mask] = (covariance[fit_mask] ** 2) / (x_spread[fit_mask] * y_spread[fit_mask])
+    return r2_values
+
+
 def calculate_historical_sigma_offsets(
     log_days,
     log_prices,
