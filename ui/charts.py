@@ -314,6 +314,46 @@ def _convert_log_offsets_to_sigma_levels(values, percentile_offsets):
     return sigma_values
 
 
+def _format_sigma_hover_suffixes(
+    df_display,
+    percentile_offsets,
+    historical_fair_log=None,
+    historical_sigma_offsets=None,
+):
+    """Per-row " · ±Nσ" hover text: the CURRENT SIGMA the KPI card read on that date.
+
+    Historical mode measures each date against the fit and sigma bands available then;
+    dates before that fit exists get no sigma rather than a classic stand-in.
+    """
+    row_count = len(df_display)
+    sigma_levels = np.full(row_count, np.nan, dtype=float)
+    if historical_fair_log is not None:
+        fair_log = np.asarray(historical_fair_log, dtype=float)
+        offsets = np.asarray(historical_sigma_offsets, dtype=float)
+        if fair_log.shape == (row_count,) and offsets.shape == (4, row_count):
+            residuals = np.asarray(df_display["LogClose"], dtype=float) - fair_log
+            valid_mask = np.isfinite(residuals) & np.all(np.isfinite(offsets), axis=0)
+            valid_indices = np.flatnonzero(valid_mask)
+            if valid_indices.size:
+                # Historical offsets are refitted weekly, so rows share a few offset sets.
+                unique_offsets, groups = np.unique(
+                    offsets[:, valid_mask], axis=1, return_inverse=True
+                )
+                groups = np.ravel(groups)
+                for group_index in range(unique_offsets.shape[1]):
+                    rows = valid_indices[groups == group_index]
+                    sigma_levels[rows] = _convert_log_offsets_to_sigma_levels(
+                        residuals[rows], unique_offsets[:, group_index]
+                    )
+    elif np.all(np.isfinite(np.asarray(percentile_offsets, dtype=float))):
+        sigma_levels = _convert_log_offsets_to_sigma_levels(df_display["Res"], percentile_offsets)
+
+    return np.array(
+        [f" · {level:+.2f}σ" if np.isfinite(level) else "" for level in sigma_levels],
+        dtype=object,
+    )
+
+
 def _iter_moving_average_series(df_display, windows):
     if not windows:
         return []
@@ -586,6 +626,12 @@ def render_powerlaw_oscillator_chart(
         )
         model_name = "Power regression"
 
+    sigma_hover = _format_sigma_hover_suffixes(
+        df_display,
+        (p2_5, p16_5, p83_5, p97_5),
+        historical_fair_log if historical_available else None,
+        historical_powerlaw_sigma_offsets if historical_available else None,
+    )
     close_values = pd.to_numeric(df_display["CloseDisplay"], errors="coerce").to_numpy(dtype=float)
     oscillator_values = np.full(close_values.shape, np.nan, dtype=float)
     valid_reference = np.isfinite(reference_fair) & (reference_fair > 0)
@@ -600,10 +646,10 @@ def render_powerlaw_oscillator_chart(
             mode="lines",
             name=f"{target_series_name} oscillator",
             line=dict(color=pl_btc_color, width=1.5),
-            customdata=df_display.index.strftime("%d.%m.%Y"),
+            customdata=np.column_stack([df_display.index.strftime("%d.%m.%Y"), sigma_hover]),
             hovertemplate=(
-                f"<b>{target_series_name} / Power Law</b>: %{{y:,.3f}}×"
-                "<br>%{customdata}<extra></extra>"
+                f"<b>{target_series_name} / Power Law</b>: %{{y:,.3f}}×%{{customdata[1]}}"
+                "<br>%{customdata[0]}<extra></extra>"
             ),
         )
     )
@@ -856,16 +902,17 @@ def render_main_model_chart(
             )
 
         main_series_label = f"{target_series_name} ({target_series_unit})"
+        use_historical_sigma_hover = powerlaw_sigma_display_mode == POWERLAW_SIGMA_MODE_HISTORICAL
+        sigma_hover = _format_sigma_hover_suffixes(
+            df_display,
+            (p2_5, p16_5, p83_5, p97_5),
+            historical_powerlaw_fair if use_historical_sigma_hover else None,
+            historical_powerlaw_sigma_offsets if use_historical_sigma_hover else None,
+        )
         btc_hover = (
-            (
-                f"<b>{main_series_label}</b>: "
-                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-            )
-            if is_log_time
-            else (
-                f"<b>{main_series_label}</b>: "
-                f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}<extra></extra>"
-            )
+            f"<b>{main_series_label}</b>: "
+            f"{currency_prefix}%{{y:,.{currency_decimals}f}}{currency_suffix}"
+            "%{customdata}<extra></extra>"
         )
         fig.add_trace(
             go.Scatter(
@@ -875,6 +922,7 @@ def render_main_model_chart(
                 name=main_series_label,
                 line=dict(color=pl_btc_color, width=1.5),
                 legendrank=10,
+                customdata=sigma_hover,
                 hovertemplate=btc_hover,
             )
         )
