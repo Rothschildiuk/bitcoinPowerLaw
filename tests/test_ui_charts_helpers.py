@@ -13,6 +13,7 @@ from core.constants import (
 from ui.charts import (
     MOBILE_TICK_LABEL_MIN_SPACING,
     _convert_log_offsets_to_sigma_levels,
+    _format_sigma_hover_suffixes,
     _iter_moving_average_series,
     _main_chart_layout,
     _main_chart_plotly_config,
@@ -30,6 +31,29 @@ from ui.charts import (
 
 
 class TestUIChartsHelpers(unittest.TestCase):
+    def test_sigma_hover_reads_each_date_against_its_own_bands(self):
+        dates = pd.date_range("2020-01-01", periods=3, freq="D")
+        df_display = pd.DataFrame(
+            {"Res": [-0.2, 0.0, 0.3], "LogClose": [1.0, 1.0, 1.0]},
+            index=dates,
+        )
+        classic = _format_sigma_hover_suffixes(df_display, (-0.4, -0.2, 0.3, 0.6))
+        self.assertEqual(list(classic), [" · -1.00σ", " · +0.00σ", " · +1.00σ"])
+
+        historical_offsets = np.array(
+            [[np.nan, -0.4, -0.8], [np.nan, -0.2, -0.4], [np.nan, 0.2, 0.4], [np.nan, 0.4, 0.8]]
+        )
+        historical = _format_sigma_hover_suffixes(
+            df_display,
+            (-0.4, -0.2, 0.3, 0.6),
+            historical_fair_log=[0.8, 0.8, 0.6],
+            historical_sigma_offsets=historical_offsets,
+        )
+        self.assertEqual(list(historical), ["", " · +1.00σ", " · +1.00σ"])
+
+        no_residuals = _format_sigma_hover_suffixes(df_display[[]], (-0.4, -0.2, 0.3, 0.6))
+        self.assertEqual(list(no_residuals), ["", "", ""])
+
     def test_powerlaw_oscillator_uses_straight_unit_baseline_for_classic_and_historical(
         self,
     ):

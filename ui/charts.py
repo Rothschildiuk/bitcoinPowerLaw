@@ -330,7 +330,11 @@ def _format_sigma_hover_suffixes(
     if historical_fair_log is not None:
         fair_log = np.asarray(historical_fair_log, dtype=float)
         offsets = np.asarray(historical_sigma_offsets, dtype=float)
-        if fair_log.shape == (row_count,) and offsets.shape == (4, row_count):
+        if (
+            "LogClose" in df_display.columns
+            and fair_log.shape == (row_count,)
+            and offsets.shape == (4, row_count)
+        ):
             residuals = np.asarray(df_display["LogClose"], dtype=float) - fair_log
             valid_mask = np.isfinite(residuals) & np.all(np.isfinite(offsets), axis=0)
             valid_indices = np.flatnonzero(valid_mask)
@@ -345,7 +349,9 @@ def _format_sigma_hover_suffixes(
                     sigma_levels[rows] = _convert_log_offsets_to_sigma_levels(
                         residuals[rows], unique_offsets[:, group_index]
                     )
-    elif np.all(np.isfinite(np.asarray(percentile_offsets, dtype=float))):
+    elif "Res" in df_display.columns and np.all(
+        np.isfinite(np.asarray(percentile_offsets, dtype=float))
+    ):
         sigma_levels = _convert_log_offsets_to_sigma_levels(df_display["Res"], percentile_offsets)
 
     return np.array(
