@@ -53,6 +53,20 @@ LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month
 LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
 FRED_US_HOUSING_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CSUSHPISA"
 DEFILLAMA_USDT_STABLECOIN_URL = "https://stablecoins.llama.fi/stablecoin/1"
+COINGECKO_BTC_SPOT_URL = (
+    "https://api.coingecko.com/api/v3/simple/price"
+    "?ids=bitcoin&vs_currencies=usd,eur,chf,uah,xau,xag&include_last_updated_at=true"
+)
+LIVE_SPOT_REFRESH_SECONDS = 60
+# CoinGecko quotes BTC directly in these units, so the live point needs no stale FX rate.
+LIVE_SPOT_QUOTE_CODES = {
+    CURRENCY_DOLLAR: "usd",
+    CURRENCY_EURO: "eur",
+    CURRENCY_CHF: "chf",
+    CURRENCY_UAH: "uah",
+    CURRENCY_GOLD: "xau",
+    CURRENCY_SILVER: "xag",
+}
 LOCAL_DATA_CACHE_DIR = Path("output/data_cache")
 SNAPSHOT_DATA_DIR = Path("data/snapshots")
 SNAPSHOT_REFRESH_METADATA_FILENAME = "refresh_metadata.json"
@@ -804,6 +818,48 @@ def _safe_download_btc_tail_from_coincap(start_date):
     daily_tail = history_df.groupby("Day", as_index=True)["Close"].last()
     daily_tail.index = pd.to_datetime(daily_tail.index)
     return daily_tail.astype(float)
+
+
+@st.cache_data(ttl=LIVE_SPOT_REFRESH_SECONDS, show_spinner=False)
+def load_live_btc_spot_quote():
+    """Current BTC spot quotes from CoinGecko, or None when the API is unavailable.
+
+    Snapshots stay the source for every past day; this only feeds today's live point.
+    """
+    payload = _fetch_json_with_retry(COINGECKO_BTC_SPOT_URL, retries=1, timeout=5)
+    quote = payload.get("bitcoin") if isinstance(payload, dict) else None
+    if not isinstance(quote, dict):
+        return None
+
+    prices = {}
+    for currency, quote_code in LIVE_SPOT_QUOTE_CODES.items():
+        value = pd.to_numeric(quote.get(quote_code), errors="coerce")
+        if pd.notna(value) and value > 0:
+            prices[currency] = float(value)
+    if CURRENCY_DOLLAR not in prices:
+        return None
+
+    updated_at = pd.to_datetime(quote.get("last_updated_at"), unit="s", utc=True, errors="coerce")
+    if pd.isna(updated_at):
+        updated_at = pd.Timestamp.now(tz="UTC")
+    return {"prices": prices, "updated_at": updated_at.tz_localize(None)}
+
+
+def resolve_live_btc_close(live_quote, selected_currency, close_usd, close_selected):
+    """Today's live BTC close in ``selected_currency``.
+
+    Units CoinGecko does not quote reuse the latest snapshot conversion factor.
+    """
+    if not live_quote:
+        return None
+    prices = live_quote["prices"]
+    if selected_currency in prices:
+        return prices[selected_currency]
+    last_close_usd = float(close_usd.iloc[-1]) if len(close_usd) else float("nan")
+    last_close_selected = float(close_selected.iloc[-1]) if len(close_selected) else float("nan")
+    if not (last_close_usd > 0 and last_close_selected > 0):
+        return None
+    return prices[CURRENCY_DOLLAR] * last_close_selected / last_close_usd
 
 
 def fetch_reference_series_frame(start_date):

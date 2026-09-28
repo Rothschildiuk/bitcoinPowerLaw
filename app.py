@@ -80,7 +80,11 @@ from core.utils import (
     resolve_trend_parameters,
     resolve_portfolio_scenario_log_offset,
 )
-from services.price_service import build_currency_close_series
+from services.price_service import (
+    build_currency_close_series,
+    load_live_btc_spot_quote,
+    resolve_live_btc_close,
+)
 from ui.charts import (
     _resolve_model_view_max,
     render_main_model_chart,
@@ -159,6 +163,58 @@ def calculate_residual_sigma_log(display_df):
         return 0.0
     sigma = float(np.std(residuals))
     return sigma if np.isfinite(sigma) else 0.0
+
+
+def append_live_price_point(
+    display_df,
+    live_date,
+    live_close,
+    genesis_offset_days,
+    intercept_a,
+    slope_b,
+    historical_fits,
+):
+    """Draw today's live price as the last point without feeding it to any fit.
+
+    Regressions, sigma bands and historical fits are computed from history before this
+    runs, so the live row only reuses their parameters. ``historical_fits`` holds the per-row
+    (intercepts, slopes, fair_log, sigma_offsets) arrays; they hold their last fit for it.
+    """
+    days = float((live_date - GENESIS_DATE).days - genesis_offset_days)
+    if days <= 0.0 or not live_close > 0.0 or live_date <= display_df.index[-1]:
+        return display_df, historical_fits
+
+    log_d = float(np.log10(days))
+    _, model_log, _ = evaluate_powerlaw_values([log_d], intercept_a, slope_b)
+    fair, _, _ = evaluate_powerlaw_values(model_log, 0.0, 1.0)
+    log_close = float(np.log10(live_close))
+    live_row = pd.DataFrame(
+        {
+            "Close": live_close,
+            "AbsDays": (live_date - GENESIS_DATE).days,
+            "LogClose": log_close,
+            "Days": days,
+            "LogD": log_d,
+            "ModelLog": model_log[0],
+            "Res": log_close - model_log[0],
+            "Fair": fair[0],
+            "CloseDisplay": live_close,
+            "FairDisplay": fair[0],
+        },
+        index=pd.DatetimeIndex([live_date], name=display_df.index.name),
+    ).reindex(columns=display_df.columns)
+    extended_df = pd.concat([display_df, live_row])
+
+    intercepts, slopes, fair_log, sigma_offsets = historical_fits
+    if len(intercepts) == len(display_df):
+        _, live_fair_log, _ = evaluate_powerlaw_values([log_d], intercepts[-1], slopes[-1])
+        historical_fits = (
+            np.append(intercepts, intercepts[-1]),
+            np.append(slopes, slopes[-1]),
+            np.append(fair_log, live_fair_log),
+            np.hstack([sigma_offsets, sigma_offsets[:, -1:]]),
+        )
+    return extended_df, historical_fits
 
 
 def calculate_peak_powerlaw_overlay(
@@ -1166,6 +1222,7 @@ genesis_offset = (
     else session_genesis_offset
 )
 current_gen_date = GENESIS_DATE + pd.Timedelta(days=genesis_offset)
+live_price_point = None
 if active_model.supports_currency_selector:
     raw_df_usd = series_store.get(POWERLAW_SERIES_PRICE)
     raw_df = raw_df_usd.copy()
@@ -1176,6 +1233,17 @@ if active_model.supports_currency_selector:
     )
     raw_df = raw_df[raw_df["Close"] > 0].copy()
     raw_df["LogClose"] = np.log10(raw_df["Close"])
+    live_quote = load_live_btc_spot_quote()
+    live_close = resolve_live_btc_close(
+        live_quote,
+        currency,
+        raw_df_usd["Close"].reindex(raw_df.index),
+        raw_df["Close"],
+    )
+    if live_close is not None:
+        live_price_point = (live_quote["updated_at"].normalize(), live_close)
+        # Today's partial snapshot row gives way to the live point drawn after the fits.
+        raw_df = raw_df[raw_df.index < live_price_point[0]]
 else:
     raw_df = series_store.get(selected_series_name).copy()
 
@@ -1275,6 +1343,27 @@ if mode == MODE_POWERLAW:
         (p2_5, p16_5, p83_5, p97_5),
         1.0,
     )
+
+if live_price_point is not None:
+    df_display, (
+        historical_powerlaw_intercepts,
+        historical_powerlaw_slopes,
+        historical_powerlaw_fair,
+        historical_powerlaw_sigma_offsets,
+    ) = append_live_price_point(
+        df_display,
+        *live_price_point,
+        genesis_offset,
+        a_active,
+        b_active,
+        (
+            historical_powerlaw_intercepts,
+            historical_powerlaw_slopes,
+            historical_powerlaw_fair,
+            historical_powerlaw_sigma_offsets,
+        ),
+    )
+    plot_x_main = df_display["Days"] if is_log_time else df_display.index
 
 if mode == MODE_POWERLAW:
     chart_renderer = (
