@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from core.constants import FLOOR_MODEL_TROUGH_ENVELOPE
-from core.power_law import build_causal_powerlaw_floor_prices
+from core.constants import GAUSSIAN_SIGMA_PERCENTILES
+from core.power_law import build_causal_pension_growth
 from core.utils import (
     PortfolioProjectionResult,
     PortfolioSettings,
@@ -17,7 +17,6 @@ from core.utils import (
     normalize_periodic_growth_rate,
     rate_withdrawal_attractiveness,
     resolve_backtest_monthly_prices,
-    resolve_backtest_prior_month_end,
     resolve_projection_anchor_day,
     resolve_portfolio_scenario_log_offset,
 )
@@ -819,8 +818,8 @@ class TestPortfolioHelpers(unittest.TestCase):
         for date, price in monthly_prices.items():
             self.assertEqual(price, price_df.loc[date, "CloseDisplay"])
 
-    def test_build_causal_floor_prices_ignore_prices_from_after_each_month(self):
-        """The defining property: a month's floor must not move when later prices arrive."""
+    def test_build_causal_pension_growth_ignores_prices_from_after_each_date(self):
+        """The defining property: a month's sale must not move when later prices arrive."""
         gen_date = pd.Timestamp("2016-01-01")
         regime_break = pd.Timestamp("2021-01-01")
         # Identical history up to the break, then a tenfold regime change afterwards.
@@ -832,81 +831,75 @@ class TestPortfolioHelpers(unittest.TestCase):
             tail_multiplier=10.0,
         )
         past_only = with_future.loc[: regime_break - pd.Timedelta(days=1)]
-        monthly_index = pd.date_range("2019-01-01", "2020-12-01", freq="MS")
+        trade_dates = pd.date_range("2019-01-31", "2020-12-31", freq="ME")
 
-        floor_with_future = build_causal_powerlaw_floor_prices(
-            with_future["CloseDisplay"], monthly_index, gen_date
+        growth_with_future = build_causal_pension_growth(
+            with_future["CloseDisplay"], trade_dates, gen_date
         )
-        floor_without_future = build_causal_powerlaw_floor_prices(
-            past_only["CloseDisplay"], monthly_index, gen_date
-        )
-
-        self.assertTrue(np.all(np.isfinite(floor_with_future.to_numpy(dtype=float))))
-        self.assertTrue(np.allclose(floor_with_future, floor_without_future))
-
-        # A full-sample fit would move these same months, which is the bias removed here.
-        full_days = np.maximum(
-            (with_future.index - gen_date).days.to_numpy(dtype=float),
-            1.0,
-        )
-        full_slope, full_intercept = np.polyfit(
-            np.log10(full_days),
-            np.log10(with_future["CloseDisplay"].to_numpy(dtype=float)),
-            1,
-        )
-        monthly_days = np.maximum(
-            (monthly_index - gen_date).days.to_numpy(dtype=float),
-            1.0,
-        )
-        full_sample_floor = np.power(10.0, full_intercept + full_slope * np.log10(monthly_days))
-        self.assertFalse(
-            np.allclose(full_sample_floor, floor_with_future.to_numpy(dtype=float), rtol=0.05)
+        growth_without_future = build_causal_pension_growth(
+            past_only["CloseDisplay"], trade_dates, gen_date
         )
 
-    def test_build_causal_floor_prices_ignore_the_future_for_the_trough_envelope(self):
+        self.assertTrue(np.all(growth_with_future.to_numpy(dtype=float) > 0.0))
+        self.assertTrue(np.allclose(growth_with_future, growth_without_future))
+
+    def test_build_causal_pension_growth_matches_the_pension_view_on_that_date(self):
         gen_date = pd.Timestamp("2016-01-01")
-        regime_break = pd.Timestamp("2021-01-01")
-        with_future = build_daily_powerlaw_prices(
-            "2016-01-02",
-            "2026-01-01",
-            gen_date,
-            cycle_days=500,
-            tail_start=regime_break,
-            tail_multiplier=10.0,
+        daily_prices = build_daily_powerlaw_prices(
+            "2016-01-02", "2024-01-01", gen_date, cycle_days=500
         )
-        past_only = with_future.loc[: regime_break - pd.Timedelta(days=1)]
-        monthly_index = pd.date_range("2019-01-01", "2020-12-01", freq="MS")
+        trade_date = pd.Timestamp("2022-11-30")
 
-        floor_with_future = build_causal_powerlaw_floor_prices(
-            with_future["CloseDisplay"],
-            monthly_index,
-            gen_date,
-            floor_model=FLOOR_MODEL_TROUGH_ENVELOPE,
-        )
-        floor_without_future = build_causal_powerlaw_floor_prices(
-            past_only["CloseDisplay"],
-            monthly_index,
-            gen_date,
-            floor_model=FLOOR_MODEL_TROUGH_ENVELOPE,
+        # The Pension view as it would have read on that day, fitted on data up to it.
+        known = daily_prices.loc[:trade_date, "CloseDisplay"]
+        log_days = np.log10((known.index - gen_date).days.to_numpy(dtype=float))
+        log_prices = np.log10(known.to_numpy(dtype=float))
+        slope, intercept = np.polyfit(log_days, log_prices, 1)
+        offsets = np.percentile(
+            log_prices - (intercept + slope * log_days), GAUSSIAN_SIGMA_PERCENTILES
         )
 
-        self.assertTrue(np.all(np.isfinite(floor_with_future.to_numpy(dtype=float))))
-        self.assertTrue(np.allclose(floor_with_future, floor_without_future))
+        def pension_on_trade_date(floor_sigma_level):
+            return estimate_current_monthly_pension(
+                current_price=float(known.iloc[-1]),
+                current_model_log=intercept + slope * log_days[-1],
+                current_date=trade_date,
+                current_gen_date=gen_date,
+                intercept_a=intercept,
+                slope_b=slope,
+                btc_amount=1.0,
+                sell_mom_change_pct=100.0,
+                percentile_offsets=offsets,
+                floor_sigma_level=floor_sigma_level,
+            )
 
-    def test_build_causal_floor_prices_leave_months_without_history_unfitted(self):
+        for sigma_level in (-2.0, -1.0, 1.0, 2.0, None):
+            with self.subTest(sigma_level=sigma_level):
+                growth = build_causal_pension_growth(
+                    daily_prices["CloseDisplay"],
+                    pd.DatetimeIndex([trade_date]),
+                    gen_date,
+                    sigma_level=sigma_level,
+                )
+                if sigma_level is None:
+                    # Current sigma: the line through the day's own price.
+                    expected = pension_on_trade_date(-2.0).max_monthly_withdrawal
+                else:
+                    expected = pension_on_trade_date(sigma_level).minimum_monthly_withdrawal
+                self.assertTrue(np.isclose(growth.iloc[0], expected))
+
+    def test_build_causal_pension_growth_leaves_dates_without_history_unfitted(self):
         gen_date = pd.Timestamp("2016-01-01")
         daily_prices = build_daily_powerlaw_prices("2016-01-02", "2016-12-31", gen_date)
-        monthly_index = pd.date_range("2016-02-01", "2016-12-01", freq="MS")
+        trade_dates = pd.date_range("2016-02-29", "2016-12-31", freq="ME")
 
-        floor_prices = build_causal_powerlaw_floor_prices(
-            daily_prices["CloseDisplay"], monthly_index, gen_date
-        )
+        growth = build_causal_pension_growth(daily_prices["CloseDisplay"], trade_dates, gen_date)
 
         # 100 daily rows are required before a fit is attempted, so early months stay NaN.
-        self.assertTrue(np.isnan(floor_prices.iloc[0]))
-        self.assertTrue(np.isfinite(floor_prices.iloc[-1]))
+        self.assertTrue(np.isnan(growth.iloc[0]))
+        self.assertTrue(np.isfinite(growth.iloc[-1]))
 
-    def test_build_portfolio_real_data_backtest_can_sell_floor_growth(self):
+    def test_build_portfolio_real_data_backtest_can_sell_pension_growth(self):
         gen_date = pd.Timestamp("2016-01-01")
         price_df = build_daily_powerlaw_prices("2016-01-02", "2026-01-01", gen_date)
         settings = PortfolioSettings(
@@ -917,11 +910,8 @@ class TestPortfolioHelpers(unittest.TestCase):
             forecast_horizon=12,
         )
         monthly_prices = resolve_backtest_monthly_prices(price_df, 5)
-        prior_month_end = resolve_backtest_prior_month_end(price_df, monthly_prices.index[0])
-        floor_prices = build_causal_powerlaw_floor_prices(
-            price_df["CloseDisplay"],
-            monthly_prices.index.insert(0, prior_month_end[0]),
-            gen_date,
+        pension_growth = build_causal_pension_growth(
+            price_df["CloseDisplay"], monthly_prices.index, gen_date
         )
 
         full_sell = build_portfolio_real_data_backtest(
@@ -929,7 +919,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             settings,
             "USD",
             years=5,
-            floor_prices=floor_prices,
+            pension_growth=pension_growth,
             sell_mom_change_pct=100.0,
             strategy_name="-2σ floor: sell 100% growth",
         )
@@ -938,7 +928,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             settings,
             "USD",
             years=5,
-            floor_prices=floor_prices,
+            pension_growth=pension_growth,
             sell_mom_change_pct=50.0,
             strategy_name="-2σ floor: sell 50% growth",
         )
@@ -953,7 +943,7 @@ class TestPortfolioHelpers(unittest.TestCase):
             half_sell.backtest_df["MonthlyWithdrawal"].sum(),
         )
         self.assertLess(full_sell.strategy_btc, half_sell.strategy_btc)
-        # The first month already sells the floor growth of its own month.
+        # The first month already sells, as the Pension view would on that day.
         self.assertGreater(full_sell.backtest_df["MonthlyWithdrawal"].iloc[0], 0.0)
         self.assertLess(full_sell.backtest_df["StrategyBTC"].iloc[0], 1.0)
 

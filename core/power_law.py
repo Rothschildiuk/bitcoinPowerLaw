@@ -5,8 +5,7 @@ import streamlit as st
 from core.constants import (
     DEFAULT_A,
     DEFAULT_B,
-    FLOOR_MODEL_SIGMA,
-    FLOOR_MODEL_TROUGH_ENVELOPE,
+    GAUSSIAN_SIGMA_PERCENTILES,
     KEY_A,
     KEY_B,
     KEY_GENESIS_OFFSET,
@@ -14,8 +13,8 @@ from core.constants import (
     POWERLAW_EXPONENT_MIN,
 )
 from core.utils import (
+    AVERAGE_MONTH_DAYS,
     calculate_expanding_powerlaw_parameters,
-    calculate_historical_sigma_offsets,
     calculate_r2_score,
     interpolate_sigma_offset_from_level,
 )
@@ -311,30 +310,30 @@ def calculate_r2_for_manual_params_on_rolling_mean(
     return calculate_r2_score(valid_log_values, predicted_log_values)
 
 
-def build_causal_powerlaw_floor_prices(
+def build_causal_pension_growth(
     daily_price_series,
-    monthly_index,
+    trade_dates,
     current_gen_date,
     *,
-    floor_model=FLOOR_MODEL_SIGMA,
     sigma_level=-2.0,
-    envelope_sigma_threshold=1.0,
-    envelope_window_days=365.25,
     min_points=100,
-    sigma_recalculation_step=7,
 ):
-    """Refit the withdrawal floor month by month from data known at that month.
+    """Replay the Pension view on each trade date with only the data known that day.
 
-    Sizing withdrawals from a model fitted on the whole history lets every month of a
-    backtest see its own future. Here each month's floor is fitted on the prefix of the
-    daily history up to that month instead, so stepping through ``monthly_index`` is
-    walk-forward. Months without enough history behind them come back as NaN.
+    For every date the PowerLaw and its sigma band are fitted on the daily history up
+    to that date, exactly as the Pension view fits them today, and the growth of the
+    ``sigma_level`` line over the next average month is read off that one line.
+    ``sigma_level=None`` follows the current sigma: the line through that day's price.
+    Sizing each month's sale from the line known on its own date keeps the backtest
+    walk-forward, and reading both ends off one line keeps band revisions out of the
+    month's growth. Dates without enough history behind them come back as NaN.
     """
-    monthly_index = pd.DatetimeIndex(monthly_index)
+    trade_dates = pd.DatetimeIndex(trade_dates)
+    growth = np.full(len(trade_dates), np.nan, dtype=float)
     daily_prices = pd.to_numeric(pd.Series(daily_price_series), errors="coerce").dropna()
     daily_prices = daily_prices[daily_prices > 0.0].sort_index()
-    if daily_prices.empty or monthly_index.empty:
-        return pd.Series(np.nan, index=monthly_index, dtype=float)
+    if daily_prices.empty or trade_dates.empty:
+        return pd.Series(growth, index=trade_dates, dtype=float)
 
     current_gen_date = pd.Timestamp(current_gen_date)
     daily_dates = pd.DatetimeIndex(daily_prices.index)
@@ -347,32 +346,18 @@ def build_causal_powerlaw_floor_prices(
         daily_log_prices,
         min_points=min_points,
     )
-    sigma_offsets = calculate_historical_sigma_offsets(
-        daily_log_days,
-        daily_log_prices,
-        intercepts,
-        slopes,
-        min_points=min_points,
-        recalculation_step=sigma_recalculation_step,
-    )
 
-    # Newest daily observation available on each entry's own date. Rows are dated on
-    # the day the strategy trades, so the fit sees that day's close and nothing later.
+    # Newest daily observation available on each trade date. The fit sees that day's
+    # close and nothing later.
     cutoff_positions = (
         np.searchsorted(
             daily_dates.to_numpy(dtype="datetime64[ns]"),
-            monthly_index.to_numpy(dtype="datetime64[ns]"),
+            trade_dates.to_numpy(dtype="datetime64[ns]"),
             side="right",
         )
         - 1
     )
-    monthly_days = np.maximum(
-        (monthly_index - current_gen_date).days.to_numpy(dtype=float),
-        1.0,
-    )
-    monthly_log_days = np.log10(monthly_days)
-
-    floor_values = np.full(len(monthly_index), np.nan, dtype=float)
+    trade_days = np.maximum((trade_dates - current_gen_date).days.to_numpy(dtype=float), 1.0)
     for position, cutoff in enumerate(cutoff_positions):
         cutoff = int(cutoff)
         if cutoff < 0 or (cutoff + 1) < int(min_points):
@@ -380,40 +365,32 @@ def build_causal_powerlaw_floor_prices(
 
         intercept = intercepts[cutoff]
         slope = slopes[cutoff]
-        offsets = sigma_offsets[:, cutoff]
-        if not (np.isfinite(intercept) and np.isfinite(slope)) or not np.all(np.isfinite(offsets)):
+        if not (np.isfinite(intercept) and np.isfinite(slope)):
             continue
 
-        if floor_model == FLOOR_MODEL_TROUGH_ENVELOPE:
-            prefix_log_days = daily_log_days[: cutoff + 1]
-            prefix_log_prices = daily_log_prices[: cutoff + 1]
-            envelope = fit_trough_powerlaw_envelope(
-                daily_days[: cutoff + 1],
-                prefix_log_prices,
-                0.0,
-                np.array([monthly_days[position]], dtype=float),
-                residuals=prefix_log_prices - (intercept + slope * prefix_log_days),
-                threshold_offset=interpolate_sigma_offset_from_level(
-                    -abs(float(envelope_sigma_threshold)),
-                    offsets,
-                ),
-                window_days=envelope_window_days,
+        residuals = daily_log_prices[: cutoff + 1] - (
+            intercept + slope * daily_log_days[: cutoff + 1]
+        )
+        if sigma_level is None:
+            log_offset = float(residuals[-1])
+        else:
+            log_offset = interpolate_sigma_offset_from_level(
+                sigma_level,
+                np.percentile(residuals, GAUSSIAN_SIGMA_PERCENTILES),
             )
-            if envelope is None:
-                continue
-            floor_values[position] = float(envelope["model_values"][0])
-            continue
-
-        floor_log = (
-            intercept
-            + slope * monthly_log_days[position]
-            + interpolate_sigma_offset_from_level(sigma_level, offsets)
+        # Today and one average month ahead, as the Pension view measures its growth.
+        target_days = np.array(
+            [trade_days[position], trade_days[position] + AVERAGE_MONTH_DAYS],
+            dtype=float,
         )
-        floor_values[position] = float(
-            np.power(10.0, np.clip(floor_log, POWERLAW_EXPONENT_MIN, POWERLAW_EXPONENT_MAX))
+        line_log = intercept + slope * np.log10(target_days) + log_offset
+        line_values = np.power(
+            10.0,
+            np.clip(line_log, POWERLAW_EXPONENT_MIN, POWERLAW_EXPONENT_MAX),
         )
+        growth[position] = float(line_values[1] - line_values[0])
 
-    return pd.Series(floor_values, index=monthly_index, dtype=float)
+    return pd.Series(growth, index=trade_dates, dtype=float)
 
 
 # --- SIDEBAR RENDERER ---

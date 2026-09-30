@@ -66,9 +66,6 @@ DEFAULT_LIQUID_TRANSACTIONS_B = 1.137
 DEFAULT_USDT_SUPPLY_A = -8.025
 DEFAULT_USDT_SUPPLY_B = 2.988
 
-# Withdrawal floor models for the portfolio strategy tester
-FLOOR_MODEL_SIGMA = "sigma"
-FLOOR_MODEL_TROUGH_ENVELOPE = "trough_envelope"
 
 # Forecast limits
 DEFAULT_FORECAST_HORIZON = 60
@@ -171,7 +168,7 @@ KEY_PORTFOLIO_FORECAST_HORIZON = "portfolio_forecast_horizon"
 KEY_PORTFOLIO_HISTORY_PERIODS = "portfolio_history_periods"
 KEY_PORTFOLIO_FORECAST_MONTHS_LEGACY = "portfolio_forecast_months"
 KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT = "portfolio_backtest_strategy_pct"
-KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL = "portfolio_backtest_floor_model"
+KEY_PORTFOLIO_BACKTEST_SIGMA_LEVEL = "portfolio_backtest_sigma_level"
 KEY_PORTFOLIO_BACKTEST_YEARS = "portfolio_backtest_years"
 KEY_PORTFOLIO_BACKTEST_INITIAL_CAPITAL = "portfolio_backtest_initial_capital"
 KEY_PORTFOLIO_BACKTEST_HAS_RUN = "portfolio_backtest_has_run"

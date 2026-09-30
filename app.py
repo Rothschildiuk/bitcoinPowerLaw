@@ -8,8 +8,6 @@ from core.constants import (
     APP_VERSION,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
-    FLOOR_MODEL_SIGMA,
-    FLOOR_MODEL_TROUGH_ENVELOPE,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_PORTFOLIO_HISTORY_PERIODS,
     FORECAST_HORIZON_MAX,
@@ -30,7 +28,7 @@ from core.constants import (
     KEY_POWERLAW_OSCILLATOR,
     KEY_POWERLAW_SERIES,
     KEY_PORTFOLIO_BACKTEST_HAS_RUN,
-    KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL,
+    KEY_PORTFOLIO_BACKTEST_SIGMA_LEVEL,
     KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT,
     KEY_PORTFOLIO_BACKTEST_YEARS,
     KEY_PORTFOLIO_BTC_AMOUNT,
@@ -72,7 +70,6 @@ from core.utils import (
     build_portfolio_view_model,
     calculate_expanding_powerlaw_parameters,
     resolve_backtest_monthly_prices,
-    resolve_backtest_prior_month_end,
     calculate_historical_sigma_offsets,
     estimate_current_monthly_pension,
     evaluate_powerlaw_values,
@@ -365,15 +362,15 @@ def prepare_model_grid(current_gen_date, a_active, b_active, view_max):
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def prepare_causal_floor_prices(daily_prices, monthly_dates, current_gen_date, floor_model):
-    # The walk-forward refit takes about a second for the trough envelope, and once the
-    # strategy tester has run it would otherwise repeat on every widget interaction.
+def prepare_causal_pension_growth(daily_prices, trade_dates, current_gen_date, sigma_level):
+    # The walk-forward refit repeats a percentile over the whole history for every month,
+    # and once the strategy tester has run it would otherwise rerun on every interaction.
     # Dates arrive as a plain datetime64 array because Streamlit cannot hash an Index.
-    return power_law.build_causal_powerlaw_floor_prices(
+    return power_law.build_causal_pension_growth(
         daily_prices,
-        pd.DatetimeIndex(monthly_dates),
+        pd.DatetimeIndex(trade_dates),
         current_gen_date,
-        floor_model=floor_model,
+        sigma_level=sigma_level,
     )
 
 
@@ -918,8 +915,16 @@ def render_portfolio_view(
     st.markdown("#### Strategy tester")
     if KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT not in st.session_state:
         st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT] = 100.0
-    if KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL not in st.session_state:
-        st.session_state[KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL] = "-2σ"
+    # Sigma levels offered like the Pension view's; None follows the current sigma.
+    sigma_level_options = {
+        "-2σ": -2.0,
+        "-1σ": -1.0,
+        "Current σ": None,
+        "+1σ": 1.0,
+        "+2σ": 2.0,
+    }
+    if st.session_state.get(KEY_PORTFOLIO_BACKTEST_SIGMA_LEVEL) not in sigma_level_options:
+        st.session_state[KEY_PORTFOLIO_BACKTEST_SIGMA_LEVEL] = "-2σ"
     if KEY_PORTFOLIO_BACKTEST_YEARS not in st.session_state:
         st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS] = 6
     if KEY_PORTFOLIO_BACKTEST_HAS_RUN not in st.session_state:
@@ -941,10 +946,6 @@ def render_portfolio_view(
         100.0: "#14b8a6",
         150.0: "#f97316",
     }
-    floor_model_options = {
-        "-2σ": "-2σ",
-        "trough_envelope_sigma_1": "Trough PowerLaw Envelope σ1",
-    }
 
     with st.form("portfolio_strategy_tester"):
         s1, s2, s3, s4 = st.columns([1.35, 1.45, 0.9, 0.65])
@@ -957,10 +958,9 @@ def render_portfolio_view(
             )
         with s2:
             st.selectbox(
-                "Withdrawal floor",
-                list(floor_model_options.keys()),
-                format_func=lambda value: floor_model_options[value],
-                key=KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL,
+                "Sigma level",
+                list(sigma_level_options.keys()),
+                key=KEY_PORTFOLIO_BACKTEST_SIGMA_LEVEL,
             )
         with s3:
             st.slider(
@@ -980,36 +980,26 @@ def render_portfolio_view(
     if st.session_state.get(KEY_PORTFOLIO_BACKTEST_HAS_RUN, False):
         selected_sell_pct = float(st.session_state[KEY_PORTFOLIO_BACKTEST_STRATEGY_PCT])
         backtest_years = int(st.session_state[KEY_PORTFOLIO_BACKTEST_YEARS])
-        selected_floor_model = st.session_state.get(KEY_PORTFOLIO_BACKTEST_FLOOR_MODEL, "-2σ")
-        floor_model_label = floor_model_options.get(selected_floor_model, "-2σ")
+        sigma_level_label = st.session_state[KEY_PORTFOLIO_BACKTEST_SIGMA_LEVEL]
         backtest_monthly_prices = resolve_backtest_monthly_prices(df_display, backtest_years)
-        floor_prices = None
+        pension_growth = None
         if backtest_monthly_prices is not None:
-            # Refit the floor month by month so no month is sized by its own future.
-            floor_dates = backtest_monthly_prices.index
-            prior_month_end = resolve_backtest_prior_month_end(df_display, floor_dates[0])
-            if prior_month_end is not None:
-                # The first month sells its own floor growth, so it needs last month's floor.
-                floor_dates = floor_dates.insert(0, prior_month_end[0])
-            floor_prices = prepare_causal_floor_prices(
+            # Replay the Pension view on each month's last day with only the data known then.
+            pension_growth = prepare_causal_pension_growth(
                 df_display["CloseDisplay"],
-                floor_dates.to_numpy(dtype="datetime64[ns]"),
+                backtest_monthly_prices.index.to_numpy(dtype="datetime64[ns]"),
                 current_gen_date,
-                (
-                    FLOOR_MODEL_TROUGH_ENVELOPE
-                    if selected_floor_model == "trough_envelope_sigma_1"
-                    else FLOOR_MODEL_SIGMA
-                ),
+                sigma_level_options[sigma_level_label],
             )
         result = build_portfolio_real_data_backtest(
             df_display,
             settings,
             currency_unit,
             years=backtest_years,
-            floor_prices=floor_prices,
+            pension_growth=pension_growth,
             sell_mom_change_pct=selected_sell_pct,
-            strategy_name=f"{floor_model_label}: sell {selected_sell_pct:.0f}% growth",
-            floor_model_label=floor_model_label,
+            strategy_name=f"{sigma_level_label}: sell {selected_sell_pct:.0f}% growth",
+            floor_model_label=sigma_level_label,
         )
     else:
         st.caption("Choose a strategy and period, then click Test strategy.")

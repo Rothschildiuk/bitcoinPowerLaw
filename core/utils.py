@@ -924,8 +924,8 @@ def resolve_backtest_monthly_prices(price_display_df, years):
 def resolve_backtest_prior_month_end(price_display_df, first_date):
     """Last observation before ``first_date``'s month as ``(date, price)``, or None.
 
-    The first backtested month already saw the floor grow, so its withdrawal needs the
-    floor as it stood one month-end earlier, which lies just outside the test window.
+    Without a floor the first backtested month sells the price growth since the
+    previous month-end, which lies just outside the test window.
     """
     if price_display_df is None or price_display_df.empty:
         return None
@@ -945,7 +945,7 @@ def build_portfolio_real_data_backtest(
     currency_unit,
     years=5,
     *,
-    floor_prices=None,
+    pension_growth=None,
     sell_mom_change_pct=None,
     strategy_name=None,
     initial_capital=None,
@@ -953,11 +953,12 @@ def build_portfolio_real_data_backtest(
 ):
     """Replay a withdrawal strategy over real prices.
 
-    ``floor_prices`` sizes the withdrawals and must already be walk-forward; build it
-    with ``build_causal_powerlaw_floor_prices``. Include the month-end before the first
-    backtested month (``resolve_backtest_prior_month_end``) so the first month sells its
-    own floor growth too. Without floor prices the strategy falls back to withdrawing
-    from realised month-on-month price growth, which is causal by nature.
+    Each month plays out as opening the Pension view on that month's last day: sell the
+    chosen share of the sigma line's growth over the next month per BTC still held, at
+    the day's actual price. ``pension_growth`` carries that growth per BTC for each trade
+    date and must already be walk-forward; build it with ``build_causal_pension_growth``.
+    Without it the strategy falls back to withdrawing from realised month-on-month price
+    growth, which is causal by nature.
     """
     monthly_prices = resolve_backtest_monthly_prices(price_display_df, years)
     if monthly_prices is None:
@@ -983,38 +984,28 @@ def build_portfolio_real_data_backtest(
 
     prior_month_end = resolve_backtest_prior_month_end(price_display_df, monthly_prices.index[0])
     previous_actual_price = prior_month_end[1] if prior_month_end is not None else None
-    previous_floor_price = None
-    if floor_prices is not None:
-        floor_prices = pd.Series(floor_prices, dtype=float)
-        prior_floors = floor_prices[floor_prices.index < monthly_prices.index[0]].dropna()
-        if not prior_floors.empty:
-            previous_floor_price = float(prior_floors.iloc[-1])
-        floor_prices = floor_prices.reindex(monthly_prices.index)
-        if not np.any(np.isfinite(floor_prices.to_numpy(dtype=float))):
-            floor_prices = None
+    if pension_growth is not None:
+        pension_growth = pd.Series(pension_growth, dtype=float).reindex(monthly_prices.index)
+        if not np.any(np.isfinite(pension_growth.to_numpy(dtype=float))):
+            pension_growth = None
 
     rows = []
     months_without_floor = 0
     for date, price in monthly_prices.items():
         price = float(price)
         hold_value = initial_btc * price
-        if floor_prices is None:
+        if pension_growth is None:
             positive_price_growth = (
                 max(price - previous_actual_price, 0.0)
                 if previous_actual_price is not None
                 else 0.0
             )
         else:
-            floor_price = float(floor_prices.loc[date])
-            if np.isfinite(floor_price):
-                positive_price_growth = (
-                    max(floor_price - previous_floor_price, 0.0)
-                    if previous_floor_price is not None
-                    else 0.0
-                )
-                previous_floor_price = floor_price
+            month_growth = float(pension_growth.loc[date])
+            if np.isfinite(month_growth):
+                positive_price_growth = max(month_growth, 0.0)
             else:
-                # Too little history behind this month to fit a floor on it yet.
+                # Too little history behind this month to fit the model on it yet.
                 months_without_floor += 1
                 positive_price_growth = 0.0
         withdrawal = positive_price_growth * strategy_btc * sell_ratio
@@ -1061,7 +1052,7 @@ def build_portfolio_real_data_backtest(
         if floor_model_label
         else f"-2σ monthly withdrawal ({currency_unit})"
     )
-    if floor_prices is None:
+    if pension_growth is None:
         monthly_withdrawal_label = f"Historical monthly withdrawal ({currency_unit})"
     table_df = backtest_df.copy()
     table_df["Date"] = table_df["Date"].dt.strftime("%Y-%m")

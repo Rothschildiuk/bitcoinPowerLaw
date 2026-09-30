@@ -38,7 +38,9 @@ Streamlit app for exploring Bitcoin-style PowerLaw models across price, network,
 - PowerLaw chart horizon extends 10 years beyond the newer of today and the latest data point.
 - Difficulty and Hashrate use an analysis cutoff starting at `2010-01-01` to skip the earliest startup-era rows.
 - Currency conversion applies only to Bitcoin price series.
-- The portfolio strategy tester is walk-forward: the withdrawal floor is refitted for
-  each backtested month from data available up to that month
-  (`core/power_law.build_causal_powerlaw_floor_prices`). Never size a backtest from a
-  model fitted on the full history.
+- The portfolio strategy tester replays the Pension view on each month's last day: the
+  PowerLaw and sigma band are refitted from data available up to that day, and the
+  month sells the chosen share of the chosen sigma line's growth over the next month
+  (`core/power_law.build_causal_pension_growth`). Never size a backtest from a
+  model fitted on the full history, and never subtract two separately refitted floors:
+  that books every sigma-band revision as growth or loss.
