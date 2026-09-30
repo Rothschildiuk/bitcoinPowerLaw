@@ -72,6 +72,7 @@ from core.utils import (
     build_portfolio_view_model,
     calculate_expanding_powerlaw_parameters,
     resolve_backtest_monthly_prices,
+    resolve_backtest_prior_month_end,
     calculate_historical_sigma_offsets,
     estimate_current_monthly_pension,
     evaluate_powerlaw_values,
@@ -985,9 +986,14 @@ def render_portfolio_view(
         floor_prices = None
         if backtest_monthly_prices is not None:
             # Refit the floor month by month so no month is sized by its own future.
+            floor_dates = backtest_monthly_prices.index
+            prior_month_end = resolve_backtest_prior_month_end(df_display, floor_dates[0])
+            if prior_month_end is not None:
+                # The first month sells its own floor growth, so it needs last month's floor.
+                floor_dates = floor_dates.insert(0, prior_month_end[0])
             floor_prices = prepare_causal_floor_prices(
                 df_display["CloseDisplay"],
-                backtest_monthly_prices.index.to_numpy(dtype="datetime64[ns]"),
+                floor_dates.to_numpy(dtype="datetime64[ns]"),
                 current_gen_date,
                 (
                     FLOOR_MODEL_TROUGH_ENVELOPE

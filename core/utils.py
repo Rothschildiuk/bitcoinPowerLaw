@@ -921,6 +921,24 @@ def resolve_backtest_monthly_prices(price_display_df, years):
     return monthly_prices
 
 
+def resolve_backtest_prior_month_end(price_display_df, first_date):
+    """Last observation before ``first_date``'s month as ``(date, price)``, or None.
+
+    The first backtested month already saw the floor grow, so its withdrawal needs the
+    floor as it stood one month-end earlier, which lies just outside the test window.
+    """
+    if price_display_df is None or price_display_df.empty:
+        return None
+
+    price_series = pd.to_numeric(price_display_df["CloseDisplay"], errors="coerce").dropna()
+    price_series = price_series[price_series > 0.0].sort_index()
+    month_start = pd.Timestamp(first_date).to_period("M").to_timestamp()
+    prior_series = price_series[price_series.index < month_start]
+    if prior_series.empty:
+        return None
+    return pd.Timestamp(prior_series.index[-1]), float(prior_series.iloc[-1])
+
+
 def build_portfolio_real_data_backtest(
     price_display_df,
     settings,
@@ -936,8 +954,10 @@ def build_portfolio_real_data_backtest(
     """Replay a withdrawal strategy over real prices.
 
     ``floor_prices`` sizes the withdrawals and must already be walk-forward; build it
-    with ``build_causal_powerlaw_floor_prices``. Without it the strategy falls back to
-    withdrawing from realised month-on-month price growth, which is causal by nature.
+    with ``build_causal_powerlaw_floor_prices``. Include the month-end before the first
+    backtested month (``resolve_backtest_prior_month_end``) so the first month sells its
+    own floor growth too. Without floor prices the strategy falls back to withdrawing
+    from realised month-on-month price growth, which is causal by nature.
     """
     monthly_prices = resolve_backtest_monthly_prices(price_display_df, years)
     if monthly_prices is None:
@@ -961,14 +981,19 @@ def build_portfolio_real_data_backtest(
     if not np.isfinite(monthly_cash_flow):
         monthly_cash_flow = 0.0
 
+    prior_month_end = resolve_backtest_prior_month_end(price_display_df, monthly_prices.index[0])
+    previous_actual_price = prior_month_end[1] if prior_month_end is not None else None
+    previous_floor_price = None
     if floor_prices is not None:
-        floor_prices = pd.Series(floor_prices, dtype=float).reindex(monthly_prices.index)
+        floor_prices = pd.Series(floor_prices, dtype=float)
+        prior_floors = floor_prices[floor_prices.index < monthly_prices.index[0]].dropna()
+        if not prior_floors.empty:
+            previous_floor_price = float(prior_floors.iloc[-1])
+        floor_prices = floor_prices.reindex(monthly_prices.index)
         if not np.any(np.isfinite(floor_prices.to_numpy(dtype=float))):
             floor_prices = None
 
     rows = []
-    previous_actual_price = None
-    previous_floor_price = None
     months_without_floor = 0
     for date, price in monthly_prices.items():
         price = float(price)

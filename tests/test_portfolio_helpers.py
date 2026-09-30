@@ -17,6 +17,7 @@ from core.utils import (
     normalize_periodic_growth_rate,
     rate_withdrawal_attractiveness,
     resolve_backtest_monthly_prices,
+    resolve_backtest_prior_month_end,
     resolve_projection_anchor_day,
     resolve_portfolio_scenario_log_offset,
 )
@@ -916,8 +917,11 @@ class TestPortfolioHelpers(unittest.TestCase):
             forecast_horizon=12,
         )
         monthly_prices = resolve_backtest_monthly_prices(price_df, 5)
+        prior_month_end = resolve_backtest_prior_month_end(price_df, monthly_prices.index[0])
         floor_prices = build_causal_powerlaw_floor_prices(
-            price_df["CloseDisplay"], monthly_prices.index, gen_date
+            price_df["CloseDisplay"],
+            monthly_prices.index.insert(0, prior_month_end[0]),
+            gen_date,
         )
 
         full_sell = build_portfolio_real_data_backtest(
@@ -949,6 +953,9 @@ class TestPortfolioHelpers(unittest.TestCase):
             half_sell.backtest_df["MonthlyWithdrawal"].sum(),
         )
         self.assertLess(full_sell.strategy_btc, half_sell.strategy_btc)
+        # The first month already sells the floor growth of its own month.
+        self.assertGreater(full_sell.backtest_df["MonthlyWithdrawal"].iloc[0], 0.0)
+        self.assertLess(full_sell.backtest_df["StrategyBTC"].iloc[0], 1.0)
 
     def test_build_portfolio_real_data_backtest_uses_starting_capital(self):
         dates = pd.date_range("2021-01-01", periods=72, freq="MS")
