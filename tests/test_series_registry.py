@@ -4,6 +4,8 @@ from core.constants import (
     CURRENCY_ALUMINUM,
     CURRENCY_CHF,
     CURRENCY_COPPER,
+    CURRENCY_EU_ELECTRICITY,
+    CURRENCY_US_ELECTRICITY,
     CURRENCY_DOLLAR,
     CURRENCY_EURO,
     CURRENCY_IRON,
@@ -244,6 +246,25 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(ndaq_config.currency_unit, "Nasdaq Composite index")
         self.assertEqual(ndaq_config.target_series_unit, CURRENCY_NDAQ)
         self.assertTrue(ndaq_config.supports_currency_selector)
+
+    def test_electricity_quote_units_have_own_keys_and_labels(self):
+        us_config = get_active_model_config(
+            MODE_POWERLAW, POWERLAW_SERIES_PRICE, CURRENCY_US_ELECTRICITY
+        )
+        eu_config = get_active_model_config(
+            MODE_POWERLAW, POWERLAW_SERIES_PRICE, CURRENCY_EU_ELECTRICITY
+        )
+
+        self.assertEqual(us_config.currency_suffix, " kWh")
+        self.assertEqual(us_config.currency_decimals, 0)
+        self.assertEqual(us_config.currency_unit, "US kWh")
+        self.assertEqual(us_config.target_series_unit, CURRENCY_US_ELECTRICITY)
+        self.assertEqual(eu_config.currency_suffix, " index")
+        self.assertEqual(eu_config.currency_unit, "Euro area HICP electricity index")
+        self.assertEqual(eu_config.target_series_unit, CURRENCY_EU_ELECTRICITY)
+        self.assertNotEqual(us_config.a_key, eu_config.a_key)
+        self.assertTrue(us_config.supports_currency_selector)
+        self.assertTrue(eu_config.supports_currency_selector)
 
     def test_bitcoin_network_simulation_uses_bitcoin_powerlaw_defaults(self):
         sim_config = get_active_model_config(

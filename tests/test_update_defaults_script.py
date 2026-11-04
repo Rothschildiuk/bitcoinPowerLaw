@@ -6,6 +6,8 @@ from core.constants import (
     CURRENCY_ALUMINUM,
     CURRENCY_CHF,
     CURRENCY_COPPER,
+    CURRENCY_EU_ELECTRICITY,
+    CURRENCY_US_ELECTRICITY,
     CURRENCY_IRON,
     CURRENCY_NDAQ,
     CURRENCY_OIL,
@@ -109,6 +111,13 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             ),
             DEFAULT_CASES,
         )
+
+    def test_default_cases_include_electricity_price_models(self):
+        for currency, a_name, b_name in (
+            (CURRENCY_US_ELECTRICITY, "DEFAULT_US_ELECTRICITY_A", "DEFAULT_US_ELECTRICITY_B"),
+            (CURRENCY_EU_ELECTRICITY, "DEFAULT_EU_ELECTRICITY_A", "DEFAULT_EU_ELECTRICITY_B"),
+        ):
+            self.assertIn((POWERLAW_SERIES_PRICE, currency, a_name, b_name), DEFAULT_CASES)
 
     def test_default_cases_include_sp500_price_model(self):
         self.assertIn(

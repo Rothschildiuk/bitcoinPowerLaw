@@ -13,6 +13,7 @@ Read this file only when changing loaders, cache behavior, snapshot refreshes, o
 - Bitcoin volatility: derived from BTC/USD as 30-day rolling std of daily log returns times 100.
 - Bitcoin market cap: BTC/USD multiplied by Blockchain.com `total-bitcoins` circulating supply.
 - FX/metals/index references: `yfinance` symbols `EURUSD=X`, `UAH=X`, `GC=F`, `SI=F`, `HG=F`, `TIO=F`, `ALI=F`, `CL=F`, `^GSPC`, `^IXIC`, fallback `XAUUSD=X`.
+- Monthly FRED references: `CSUSHPISA` (US housing), `APU000072610` (US average electricity price, USD per kWh), `CP0451EZ19M086NEST` (euro area HICP electricity index, 2015 = 100, EUR prices). Each reference snapshot refresh refetches their full history, because FRED publishes a month weeks after it ends and revises recent months.
 - Miner revenue, Difficulty, Hashrate, Bitcoin circulating supply: Blockchain.com headerless CSV chart endpoints.
 - Lightning nodes/capacity: `bitcoinvisuals.com/static/data/data_daily.csv`.
 - Liquid BTC/transactions: Liquid reserves API plus `liquid.net/api/getChartsData`.

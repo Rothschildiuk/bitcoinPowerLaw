@@ -285,10 +285,12 @@ class TestPriceService(unittest.TestCase):
         self.assertEqual(status["resolved_source"], "snapshot")
         self.assertIn("network down", status["fallback_reason"])
 
+    @patch("services.price_service.fetch_fred_reference_frame", return_value=pd.DataFrame())
     @patch("services.price_service.fetch_reference_series_frame")
     def test_build_incremental_reference_series_snapshot_fetches_only_missing_tail(
         self,
         mock_fetch_reference_series_frame,
+        _mock_fetch_fred_reference_frame,
     ):
         snapshot_df = self._make_valid_reference_snapshot()
         price_service.write_snapshot_dataframe("reference_series", snapshot_df)
@@ -307,6 +309,35 @@ class TestPriceService(unittest.TestCase):
         self.assertEqual(result.index.max(), pd.Timestamp("2024-01-03"))
         self.assertEqual(len(result), len(snapshot_df) + 1)
         self.assertEqual(float(result.loc[pd.Timestamp("2024-01-03"), "EURUSD"]), 1000.0)
+
+    @patch("services.price_service.fetch_fred_reference_frame")
+    @patch("services.price_service.fetch_reference_series_frame")
+    def test_build_incremental_reference_series_snapshot_refetches_full_fred_history(
+        self,
+        mock_fetch_reference_series_frame,
+        mock_fetch_fred_reference_frame,
+    ):
+        # Written before the electricity columns existed, with a stale housing month.
+        snapshot_df = self._make_valid_reference_snapshot().drop(
+            columns=["USELECTRICITY", "EUELECTRICITY"]
+        )
+        price_service.write_snapshot_dataframe("reference_series", snapshot_df)
+        mock_fetch_reference_series_frame.return_value = pd.DataFrame()
+        late_month = pd.Timestamp("2023-12-01")
+        mock_fetch_fred_reference_frame.return_value = pd.DataFrame(
+            {"USHOUSING": [333.0], "USELECTRICITY": [0.19], "EUELECTRICITY": [101.0]},
+            index=[late_month],
+        )
+
+        result = price_service.build_incremental_reference_series_snapshot()
+
+        mock_fetch_fred_reference_frame.assert_called_once_with(str(snapshot_df.index.min().date()))
+        self.assertEqual(list(result.columns), list(price_service.REFERENCE_SERIES_COLUMNS))
+        self.assertEqual(float(result.loc[late_month, "USHOUSING"]), 333.0)
+        self.assertEqual(float(result.loc[late_month, "USELECTRICITY"]), 0.19)
+        self.assertEqual(float(result.loc[late_month, "EUELECTRICITY"]), 101.0)
+        self.assertEqual(result["USHOUSING"].count(), 1)
+        self.assertEqual(float(result.iloc[-1]["EURUSD"]), float(snapshot_df.iloc[-1]["EURUSD"]))
 
     @patch("services.price_service.fetch_reference_series_frame")
     def test_build_incremental_reference_series_snapshot_full_fetches_without_valid_snapshot(
@@ -810,6 +841,43 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service.build_currency_close_series(raw_df, "US_HOUSING")
         self.assertListEqual(result.round(6).tolist(), [0.4, 0.4])
+
+    def _reference_tuple_with_electricity(self, eur_usd, us_electricity, eu_electricity):
+        empty = pd.Series(dtype=float)
+        return (eur_usd,) + (empty,) * 11 + (us_electricity, eu_electricity)
+
+    @patch("services.price_service.load_reference_series")
+    def test_build_currency_close_series_for_us_electricity(self, mock_load_reference_series):
+        idx = pd.to_datetime(["2024-01-01", "2024-01-15", "2024-02-01"])
+        raw_df = pd.DataFrame({"Close": [40000.0, 40000.0, 50000.0]}, index=idx)
+        monthly = pd.to_datetime(["2024-01-01", "2024-02-01"])
+        us_electricity = pd.Series([0.16, 0.20], index=monthly)
+        mock_load_reference_series.return_value = self._reference_tuple_with_electricity(
+            pd.Series(dtype=float), us_electricity, pd.Series(dtype=float)
+        )
+
+        result = price_service.build_currency_close_series(raw_df, "US_POWER")
+
+        self.assertEqual(float(result.iloc[0]), 250000.0)
+        self.assertGreater(float(result.iloc[1]), 40000.0 / 0.20)
+        self.assertLess(float(result.iloc[1]), 40000.0 / 0.16)
+        self.assertEqual(float(result.iloc[2]), 250000.0)
+
+    @patch("services.price_service.load_reference_series")
+    def test_build_currency_close_series_for_eu_electricity_prices_in_euro(
+        self, mock_load_reference_series
+    ):
+        idx = pd.to_datetime(["2024-01-01", "2024-02-01"])
+        raw_df = pd.DataFrame({"Close": [50000.0, 60000.0]}, index=idx)
+        eur_usd = pd.Series([1.25, 1.2], index=idx)
+        eu_electricity = pd.Series([100.0, 120.0], index=idx)
+        mock_load_reference_series.return_value = self._reference_tuple_with_electricity(
+            eur_usd, pd.Series(dtype=float), eu_electricity
+        )
+
+        result = price_service.build_currency_close_series(raw_df, "EU_POWER")
+
+        self.assertListEqual(result.round(6).tolist(), [400.0, 416.666667])
 
     @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_sp500(self, mock_load_reference_series):

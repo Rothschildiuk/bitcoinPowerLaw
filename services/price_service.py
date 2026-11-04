@@ -18,6 +18,7 @@ from core.constants import (
     CURRENCY_CHF,
     CURRENCY_COPPER,
     CURRENCY_DOLLAR,
+    CURRENCY_EU_ELECTRICITY,
     CURRENCY_EURO,
     CURRENCY_GOLD,
     CURRENCY_IRON,
@@ -26,6 +27,7 @@ from core.constants import (
     CURRENCY_SILVER,
     CURRENCY_SP500,
     CURRENCY_UAH,
+    CURRENCY_US_ELECTRICITY,
     CURRENCY_US_HOUSING,
     GENESIS_DATE,
 )
@@ -51,7 +53,14 @@ BITCOIN_VISUALS_DAILY_CSV_URL = "https://bitcoinvisuals.com/static/data/data_dai
 LIQUID_RESERVES_URL = "https://liquid.network/api/v1/liquid/reserves"
 LIQUID_RESERVES_MONTH_URL = "https://liquid.network/api/v1/liquid/reserves/month"
 LIQUID_CHARTS_DATA_URL = "https://liquid.net/api/getChartsData"
-FRED_US_HOUSING_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CSUSHPISA"
+FRED_CSV_URL_TEMPLATE = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+# Monthly FRED series in the reference frame: column name -> FRED series id.
+# Euro area electricity is the HICP electricity sub-index (2015 = 100), priced in EUR.
+FRED_REFERENCE_SERIES_IDS = {
+    "USHOUSING": "CSUSHPISA",
+    "USELECTRICITY": "APU000072610",
+    "EUELECTRICITY": "CP0451EZ19M086NEST",
+}
 DEFILLAMA_USDT_STABLECOIN_URL = "https://stablecoins.llama.fi/stablecoin/1"
 COINGECKO_BTC_SPOT_URL = (
     "https://api.coingecko.com/api/v3/simple/price"
@@ -90,6 +99,8 @@ REFERENCE_SERIES_COLUMNS = (
     "USHOUSING",
     "SP500",
     "NDAQ",
+    "USELECTRICITY",
+    "EUELECTRICITY",
 )
 
 
@@ -877,8 +888,7 @@ def fetch_reference_series_frame(start_date):
     iron_ore_usd = _safe_download_close_series("TIO=F", start_date)
     aluminum_usd = _safe_download_close_series("ALI=F", start_date)
     oil_usd = _safe_download_close_series("CL=F", start_date)
-    us_housing = _fetch_fred_series(FRED_US_HOUSING_CSV_URL, "CSUSHPISA")
-    us_housing = us_housing[us_housing.index >= pd.Timestamp(start_date)]
+    fred_df = fetch_fred_reference_frame(start_date)
     sp500 = _safe_download_close_series("^GSPC", start_date)
     ndaq = _safe_download_close_series("^IXIC", start_date)
 
@@ -893,20 +903,59 @@ def fetch_reference_series_frame(start_date):
             iron_ore_usd.rename("IRONOREUSD"),
             aluminum_usd.rename("ALUMINUMUSD"),
             oil_usd.rename("OILUSD"),
-            us_housing.rename("USHOUSING"),
+            fred_df["USHOUSING"],
             sp500.rename("SP500"),
             ndaq.rename("NDAQ"),
+            fred_df["USELECTRICITY"],
+            fred_df["EUELECTRICITY"],
         ],
         axis=1,
     ).sort_index()
 
 
+def fetch_fred_reference_frame(start_date):
+    """Every monthly FRED reference column from ``start_date`` on."""
+    columns = []
+    for column_name, series_id in FRED_REFERENCE_SERIES_IDS.items():
+        values = _fetch_fred_series(FRED_CSV_URL_TEMPLATE.format(series_id=series_id), series_id)
+        columns.append(values[values.index >= pd.Timestamp(start_date)].rename(column_name))
+    return pd.concat(columns, axis=1).sort_index()
+
+
+def _refresh_fred_reference_columns(reference_df):
+    """Replace the monthly FRED columns with their full published history.
+
+    FRED publishes a month weeks after it ends and revises recent months, so a
+    daily tail fetch that starts after the last stored day never picks them up.
+    """
+    try:
+        fred_df = fetch_fred_reference_frame(str(reference_df.index.min().date()))
+    except Exception:
+        return reference_df
+    if fred_df is None or fred_df.empty:
+        return reference_df
+
+    refreshed_columns = [column for column in fred_df.columns if fred_df[column].notna().any()]
+    merged_df = reference_df.drop(columns=refreshed_columns, errors="ignore").join(
+        fred_df[refreshed_columns], how="outer"
+    )
+    return merged_df[list(REFERENCE_SERIES_COLUMNS)].sort_index()
+
+
 def build_incremental_reference_series_snapshot(start_date="2010-01-01"):
     snapshot_df = _read_snapshot_dataframe("reference_series")
-    if snapshot_df is None or not _validate_reference_frame(snapshot_df):
+    daily_columns = [
+        column for column in REFERENCE_SERIES_COLUMNS if column not in FRED_REFERENCE_SERIES_IDS
+    ]
+    if (
+        snapshot_df is None
+        or len(snapshot_df) < 100
+        or not set(daily_columns).issubset(snapshot_df.columns)
+    ):
         return fetch_reference_series_frame(start_date)
 
-    snapshot_df = snapshot_df[list(REFERENCE_SERIES_COLUMNS)]
+    # A snapshot written before a FRED column existed gets it from the FRED refresh below.
+    snapshot_df = snapshot_df.reindex(columns=list(REFERENCE_SERIES_COLUMNS))
     latest_snapshot_date = snapshot_df.index.max()
     if pd.isna(latest_snapshot_date):
         return fetch_reference_series_frame(start_date)
@@ -914,21 +963,21 @@ def build_incremental_reference_series_snapshot(start_date="2010-01-01"):
     tail_start = pd.Timestamp(latest_snapshot_date).normalize() + pd.Timedelta(days=1)
     today = pd.Timestamp.utcnow().tz_localize(None).normalize()
     if tail_start > today:
-        return snapshot_df
+        return _refresh_fred_reference_columns(snapshot_df)
 
     try:
         tail_df = fetch_reference_series_frame(tail_start.strftime("%Y-%m-%d"))
     except Exception:
-        return snapshot_df
+        return _refresh_fred_reference_columns(snapshot_df)
 
     if tail_df is None or tail_df.empty:
-        return snapshot_df
+        return _refresh_fred_reference_columns(snapshot_df)
 
     merged_df = pd.concat([snapshot_df, tail_df])
     merged_df = merged_df[~merged_df.index.duplicated(keep="last")].sort_index()
-    if _validate_reference_frame(merged_df):
-        return merged_df
-    return snapshot_df
+    if not _validate_reference_frame(merged_df):
+        merged_df = snapshot_df
+    return _refresh_fred_reference_columns(merged_df)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1017,6 +1066,16 @@ def load_reference_series(start_date, source="auto"):
         if "USDUAH" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    us_electricity = (
+        pd.to_numeric(reference_df["USELECTRICITY"], errors="coerce").dropna()
+        if "USELECTRICITY" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    eu_electricity = (
+        pd.to_numeric(reference_df["EUELECTRICITY"], errors="coerce").dropna()
+        if "EUELECTRICITY" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
     eur_usd.index = pd.to_datetime(eur_usd.index)
     usd_chf.index = pd.to_datetime(usd_chf.index)
     usd_uah.index = pd.to_datetime(usd_uah.index)
@@ -1029,6 +1088,8 @@ def load_reference_series(start_date, source="auto"):
     us_housing.index = pd.to_datetime(us_housing.index)
     sp500.index = pd.to_datetime(sp500.index)
     ndaq.index = pd.to_datetime(ndaq.index)
+    us_electricity.index = pd.to_datetime(us_electricity.index)
+    eu_electricity.index = pd.to_datetime(eu_electricity.index)
     return (
         eur_usd,
         usd_chf,
@@ -1042,6 +1103,8 @@ def load_reference_series(start_date, source="auto"):
         us_housing,
         sp500,
         ndaq,
+        us_electricity,
+        eu_electricity,
     )
 
 
@@ -1077,6 +1140,8 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
         us_housing = reference_series[8] if len(reference_series) > 8 else pd.Series(dtype=float)
         sp500 = reference_series[9] if len(reference_series) > 9 else pd.Series(dtype=float)
         ndaq = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
+    us_electricity = reference_series[12] if len(reference_series) > 12 else pd.Series(dtype=float)
+    eu_electricity = reference_series[13] if len(reference_series) > 13 else pd.Series(dtype=float)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
@@ -1126,6 +1191,17 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     if selected_currency == CURRENCY_OIL and not oil_usd.empty:
         oil_usd_aligned = align_reference_to_close(oil_usd)
         return close_usd / oil_usd_aligned
+
+    if selected_currency == CURRENCY_US_ELECTRICITY and not us_electricity.empty:
+        return close_usd / align_reference_to_close(us_electricity)
+
+    if (
+        selected_currency == CURRENCY_EU_ELECTRICITY
+        and not eu_electricity.empty
+        and not eur_usd.empty
+    ):
+        close_eur = close_usd / align_reference_to_close(eur_usd)
+        return close_eur / align_reference_to_close(eu_electricity)
 
     if selected_currency == CURRENCY_US_HOUSING and not us_housing.empty:
         us_housing_aligned = align_reference_to_close(us_housing)
