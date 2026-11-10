@@ -11,6 +11,11 @@ from core.constants import (
     CURRENCY_GOLD,
     CURRENCY_IRON,
     CURRENCY_NDAQ,
+    CURRENCY_NVDA,
+    CURRENCY_AAPL,
+    CURRENCY_MSFT,
+    CURRENCY_AMZN,
+    CURRENCY_GOOGL,
     CURRENCY_OIL,
     CURRENCY_OPTIONS,
     CURRENCY_SILVER,
@@ -49,6 +54,11 @@ class TestConstantsSeries(unittest.TestCase):
                 CURRENCY_SP500,
                 CURRENCY_GOLD,
                 CURRENCY_NDAQ,
+                CURRENCY_NVDA,
+                CURRENCY_AAPL,
+                CURRENCY_MSFT,
+                CURRENCY_AMZN,
+                CURRENCY_GOOGL,
             ],
         )
 

@@ -910,6 +910,48 @@ class TestPriceService(unittest.TestCase):
         self.assertListEqual(result.round(6).tolist(), [20.0, 20.0])
 
     @patch("services.price_service.load_reference_series")
+    def test_nvda_quote_aligns_non_trading_days_and_preserves_other_reference_positions(
+        self, mock_load_reference_series
+    ):
+        dates = pd.to_datetime(["2024-01-05", "2024-01-06", "2024-01-07", "2024-01-08"])
+        raw_df = pd.DataFrame({"Close": [60000.0] * 4}, index=dates)
+        empty = pd.Series(dtype=float)
+        nvda = pd.Series([100.0, 130.0], index=dates[[0, 3]])
+        mock_load_reference_series.return_value = (empty,) * 14 + (nvda,)
+
+        result = price_service.build_currency_close_series(raw_df, "NVDA", source="snapshot")
+
+        np.testing.assert_allclose(result, 60000.0 / np.array([100.0, 110.0, 120.0, 130.0]))
+        mock_load_reference_series.assert_called_once_with("2024-01-05", source="snapshot")
+
+    @patch("services.price_service.load_reference_series")
+    def test_nvda_quote_rejects_missing_history_instead_of_showing_usd(
+        self, mock_load_reference_series
+    ):
+        raw_df = pd.DataFrame({"Close": [60000.0]}, index=pd.to_datetime(["2024-01-05"]))
+        mock_load_reference_series.return_value = (pd.Series(dtype=float),) * 14
+        with self.assertRaisesRegex(ValueError, "NVIDIA price history is unavailable"):
+            price_service.build_currency_close_series(raw_df, "NVDA")
+
+    @patch("services.price_service.load_reference_series")
+    def test_added_stock_quotes_use_their_own_reference_history(self, mock_load_reference_series):
+        dates = pd.to_datetime(["2024-01-05", "2024-01-06", "2024-01-07", "2024-01-08"])
+        raw_df = pd.DataFrame({"Close": [60000.0] * 4}, index=dates)
+        empty = pd.Series(dtype=float)
+        stocks = ["AAPL", "MSFT", "AMZN", "GOOGL"]
+        histories = [
+            pd.Series([100.0, 130.0], index=dates[[0, 3]]) * (index + 1) for index in range(4)
+        ]
+        mock_load_reference_series.return_value = (empty,) * 15 + tuple(histories)
+        for index, symbol in enumerate(stocks):
+            with self.subTest(symbol=symbol):
+                result = price_service.build_currency_close_series(
+                    raw_df, symbol, source="snapshot"
+                )
+                expected = 60000.0 / (np.array([100.0, 110.0, 120.0, 130.0]) * (index + 1))
+                np.testing.assert_allclose(result, expected)
+
+    @patch("services.price_service.load_reference_series")
     def test_build_currency_close_series_for_ndaq(self, mock_load_reference_series):
         idx = pd.to_datetime(["2024-01-01", "2024-01-02"])
         raw_df = pd.DataFrame({"Close": [100000.0, 120000.0]}, index=idx)

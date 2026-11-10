@@ -12,8 +12,9 @@ Each series config owns its session keys, defaults, display label/unit, currency
 - Fiat money: USDT supply.
 
 ## Special Behavior
-- Bitcoin is the only series with currency switching (`EUR`, `USD`, `CHF`, `UAH`, `OIL`, `US_POWER`, `EU_POWER`, `IRON`, `ALUMINUM`, `COPPER`, `US_HOUSING`, `SILVER`, `SP500`, `GOLD`, `NDAQ`).
+- Bitcoin is the only series with currency switching (`EUR`, `USD`, `CHF`, `UAH`, `OIL`, `US_POWER`, `EU_POWER`, `IRON`, `ALUMINUM`, `COPPER`, `US_HOUSING`, `SILVER`, `SP500`, `GOLD`, `NDAQ`, `NVDA`, `AAPL`, `MSFT`, `AMZN`, `GOOGL`).
 - `US_POWER` quotes BTC in US kWh (BTC/USD divided by the US average price per kWh). `EU_POWER` quotes BTC/EUR divided by the euro area HICP electricity index, so it is an index ratio, not kWh.
+- `NVDA`, `AAPL`, `MSFT`, `AMZN`, and `GOOGL` quote BTC in shares of NVIDIA, Apple, Microsoft, Amazon, and Alphabet respectively (BTC/USD divided by the adjusted stock close in USD), using the same calendar alignment as the index quotes. Alphabet uses Class A shares (`GOOGL`).
 - Difficulty and Hashrate force log scale and start analysis at `2010-01-01`.
 - Bitcoin volatility is PowerLaw-only, log scale, and derived from 30-day daily BTC/USD log-return volatility.
 - Bitcoin market cap is PowerLaw-only, log scale, and derived from BTC/USD multiplied by circulating BTC supply.

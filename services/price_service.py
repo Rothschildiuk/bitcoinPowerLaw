@@ -23,6 +23,11 @@ from core.constants import (
     CURRENCY_GOLD,
     CURRENCY_IRON,
     CURRENCY_NDAQ,
+    CURRENCY_NVDA,
+    CURRENCY_AAPL,
+    CURRENCY_MSFT,
+    CURRENCY_AMZN,
+    CURRENCY_GOOGL,
     CURRENCY_OIL,
     CURRENCY_SILVER,
     CURRENCY_SP500,
@@ -82,7 +87,7 @@ SNAPSHOT_REFRESH_METADATA_FILENAME = "refresh_metadata.json"
 DATA_SOURCE_ENV_VAR = "POWERLAW_DATA_SOURCE"
 DATA_SOURCE_MODES = {"auto", "snapshot", "live"}
 DATA_LOAD_STATUS_SESSION_KEY = "data_load_status"
-LOCAL_CACHE_SCHEMA_VERSION = 5
+LOCAL_CACHE_SCHEMA_VERSION = 7
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
@@ -101,6 +106,11 @@ REFERENCE_SERIES_COLUMNS = (
     "NDAQ",
     "USELECTRICITY",
     "EUELECTRICITY",
+    "NVDA",
+    "AAPL",
+    "MSFT",
+    "AMZN",
+    "GOOGL",
 )
 
 
@@ -891,6 +901,11 @@ def fetch_reference_series_frame(start_date):
     fred_df = fetch_fred_reference_frame(start_date)
     sp500 = _safe_download_close_series("^GSPC", start_date)
     ndaq = _safe_download_close_series("^IXIC", start_date)
+    nvda = _safe_download_close_series("NVDA", start_date)
+    aapl = _safe_download_close_series("AAPL", start_date)
+    msft = _safe_download_close_series("MSFT", start_date)
+    amzn = _safe_download_close_series("AMZN", start_date)
+    googl = _safe_download_close_series("GOOGL", start_date)
 
     return pd.concat(
         [
@@ -908,6 +923,11 @@ def fetch_reference_series_frame(start_date):
             ndaq.rename("NDAQ"),
             fred_df["USELECTRICITY"],
             fred_df["EUELECTRICITY"],
+            nvda.rename("NVDA"),
+            aapl.rename("AAPL"),
+            msft.rename("MSFT"),
+            amzn.rename("AMZN"),
+            googl.rename("GOOGL"),
         ],
         axis=1,
     ).sort_index()
@@ -1076,6 +1096,36 @@ def load_reference_series(start_date, source="auto"):
         if "EUELECTRICITY" in reference_df.columns
         else pd.Series(dtype=float)
     )
+    nvda = (
+        pd.to_numeric(reference_df["NVDA"], errors="coerce").dropna()
+        if "NVDA" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    nvda.index = pd.to_datetime(nvda.index)
+    aapl = (
+        pd.to_numeric(reference_df["AAPL"], errors="coerce").dropna()
+        if "AAPL" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    aapl.index = pd.to_datetime(aapl.index)
+    msft = (
+        pd.to_numeric(reference_df["MSFT"], errors="coerce").dropna()
+        if "MSFT" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    msft.index = pd.to_datetime(msft.index)
+    amzn = (
+        pd.to_numeric(reference_df["AMZN"], errors="coerce").dropna()
+        if "AMZN" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    amzn.index = pd.to_datetime(amzn.index)
+    googl = (
+        pd.to_numeric(reference_df["GOOGL"], errors="coerce").dropna()
+        if "GOOGL" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    googl.index = pd.to_datetime(googl.index)
     eur_usd.index = pd.to_datetime(eur_usd.index)
     usd_chf.index = pd.to_datetime(usd_chf.index)
     usd_uah.index = pd.to_datetime(usd_uah.index)
@@ -1105,6 +1155,11 @@ def load_reference_series(start_date, source="auto"):
         ndaq,
         us_electricity,
         eu_electricity,
+        nvda,
+        aapl,
+        msft,
+        amzn,
+        googl,
     )
 
 
@@ -1142,6 +1197,12 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
         ndaq = reference_series[10] if len(reference_series) > 10 else pd.Series(dtype=float)
     us_electricity = reference_series[12] if len(reference_series) > 12 else pd.Series(dtype=float)
     eu_electricity = reference_series[13] if len(reference_series) > 13 else pd.Series(dtype=float)
+
+    nvda = reference_series[14] if len(reference_series) > 14 else pd.Series(dtype=float)
+    aapl = reference_series[15] if len(reference_series) > 15 else pd.Series(dtype=float)
+    msft = reference_series[16] if len(reference_series) > 16 else pd.Series(dtype=float)
+    amzn = reference_series[17] if len(reference_series) > 17 else pd.Series(dtype=float)
+    googl = reference_series[18] if len(reference_series) > 18 else pd.Series(dtype=float)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
@@ -1210,6 +1271,36 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     if selected_currency == CURRENCY_SP500 and not sp500.empty:
         sp500_aligned = align_reference_to_close(sp500)
         return close_usd / sp500_aligned
+
+    if selected_currency == CURRENCY_NVDA:
+        nvda = nvda[nvda > 0]
+        if nvda.empty:
+            raise ValueError("NVIDIA price history is unavailable in the reference snapshot.")
+        return close_usd / align_reference_to_close(nvda)
+
+    if selected_currency == CURRENCY_AAPL:
+        aapl = aapl[aapl > 0]
+        if aapl.empty:
+            raise ValueError("Apple price history is unavailable in the reference snapshot.")
+        return close_usd / align_reference_to_close(aapl)
+
+    if selected_currency == CURRENCY_MSFT:
+        msft = msft[msft > 0]
+        if msft.empty:
+            raise ValueError("Microsoft price history is unavailable in the reference snapshot.")
+        return close_usd / align_reference_to_close(msft)
+
+    if selected_currency == CURRENCY_AMZN:
+        amzn = amzn[amzn > 0]
+        if amzn.empty:
+            raise ValueError("Amazon price history is unavailable in the reference snapshot.")
+        return close_usd / align_reference_to_close(amzn)
+
+    if selected_currency == CURRENCY_GOOGL:
+        googl = googl[googl > 0]
+        if googl.empty:
+            raise ValueError("Alphabet price history is unavailable in the reference snapshot.")
+        return close_usd / align_reference_to_close(googl)
 
     if selected_currency == CURRENCY_NDAQ and not ndaq.empty:
         ndaq_aligned = align_reference_to_close(ndaq)

@@ -10,6 +10,7 @@ from core.constants import (
     CURRENCY_EURO,
     CURRENCY_IRON,
     CURRENCY_NDAQ,
+    CURRENCY_NVDA,
     CURRENCY_OIL,
     CURRENCY_SILVER,
     CURRENCY_SP500,
@@ -246,6 +247,36 @@ class TestSeriesRegistry(unittest.TestCase):
         self.assertEqual(ndaq_config.currency_unit, "Nasdaq Composite index")
         self.assertEqual(ndaq_config.target_series_unit, CURRENCY_NDAQ)
         self.assertTrue(ndaq_config.supports_currency_selector)
+
+    def test_nvda_quote_uses_shares_and_separate_session_defaults(self):
+        config = get_active_model_config(MODE_POWERLAW, POWERLAW_SERIES_PRICE, CURRENCY_NVDA)
+        self.assertEqual(config.currency_suffix, " shares")
+        self.assertEqual(config.currency_unit, "NVIDIA shares")
+        self.assertEqual(config.target_series_unit, CURRENCY_NVDA)
+        self.assertTrue(config.supports_currency_selector)
+        self.assertEqual(config.a_key, "A_nvda")
+        self.assertEqual(config.b_key, "B_nvda")
+        defaults = dict(iter_session_model_defaults())
+        self.assertEqual(defaults[config.a_key], config.default_a)
+        self.assertEqual(defaults[config.b_key], config.default_b)
+
+    def test_added_stock_quotes_use_separate_share_models(self):
+        defaults = dict(iter_session_model_defaults())
+        for symbol, company in (
+            ("AAPL", "Apple"),
+            ("MSFT", "Microsoft"),
+            ("AMZN", "Amazon"),
+            ("GOOGL", "Alphabet"),
+        ):
+            with self.subTest(symbol=symbol):
+                config = get_active_model_config(MODE_POWERLAW, POWERLAW_SERIES_PRICE, symbol)
+                self.assertEqual(config.currency_unit, f"{company} shares")
+                self.assertEqual(config.currency_suffix, " shares")
+                self.assertEqual(config.target_series_unit, symbol)
+                self.assertEqual(config.a_key, f"A_{symbol.lower()}")
+                self.assertEqual(config.b_key, f"B_{symbol.lower()}")
+                self.assertEqual(defaults[config.a_key], config.default_a)
+                self.assertEqual(defaults[config.b_key], config.default_b)
 
     def test_electricity_quote_units_have_own_keys_and_labels(self):
         us_config = get_active_model_config(

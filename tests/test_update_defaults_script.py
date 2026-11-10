@@ -10,6 +10,7 @@ from core.constants import (
     CURRENCY_US_ELECTRICITY,
     CURRENCY_IRON,
     CURRENCY_NDAQ,
+    CURRENCY_NVDA,
     CURRENCY_OIL,
     CURRENCY_SILVER,
     CURRENCY_SP500,
@@ -135,6 +136,20 @@ class TestUpdateDefaultsScript(unittest.TestCase):
             (POWERLAW_SERIES_PRICE, CURRENCY_NDAQ, "DEFAULT_NDAQ_A", "DEFAULT_NDAQ_B"),
             DEFAULT_CASES,
         )
+
+    def test_default_cases_include_nvda_price_model(self):
+        self.assertIn(
+            (POWERLAW_SERIES_PRICE, CURRENCY_NVDA, "DEFAULT_NVDA_A", "DEFAULT_NVDA_B"),
+            DEFAULT_CASES,
+        )
+
+    def test_default_cases_include_added_stock_price_models(self):
+        for symbol in ("AAPL", "MSFT", "AMZN", "GOOGL"):
+            with self.subTest(symbol=symbol):
+                self.assertIn(
+                    (POWERLAW_SERIES_PRICE, symbol, f"DEFAULT_{symbol}_A", f"DEFAULT_{symbol}_B"),
+                    DEFAULT_CASES,
+                )
 
     def test_load_series_frames_builds_bitcoin_volatility_from_price_data(self):
         update_powerlaw_defaults.load_prepared_price_data.clear()
