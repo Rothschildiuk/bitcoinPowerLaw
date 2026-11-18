@@ -292,6 +292,21 @@ CURRENCY_GROUPS = {
     ],
 }
 CURRENCY_OPTIONS = [currency for group in CURRENCY_GROUPS.values() for currency in group]
+# Stock tickers are shown by company name; other quote units keep their code.
+CURRENCY_DISPLAY_LABELS = {
+    CURRENCY_NVDA: "NVIDIA",
+    CURRENCY_AAPL: "Apple",
+    CURRENCY_MSFT: "Microsoft",
+    CURRENCY_AMZN: "Amazon",
+    CURRENCY_GOOGL: "Alphabet",
+    CURRENCY_KO: "Coca-Cola",
+}
+
+
+def get_currency_display_label(currency):
+    return CURRENCY_DISPLAY_LABELS.get(currency, currency)
+
+
 TIME_LOG = "Log"
 TIME_LIN = "Lin"
 THEME_OPTIONS = ["Dark 🌑"]

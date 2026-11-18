@@ -287,7 +287,7 @@ class TestPriceService(unittest.TestCase):
 
     @patch("services.price_service.fetch_fred_reference_frame", return_value=pd.DataFrame())
     @patch("services.price_service.fetch_reference_series_frame")
-    def test_build_incremental_reference_series_snapshot_fetches_only_missing_tail(
+    def test_build_incremental_reference_series_snapshot_rereads_recent_window(
         self,
         mock_fetch_reference_series_frame,
         _mock_fetch_fred_reference_frame,
@@ -305,10 +305,59 @@ class TestPriceService(unittest.TestCase):
 
         result = price_service.build_incremental_reference_series_snapshot()
 
-        mock_fetch_reference_series_frame.assert_called_once_with("2024-01-03")
+        mock_fetch_reference_series_frame.assert_called_once_with("2023-12-03")
         self.assertEqual(result.index.max(), pd.Timestamp("2024-01-03"))
         self.assertEqual(len(result), len(snapshot_df) + 1)
         self.assertEqual(float(result.loc[pd.Timestamp("2024-01-03"), "EURUSD"]), 1000.0)
+
+    @patch("services.price_service.fetch_fred_reference_frame", return_value=pd.DataFrame())
+    @patch("services.price_service.fetch_reference_series_frame")
+    def test_incremental_reference_refresh_fills_closes_that_arrived_after_fx_row(
+        self,
+        mock_fetch_reference_series_frame,
+        _mock_fetch_fred_reference_frame,
+    ):
+        # The newest rows were stored while only FX had traded; stock closes came later.
+        snapshot_df = self._make_valid_reference_snapshot()
+        lagging_days = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        snapshot_df.loc[lagging_days, ["SP500", "NVDA"]] = np.nan
+        price_service.write_snapshot_dataframe("reference_series", snapshot_df)
+        tail_df = pd.DataFrame(
+            {"SP500": [4700.0, 4710.0], "NVDA": [48.0, 49.0]},
+            index=lagging_days,
+        ).reindex(columns=list(price_service.REFERENCE_SERIES_COLUMNS))
+        mock_fetch_reference_series_frame.return_value = tail_df
+
+        result = price_service.build_incremental_reference_series_snapshot()
+
+        self.assertEqual(result.loc[lagging_days, "SP500"].tolist(), [4700.0, 4710.0])
+        self.assertEqual(result.loc[lagging_days, "NVDA"].tolist(), [48.0, 49.0])
+        # Columns the fetch did not return keep their stored values.
+        pd.testing.assert_series_equal(result["EURUSD"], snapshot_df["EURUSD"], check_freq=False)
+        self.assertEqual(len(result), len(snapshot_df))
+
+    def test_reference_refresh_start_reaches_back_to_stalest_column_with_a_bound(self):
+        snapshot_df = self._make_valid_reference_snapshot()
+        daily_columns = ["EURUSD", "IRONOREUSD"]
+        snapshot_df.loc[snapshot_df.index > pd.Timestamp("2023-10-15"), "IRONOREUSD"] = np.nan
+
+        start = price_service._resolve_reference_refresh_start(snapshot_df, daily_columns)
+        self.assertEqual(start, pd.Timestamp("2023-10-15"))
+
+        with patch.object(price_service, "REFERENCE_REFRESH_MAX_LOOKBACK_DAYS", 40):
+            start = price_service._resolve_reference_refresh_start(snapshot_df, daily_columns)
+        self.assertEqual(start, pd.Timestamp("2023-11-23"))
+
+    def test_merge_reference_frames_prefers_fresh_values_and_keeps_stored_gaps(self):
+        dates = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        stored = pd.DataFrame({"EURUSD": [1.10, 1.11], "SP500": [4700.0, 4710.0]}, index=dates)
+        fresh = pd.DataFrame({"EURUSD": [1.12, np.nan], "SP500": [np.nan, np.nan]}, index=dates)
+
+        result = price_service.merge_reference_frames(fresh, stored)
+
+        self.assertEqual(result["EURUSD"].tolist(), [1.12, 1.11])
+        self.assertEqual(result["SP500"].tolist(), [4700.0, 4710.0])
+        self.assertEqual(list(result.columns), list(price_service.REFERENCE_SERIES_COLUMNS))
 
     @patch("services.price_service.fetch_fred_reference_frame")
     @patch("services.price_service.fetch_reference_series_frame")

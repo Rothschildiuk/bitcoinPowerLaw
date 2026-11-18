@@ -6,6 +6,7 @@ from core.constants import (
     CURRENCY_GROUP_FIAT,
     CURRENCY_GROUPS,
     CURRENCY_OPTIONS,
+    get_currency_display_label,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_PORTFOLIO_HISTORY_PERIODS,
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
@@ -102,6 +103,7 @@ def _render_currency_selector():
     return st.radio(
         "Quote unit",
         CURRENCY_GROUPS[group],
+        format_func=get_currency_display_label,
         horizontal=True,
         key=KEY_CURRENCY_SELECTOR,
         label_visibility="collapsed",

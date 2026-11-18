@@ -92,6 +92,8 @@ LOCAL_CACHE_SCHEMA_VERSION = 8
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
+REFERENCE_REFRESH_WINDOW_DAYS = 30
+REFERENCE_REFRESH_MAX_LOOKBACK_DAYS = 370
 REFERENCE_SERIES_COLUMNS = (
     "EURUSD",
     "USDCHF",
@@ -984,11 +986,7 @@ def build_incremental_reference_series_snapshot(start_date="2010-01-01"):
     if pd.isna(latest_snapshot_date):
         return fetch_reference_series_frame(start_date)
 
-    tail_start = pd.Timestamp(latest_snapshot_date).normalize() + pd.Timedelta(days=1)
-    today = pd.Timestamp.utcnow().tz_localize(None).normalize()
-    if tail_start > today:
-        return _refresh_fred_reference_columns(snapshot_df)
-
+    tail_start = _resolve_reference_refresh_start(snapshot_df, daily_columns)
     try:
         tail_df = fetch_reference_series_frame(tail_start.strftime("%Y-%m-%d"))
     except Exception:
@@ -997,11 +995,39 @@ def build_incremental_reference_series_snapshot(start_date="2010-01-01"):
     if tail_df is None or tail_df.empty:
         return _refresh_fred_reference_columns(snapshot_df)
 
-    merged_df = pd.concat([snapshot_df, tail_df])
-    merged_df = merged_df[~merged_df.index.duplicated(keep="last")].sort_index()
+    merged_df = merge_reference_frames(tail_df, snapshot_df)
     if not _validate_reference_frame(merged_df):
         merged_df = snapshot_df
     return _refresh_fred_reference_columns(merged_df)
+
+
+def _resolve_reference_refresh_start(snapshot_df, daily_columns):
+    """Pick where the daily re-fetch starts.
+
+    FX trades almost around the clock, so the newest row usually holds only FX
+    while stock, index and commodity closes for that day arrive later. Starting
+    after the newest row would skip those closes forever, so the fetch re-reads a
+    recent window and reaches back to the stalest daily column (bounded).
+    """
+    latest_snapshot_date = pd.Timestamp(snapshot_df.index.max()).normalize()
+    last_valid_dates = [
+        snapshot_df[column].last_valid_index()
+        for column in daily_columns
+        if column in snapshot_df.columns
+    ]
+    last_valid_dates = [pd.Timestamp(date) for date in last_valid_dates if date is not None]
+    stalest_date = min(last_valid_dates, default=latest_snapshot_date).normalize()
+    window_start = latest_snapshot_date - pd.Timedelta(days=REFERENCE_REFRESH_WINDOW_DAYS)
+    earliest_start = latest_snapshot_date - pd.Timedelta(days=REFERENCE_REFRESH_MAX_LOOKBACK_DAYS)
+    return max(min(window_start, stalest_date), earliest_start)
+
+
+def merge_reference_frames(preferred_df, fallback_df):
+    """Combine two reference frames cell by cell: preferred values win, gaps fall back."""
+    preferred_df = preferred_df[~preferred_df.index.duplicated(keep="last")]
+    fallback_df = fallback_df[~fallback_df.index.duplicated(keep="last")]
+    merged_df = preferred_df.combine_first(fallback_df)
+    return merged_df.reindex(columns=list(REFERENCE_SERIES_COLUMNS)).sort_index()
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
