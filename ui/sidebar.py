@@ -3,12 +3,15 @@ import streamlit as st
 from core import power_law
 from core.constants import (
     CURRENCY_DOLLAR,
+    CURRENCY_GROUP_FIAT,
+    CURRENCY_GROUPS,
     CURRENCY_OPTIONS,
     DEFAULT_FORECAST_HORIZON,
     DEFAULT_PORTFOLIO_HISTORY_PERIODS,
     KEY_BITCOIN_NETWORK_SIMULATION_RESOLUTION,
     KEY_BITCOIN_NETWORK_SIMULATION_SEED,
     KEY_CHART_REVISION,
+    KEY_CURRENCY_GROUP_SELECTOR,
     KEY_CURRENCY_SELECTOR,
     KEY_LAST_MODE,
     KEY_MODE_SELECTOR,
@@ -62,6 +65,50 @@ from core.series_registry import (
 
 KEY_PORTFOLIO_BTC_AMOUNT_INPUT = f"{KEY_PORTFOLIO_BTC_AMOUNT}_input"
 KEY_LAST_PORTFOLIO_VIEW = "last_portfolio_strategy_view"
+
+
+def get_currency_group(currency):
+    for group, currencies in CURRENCY_GROUPS.items():
+        if currency in currencies:
+            return group
+    return CURRENCY_GROUP_FIAT
+
+
+def _on_currency_group_change():
+    group = st.session_state.get(KEY_CURRENCY_GROUP_SELECTOR)
+    if group not in CURRENCY_GROUPS:
+        return
+    if st.session_state.get(KEY_CURRENCY_SELECTOR) not in CURRENCY_GROUPS[group]:
+        st.session_state[KEY_CURRENCY_SELECTOR] = CURRENCY_GROUPS[group][0]
+
+
+def _render_currency_selector():
+    current_group = get_currency_group(st.session_state.get(KEY_CURRENCY_SELECTOR))
+    # Keep the group choice in sync with the quote unit chosen in an earlier run.
+    if st.session_state.get(KEY_CURRENCY_GROUP_SELECTOR) != current_group:
+        st.session_state[KEY_CURRENCY_GROUP_SELECTOR] = current_group
+    st.markdown("**Quote unit**")
+    group = st.radio(
+        "Quote unit group",
+        list(CURRENCY_GROUPS),
+        horizontal=True,
+        key=KEY_CURRENCY_GROUP_SELECTOR,
+        on_change=_on_currency_group_change,
+        label_visibility="collapsed",
+        width="stretch",
+    )
+    if group not in CURRENCY_GROUPS:
+        group = current_group
+    return st.radio(
+        "Quote unit",
+        CURRENCY_GROUPS[group],
+        horizontal=True,
+        key=KEY_CURRENCY_SELECTOR,
+        label_visibility="collapsed",
+        width="stretch",
+    )
+
+
 KEY_POWERLAW_SIGMA_DISPLAY_MODE_SELECTOR = f"{KEY_POWERLAW_SIGMA_DISPLAY_MODE}_selector"
 
 
@@ -543,13 +590,7 @@ def render_sidebar_panel(
             st.markdown("**Quote unit**")
             st.caption("This series does not use quote-unit conversion.")
         else:
-            currency = st.radio(
-                "Quote unit",
-                CURRENCY_OPTIONS,
-                horizontal=True,
-                key=KEY_CURRENCY_SELECTOR,
-                width="stretch",
-            )
+            currency = _render_currency_selector()
 
         current_r2 = 0.0
         active_model = get_active_model_config(

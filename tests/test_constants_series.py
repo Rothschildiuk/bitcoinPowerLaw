@@ -16,6 +16,8 @@ from core.constants import (
     CURRENCY_MSFT,
     CURRENCY_AMZN,
     CURRENCY_GOOGL,
+    CURRENCY_GROUPS,
+    CURRENCY_KO,
     CURRENCY_OIL,
     CURRENCY_OPTIONS,
     CURRENCY_SILVER,
@@ -43,24 +45,34 @@ class TestConstantsSeries(unittest.TestCase):
                 CURRENCY_DOLLAR,
                 CURRENCY_CHF,
                 CURRENCY_UAH,
+                CURRENCY_GOLD,
+                CURRENCY_SILVER,
+                CURRENCY_COPPER,
+                CURRENCY_ALUMINUM,
+                CURRENCY_IRON,
                 CURRENCY_OIL,
                 CURRENCY_US_ELECTRICITY,
                 CURRENCY_EU_ELECTRICITY,
-                CURRENCY_IRON,
-                CURRENCY_ALUMINUM,
-                CURRENCY_COPPER,
                 CURRENCY_US_HOUSING,
-                CURRENCY_SILVER,
                 CURRENCY_SP500,
-                CURRENCY_GOLD,
                 CURRENCY_NDAQ,
                 CURRENCY_NVDA,
                 CURRENCY_AAPL,
                 CURRENCY_MSFT,
                 CURRENCY_AMZN,
                 CURRENCY_GOOGL,
+                CURRENCY_KO,
             ],
         )
+
+    def test_currency_groups_cover_each_quote_unit_once(self):
+        self.assertEqual(
+            list(CURRENCY_GROUPS),
+            ["Fiat", "Commodities", "Energy & housing", "Indices", "Stocks"],
+        )
+        grouped = [currency for group in CURRENCY_GROUPS.values() for currency in group]
+        self.assertEqual(len(grouped), len(set(grouped)))
+        self.assertIn(CURRENCY_KO, CURRENCY_GROUPS["Stocks"])
 
     def test_powerlaw_series_options_include_lightning_and_liquid_series(self):
         self.assertIn(POWERLAW_SERIES_LIGHTNING_NODES, POWERLAW_SERIES_OPTIONS)

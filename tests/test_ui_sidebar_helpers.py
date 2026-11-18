@@ -2,6 +2,8 @@ import unittest
 from unittest.mock import patch
 
 from core.constants import (
+    KEY_CURRENCY_GROUP_SELECTOR,
+    KEY_CURRENCY_SELECTOR,
     KEY_POWERLAW_OSCILLATOR,
     KEY_POWERLAW_SIGMA_DISPLAY_MODE,
     KEY_SIGMA_BAND_HISTORY_RANGE_PCT,
@@ -15,6 +17,33 @@ from ui import sidebar
 
 
 class TestUISidebarHelpers(unittest.TestCase):
+    def test_currency_group_lookup_falls_back_to_fiat(self):
+        self.assertEqual(sidebar.get_currency_group("KO"), "Stocks")
+        self.assertEqual(sidebar.get_currency_group("US_POWER"), "Energy & housing")
+        self.assertEqual(sidebar.get_currency_group("unknown"), "Fiat")
+
+    def test_currency_group_change_selects_first_unit_of_new_group(self):
+        session_state = {KEY_CURRENCY_SELECTOR: "EUR", KEY_CURRENCY_GROUP_SELECTOR: "Stocks"}
+        with patch.object(sidebar.st, "session_state", session_state):
+            sidebar._on_currency_group_change()
+        self.assertEqual(session_state[KEY_CURRENCY_SELECTOR], "NVDA")
+
+    def test_currency_selector_shows_only_units_of_selected_group(self):
+        session_state = {KEY_CURRENCY_SELECTOR: "GOLD"}
+        with (
+            patch.object(sidebar.st, "session_state", session_state),
+            patch.object(sidebar.st, "markdown"),
+            patch.object(sidebar.st, "radio", side_effect=["Commodities", "GOLD"]) as radio,
+        ):
+            selected = sidebar._render_currency_selector()
+
+        self.assertEqual(selected, "GOLD")
+        self.assertEqual(session_state[KEY_CURRENCY_GROUP_SELECTOR], "Commodities")
+        group_call, unit_call = radio.call_args_list
+        self.assertEqual(group_call.kwargs["key"], KEY_CURRENCY_GROUP_SELECTOR)
+        self.assertIn("OIL", unit_call.args[1])
+        self.assertNotIn("EUR", unit_call.args[1])
+
     def test_oscillator_control_preserves_on_selection(self):
         session_state = {KEY_POWERLAW_OSCILLATOR: POWERLAW_OSCILLATOR_ON}
 

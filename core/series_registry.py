@@ -15,6 +15,7 @@ from core.constants import (
     CURRENCY_MSFT,
     CURRENCY_AMZN,
     CURRENCY_GOOGL,
+    CURRENCY_KO,
     CURRENCY_OIL,
     CURRENCY_SILVER,
     CURRENCY_SP500,
@@ -55,6 +56,8 @@ from core.constants import (
     DEFAULT_AMZN_B,
     DEFAULT_GOOGL_A,
     DEFAULT_GOOGL_B,
+    DEFAULT_KO_A,
+    DEFAULT_KO_B,
     DEFAULT_OIL_A,
     DEFAULT_OIL_B,
     DEFAULT_SP500_A,
@@ -95,6 +98,7 @@ from core.constants import (
     KEY_A_MSFT,
     KEY_A_AMZN,
     KEY_A_GOOGL,
+    KEY_A_KO,
     KEY_A_OIL,
     KEY_A_SP500,
     KEY_A_EU_ELECTRICITY,
@@ -126,6 +130,7 @@ from core.constants import (
     KEY_B_MSFT,
     KEY_B_AMZN,
     KEY_B_GOOGL,
+    KEY_B_KO,
     KEY_B_OIL,
     KEY_B_SP500,
     KEY_B_EU_ELECTRICITY,
@@ -608,6 +613,17 @@ _PRICE_CURRENCY_OVERRIDES = {
         "currency_decimals": 2,
         "currency_unit": "Alphabet shares",
     },
+    CURRENCY_KO: {
+        "a_key": KEY_A_KO,
+        "b_key": KEY_B_KO,
+        "default_a": DEFAULT_KO_A,
+        "default_b": DEFAULT_KO_B,
+        "target_series_unit": CURRENCY_KO,
+        "currency_prefix": "",
+        "currency_suffix": " shares",
+        "currency_decimals": 2,
+        "currency_unit": "Coca-Cola shares",
+    },
 }
 
 _POWERLAW_SERIES_GROUPS = [
@@ -720,6 +736,7 @@ def iter_session_model_defaults():
         CURRENCY_MSFT,
         CURRENCY_AMZN,
         CURRENCY_GOOGL,
+        CURRENCY_KO,
     ):
         price_config = get_series_config(POWERLAW_SERIES_PRICE, selected_currency=currency)
         for key, value in (

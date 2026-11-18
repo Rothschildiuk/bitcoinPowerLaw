@@ -144,7 +144,7 @@ class TestUpdateDefaultsScript(unittest.TestCase):
         )
 
     def test_default_cases_include_added_stock_price_models(self):
-        for symbol in ("AAPL", "MSFT", "AMZN", "GOOGL"):
+        for symbol in ("AAPL", "MSFT", "AMZN", "GOOGL", "KO"):
             with self.subTest(symbol=symbol):
                 self.assertIn(
                     (POWERLAW_SERIES_PRICE, symbol, f"DEFAULT_{symbol}_A", f"DEFAULT_{symbol}_B"),

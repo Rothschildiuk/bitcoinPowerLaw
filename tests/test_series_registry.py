@@ -267,6 +267,7 @@ class TestSeriesRegistry(unittest.TestCase):
             ("MSFT", "Microsoft"),
             ("AMZN", "Amazon"),
             ("GOOGL", "Alphabet"),
+            ("KO", "Coca-Cola"),
         ):
             with self.subTest(symbol=symbol):
                 config = get_active_model_config(MODE_POWERLAW, POWERLAW_SERIES_PRICE, symbol)

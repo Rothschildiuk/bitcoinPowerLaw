@@ -938,9 +938,10 @@ class TestPriceService(unittest.TestCase):
         dates = pd.to_datetime(["2024-01-05", "2024-01-06", "2024-01-07", "2024-01-08"])
         raw_df = pd.DataFrame({"Close": [60000.0] * 4}, index=dates)
         empty = pd.Series(dtype=float)
-        stocks = ["AAPL", "MSFT", "AMZN", "GOOGL"]
+        stocks = ["AAPL", "MSFT", "AMZN", "GOOGL", "KO"]
         histories = [
-            pd.Series([100.0, 130.0], index=dates[[0, 3]]) * (index + 1) for index in range(4)
+            pd.Series([100.0, 130.0], index=dates[[0, 3]]) * (index + 1)
+            for index in range(len(stocks))
         ]
         mock_load_reference_series.return_value = (empty,) * 15 + tuple(histories)
         for index, symbol in enumerate(stocks):

@@ -28,6 +28,7 @@ from core.constants import (
     CURRENCY_MSFT,
     CURRENCY_AMZN,
     CURRENCY_GOOGL,
+    CURRENCY_KO,
     CURRENCY_OIL,
     CURRENCY_SILVER,
     CURRENCY_SP500,
@@ -87,7 +88,7 @@ SNAPSHOT_REFRESH_METADATA_FILENAME = "refresh_metadata.json"
 DATA_SOURCE_ENV_VAR = "POWERLAW_DATA_SOURCE"
 DATA_SOURCE_MODES = {"auto", "snapshot", "live"}
 DATA_LOAD_STATUS_SESSION_KEY = "data_load_status"
-LOCAL_CACHE_SCHEMA_VERSION = 7
+LOCAL_CACHE_SCHEMA_VERSION = 8
 FAST_REFRESH_SECONDS = 3600
 SLOW_REFRESH_SECONDS = 6 * 3600
 REFERENCE_REFRESH_SECONDS = 12 * 3600
@@ -111,6 +112,7 @@ REFERENCE_SERIES_COLUMNS = (
     "MSFT",
     "AMZN",
     "GOOGL",
+    "KO",
 )
 
 
@@ -906,6 +908,7 @@ def fetch_reference_series_frame(start_date):
     msft = _safe_download_close_series("MSFT", start_date)
     amzn = _safe_download_close_series("AMZN", start_date)
     googl = _safe_download_close_series("GOOGL", start_date)
+    ko = _safe_download_close_series("KO", start_date)
 
     return pd.concat(
         [
@@ -928,6 +931,7 @@ def fetch_reference_series_frame(start_date):
             msft.rename("MSFT"),
             amzn.rename("AMZN"),
             googl.rename("GOOGL"),
+            ko.rename("KO"),
         ],
         axis=1,
     ).sort_index()
@@ -1126,6 +1130,12 @@ def load_reference_series(start_date, source="auto"):
         else pd.Series(dtype=float)
     )
     googl.index = pd.to_datetime(googl.index)
+    ko = (
+        pd.to_numeric(reference_df["KO"], errors="coerce").dropna()
+        if "KO" in reference_df.columns
+        else pd.Series(dtype=float)
+    )
+    ko.index = pd.to_datetime(ko.index)
     eur_usd.index = pd.to_datetime(eur_usd.index)
     usd_chf.index = pd.to_datetime(usd_chf.index)
     usd_uah.index = pd.to_datetime(usd_uah.index)
@@ -1160,6 +1170,7 @@ def load_reference_series(start_date, source="auto"):
         msft,
         amzn,
         googl,
+        ko,
     )
 
 
@@ -1203,6 +1214,7 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
     msft = reference_series[16] if len(reference_series) > 16 else pd.Series(dtype=float)
     amzn = reference_series[17] if len(reference_series) > 17 else pd.Series(dtype=float)
     googl = reference_series[18] if len(reference_series) > 18 else pd.Series(dtype=float)
+    ko = reference_series[19] if len(reference_series) > 19 else pd.Series(dtype=float)
 
     def align_reference_to_close(reference_series):
         reference_series = pd.to_numeric(reference_series, errors="coerce").dropna()
@@ -1301,6 +1313,12 @@ def build_currency_close_series(raw_df, selected_currency, source="auto"):
         if googl.empty:
             raise ValueError("Alphabet price history is unavailable in the reference snapshot.")
         return close_usd / align_reference_to_close(googl)
+
+    if selected_currency == CURRENCY_KO:
+        ko = ko[ko > 0]
+        if ko.empty:
+            raise ValueError("Coca-Cola price history is unavailable in the reference snapshot.")
+        return close_usd / align_reference_to_close(ko)
 
     if selected_currency == CURRENCY_NDAQ and not ndaq.empty:
         ndaq_aligned = align_reference_to_close(ndaq)
